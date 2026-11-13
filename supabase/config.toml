@@ -1,0 +1,7 @@
+project_id = "shooting-line"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15
