@@ -2,113 +2,41 @@
 import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 
-const STORAGE_KEY = 'archery-manager-workspace-v1'
+const props = defineProps({
+  initialData: { type: Object, required: true },
+  repository: { type: Object, required: true },
+  userEmail: { type: String, default: '' },
+})
+
+const THEME_STORAGE_KEY = 'shooting-line-theme'
+const theme = ref(localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light')
+const data = ref(props.initialData)
+const databaseError = ref('')
+
+watch(theme, (value) => {
+  document.documentElement.dataset.theme = value
+  localStorage.setItem(THEME_STORAGE_KEY, value)
+}, { immediate: true })
+
+function toggleTheme() {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark'
+}
 
 function makeId() {
   return crypto.randomUUID()
 }
 
-function exampleTournamentTypes() {
-  return [
-    { id: 'type-70m', name: 'Outdoor 70m Recurve', distance: 70, distanceUnit: 'm', targetType: '122 cm face', ends: 12, arrowsPerEnd: 6 },
-    { id: 'type-18m', name: 'Indoor 18m', distance: 18, distanceUnit: 'm', targetType: '40 cm triple-spot', ends: 20, arrowsPerEnd: 3 },
-  ]
-}
-
-function exampleCategories() {
-  return [
-    { id: 'category-open-recurve', name: 'Open Recurve', minAge: null, maxAge: null, bowType: 'Recurve' },
-    { id: 'category-junior-recurve', name: 'Junior Recurve', minAge: null, maxAge: 17, bowType: 'Recurve' },
-    { id: 'category-open-compound', name: 'Open Compound', minAge: null, maxAge: null, bowType: 'Compound' },
-  ]
-}
-
-function initialData() {
-  const tournamentTypes = exampleTournamentTypes()
-  const categories = exampleCategories()
-  const clubs = [
-    {
-      id: 'club-river',
-      name: 'Riverbend Archery Club',
-      representative: 'Morgan Lee',
-      phone: '(555) 218-4402',
-      email: 'morgan@example.com',
-      website: 'https://example.com/riverbend',
-      address: '18 Meadow Lane, Asheville, NC 28801',
-      mapUrl: 'https://maps.google.com',
-      userEmail: 'club@example.com',
-      userEnabled: true,
-    },
-    {
-      id: 'club-pine',
-      name: 'Pine Valley Bowmen',
-      representative: 'Taylor Brooks',
-      phone: '(555) 305-7714',
-      email: 'taylor@example.com',
-      website: '',
-      address: '240 Forest Road, Hendersonville, NC 28792',
-      mapUrl: 'https://maps.google.com',
-      userEmail: 'office@example.com',
-      userEnabled: true,
-    },
-    {
-      id: 'club-mountain',
-      name: 'Mountain View Archers',
-      representative: 'Jordan Kim',
-      phone: '(555) 882-1930',
-      email: '',
-      website: '',
-      address: '5 Summit Drive, Brevard, NC 28712',
-      mapUrl: '',
-      userEmail: 'archery@example.com',
-      userEnabled: false,
-    },
-  ]
-  const participants = [
-    { id: 'p-1', firstName: 'Avery', lastName: 'Chen', birthDate: '2002-06-14', waId: '10482931', aetayId: '' },
-    { id: 'p-2', firstName: 'Riley', lastName: 'Morgan', birthDate: '1997-11-03', waId: '10482702', aetayId: 'AET-48291' },
-    { id: 'p-3', firstName: 'Casey', lastName: 'Patel', birthDate: '2005-02-20', waId: '', aetayId: 'AET-51820' },
-    { id: 'p-4', firstName: 'Jamie', lastName: 'Rivera', birthDate: '1994-09-08', waId: '10483014', aetayId: '' },
-  ]
-  const tournament = {
-    id: 't-1',
-    name: 'Blue Ridge Spring Classic',
-    date: '2027-04-19',
-    discipline: 'Outdoor target',
-    tournamentTypeId: 'type-70m',
-    clubId: 'club-river',
-    venueMode: 'club',
-    customAddress: '',
-    rounds: ['Qualification'],
-    participantIds: participants.map((participant) => participant.id),
-    categoryIds: [],
-    categoryAssignments: {},
+async function persistChange(operation, updateLocalState) {
+  try {
+    await operation()
+    updateLocalState()
+    databaseError.value = ''
+    return true
+  } catch (error) {
+    databaseError.value = `Database save failed: ${error.message}`
+    return false
   }
-  const scores = [
-    { tournamentId: 't-1', participantId: 'p-1', round: 'Qualification', score: 642 },
-    { tournamentId: 't-1', participantId: 'p-2', round: 'Qualification', score: 618 },
-    { tournamentId: 't-1', participantId: 'p-3', round: 'Qualification', score: 601 },
-    { tournamentId: 't-1', participantId: 'p-4', round: 'Qualification', score: 587 },
-  ]
-  return { clubs, participants, tournaments: [tournament], tournamentTypes, categories, scores, matches: [] }
 }
-
-function loadData() {
-  const saved = localStorage.getItem(STORAGE_KEY)
-  const workspace = saved ? JSON.parse(saved) : initialData()
-  if (!Array.isArray(workspace.tournamentTypes)) workspace.tournamentTypes = exampleTournamentTypes()
-  if (!Array.isArray(workspace.categories)) workspace.categories = exampleCategories()
-  for (const tournament of workspace.tournaments) {
-    if (!Array.isArray(tournament.rounds)) tournament.rounds = ['Qualification']
-    if (!Array.isArray(tournament.categoryIds)) tournament.categoryIds = []
-    if (!tournament.categoryAssignments) tournament.categoryAssignments = {}
-    if (!tournament.tournamentTypeId) tournament.tournamentTypeId = workspace.tournamentTypes[0]?.id || ''
-  }
-  return workspace
-}
-
-const data = ref(loadData())
-watch(data, (value) => localStorage.setItem(STORAGE_KEY, JSON.stringify(value)), { deep: true })
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: '◫' },
@@ -361,20 +289,27 @@ function closeModal() {
   editingCategoryId.value = ''
 }
 
-function saveClub() {
-  if (editingClubId.value) {
-    const club = clubFor(editingClubId.value)
-    if (club) Object.assign(club, form.value)
-    closeModal()
-    notify('Club details updated')
-    return
-  }
-  data.value.clubs.unshift({ ...form.value, id: makeId() })
+async function saveClub() {
+  const isEditing = Boolean(editingClubId.value)
+  const club = { ...form.value, id: editingClubId.value || makeId() }
+  const saved = await persistChange(
+    () => props.repository.saveClub(club),
+    () => {
+      if (isEditing) {
+        const existing = clubFor(club.id)
+        if (existing) Object.assign(existing, club)
+      } else {
+        data.value.clubs.unshift(club)
+      }
+    },
+  )
+  if (!saved) return
+
   closeModal()
-  notify('Club added')
+  notify(isEditing ? 'Club details updated' : 'Club added')
 }
 
-function saveTournament() {
+async function saveTournament() {
   if (form.value.venueMode === 'club' && !form.value.clubId) {
     notify('Select a host club or use a custom address')
     return
@@ -387,7 +322,11 @@ function saveTournament() {
     categoryIds: [],
     categoryAssignments: {},
   }
-  data.value.tournaments.unshift(tournament)
+  if (!await persistChange(
+    () => props.repository.saveTournament(tournament),
+    () => data.value.tournaments.unshift(tournament),
+  )) return
+
   selectedTournamentId.value = tournament.id
   selectedTournamentTab.value = 'participants'
   closeModal()
@@ -395,28 +334,37 @@ function saveTournament() {
   notify('Tournament created')
 }
 
-function saveTournamentType() {
+async function saveTournamentType() {
+  const isEditing = Boolean(editingTournamentTypeId.value)
   const type = {
     ...form.value,
+    id: editingTournamentTypeId.value || makeId(),
     distance: Number(form.value.distance),
     ends: Number(form.value.ends),
     arrowsPerEnd: Number(form.value.arrowsPerEnd),
   }
-  if (editingTournamentTypeId.value) {
-    const existing = tournamentTypeFor(editingTournamentTypeId.value)
-    if (existing) Object.assign(existing, type)
-    closeModal()
-    notify('Tournament type updated')
-    return
-  }
-  data.value.tournamentTypes.push({ ...type, id: makeId() })
+  const saved = await persistChange(
+    () => props.repository.saveTournamentType(type),
+    () => {
+      if (isEditing) {
+        const existing = tournamentTypeFor(type.id)
+        if (existing) Object.assign(existing, type)
+      } else {
+        data.value.tournamentTypes.push(type)
+      }
+    },
+  )
+  if (!saved) return
+
   closeModal()
-  notify('Tournament type created')
+  notify(isEditing ? 'Tournament type updated' : 'Tournament type created')
 }
 
-function saveCategory() {
+async function saveCategory() {
+  const isEditing = Boolean(editingCategoryId.value)
   const category = {
     ...form.value,
+    id: editingCategoryId.value || makeId(),
     minAge: form.value.minAge === '' ? null : Number(form.value.minAge),
     maxAge: form.value.maxAge === '' ? null : Number(form.value.maxAge),
   }
@@ -424,34 +372,51 @@ function saveCategory() {
     notify('Minimum age cannot be greater than maximum age')
     return
   }
-  if (editingCategoryId.value) {
-    const existing = categoryFor(editingCategoryId.value)
-    if (existing) Object.assign(existing, category)
-    closeModal()
-    notify('Category updated')
-    return
-  }
-  data.value.categories.push({ ...category, id: makeId() })
+  const saved = await persistChange(
+    () => props.repository.saveCategory(category),
+    () => {
+      if (isEditing) {
+        const existing = categoryFor(category.id)
+        if (existing) Object.assign(existing, category)
+      } else {
+        data.value.categories.push(category)
+      }
+    },
+  )
+  if (!saved) return
+
   closeModal()
-  notify('Category created')
+  notify(isEditing ? 'Category updated' : 'Category created')
 }
 
-function toggleTournamentCategory(tournament, categoryId) {
+async function toggleTournamentCategory(tournament, categoryId) {
   const index = tournament.categoryIds.indexOf(categoryId)
-  if (index === -1) tournament.categoryIds.push(categoryId)
-  else {
-    tournament.categoryIds.splice(index, 1)
-    for (const [participantId, assignedCategoryId] of Object.entries(tournament.categoryAssignments)) {
-      if (assignedCategoryId === categoryId) delete tournament.categoryAssignments[participantId]
-    }
-    if (selectedCategoryId.value === categoryId) selectedCategoryId.value = ''
-  }
+  const enabled = index === -1
+  if (!await persistChange(
+    () => props.repository.setTournamentCategory(tournament.id, categoryId, enabled),
+    () => {
+      if (enabled) {
+        tournament.categoryIds.push(categoryId)
+      } else {
+        tournament.categoryIds.splice(index, 1)
+        for (const [participantId, assignedCategoryId] of Object.entries(tournament.categoryAssignments)) {
+          if (assignedCategoryId === categoryId) delete tournament.categoryAssignments[participantId]
+        }
+        if (selectedCategoryId.value === categoryId) selectedCategoryId.value = ''
+      }
+    },
+  )) return
 }
 
-function setParticipantCategory(tournament, participant, event) {
+async function setParticipantCategory(tournament, participant, event) {
   const categoryId = event.target.value
   if (categoryId) {
     const category = categoryFor(categoryId)
+    if (!category) {
+      notify('Select a valid category')
+      event.target.value = tournament.categoryAssignments[participant.id] || ''
+      return
+    }
     const age = ageAtTournament(participant, tournament)
     if (age !== null && category.minAge !== null && category.minAge !== '' && age < category.minAge) {
       notify(`${fullName(participant)} is below this category's minimum age`)
@@ -464,7 +429,15 @@ function setParticipantCategory(tournament, participant, event) {
       return
     }
   }
-  tournament.categoryAssignments[participant.id] = categoryId
+  const existingCategoryId = tournament.categoryAssignments[participant.id] || ''
+  const saved = await persistChange(
+    () => props.repository.setParticipantCategory(tournament.id, participant.id, categoryId),
+    () => {
+      if (categoryId) tournament.categoryAssignments[participant.id] = categoryId
+      else delete tournament.categoryAssignments[participant.id]
+    },
+  )
+  if (!saved) event.target.value = existingCategoryId
 }
 
 function openTournament(tournamentId, tab = 'participants') {
@@ -478,66 +451,107 @@ function openScoreDetails(participantId) {
   activePage.value = 'score-detail'
 }
 
-function addRound() {
+async function addRound() {
   const name = newRoundName.value.trim()
   if (!name || !selectedTournament.value) return
   if (selectedTournament.value.rounds.some((round) => round.toLowerCase() === name.toLowerCase())) {
     notify('That round already exists for this tournament')
     return
   }
-  selectedTournament.value.rounds.push(name)
+  if (!await persistChange(
+    () => props.repository.addTournamentRound(selectedTournamentId.value, name, selectedTournament.value.rounds.length),
+    () => selectedTournament.value.rounds.push(name),
+  )) return
+
   selectedRound.value = name
   newRoundName.value = ''
   notify('Round added to this tournament')
 }
 
-function saveParticipant() {
+async function saveParticipant() {
   const participant = { ...form.value, id: makeId() }
-  data.value.participants.unshift(participant)
-  if (assignNewParticipant.value && selectedTournament.value && !selectedTournament.value.participantIds.includes(participant.id)) {
-    selectedTournament.value.participantIds.push(participant.id)
-  }
+  const tournament = assignNewParticipant.value ? selectedTournament.value : null
+  if (!await persistChange(
+    () => props.repository.saveParticipant(participant, tournament?.id || ''),
+    () => {
+      data.value.participants.unshift(participant)
+      if (tournament) tournament.participantIds.push(participant.id)
+    },
+  )) return
+
   closeModal()
   notify('Participant saved to your database')
 }
 
-function toggleClub(club) {
+async function toggleClub(club) {
   if (!club.userEmail && !club.userEnabled) {
     notify('Add a club user email before enabling access')
     return
   }
-  club.userEnabled = !club.userEnabled
+  const enabled = !club.userEnabled
+  if (!await persistChange(
+    () => props.repository.setClubEnabled(club.id, enabled),
+    () => { club.userEnabled = enabled },
+  )) return
+
   notify(`Club user ${club.userEnabled ? 'enabled' : 'disabled'}`)
 }
 
-function toggleParticipant(tournament, participantId) {
+async function toggleParticipant(tournament, participantId) {
   const index = tournament.participantIds.indexOf(participantId)
-  if (index === -1) tournament.participantIds.push(participantId)
-  else tournament.participantIds.splice(index, 1)
+  const included = index === -1
+  if (!await persistChange(
+    () => props.repository.setTournamentParticipant(tournament.id, participantId, included),
+    () => {
+      if (included) tournament.participantIds.push(participantId)
+      else tournament.participantIds.splice(index, 1)
+    },
+  )) return
 }
 
-function saveScore(participantId, value) {
+async function saveScore(participantId, value) {
   if (value === '' || value === null) {
-    data.value.scores = data.value.scores.filter((item) =>
-      !(item.tournamentId === selectedTournamentId.value && item.participantId === participantId && item.round === selectedRound.value),
+    await persistChange(
+      () => props.repository.saveScore({
+        tournamentId: selectedTournamentId.value,
+        participantId,
+        round: selectedRound.value,
+        score: null,
+      }),
+      () => {
+        data.value.scores = data.value.scores.filter((item) =>
+          !(item.tournamentId === selectedTournamentId.value && item.participantId === participantId && item.round === selectedRound.value),
+        )
+      },
     )
     return
   }
   const numericScore = Number(value)
-  if (!Number.isFinite(numericScore) || numericScore < 0) return
+  if (!Number.isFinite(numericScore) || numericScore < 0) {
+    notify('Enter a non-negative score')
+    return
+  }
   const existing = data.value.scores.find((item) =>
     item.tournamentId === selectedTournamentId.value && item.participantId === participantId && item.round === selectedRound.value,
   )
   const categoryId = selectedTournament.value?.categoryAssignments?.[participantId] || ''
-  if (existing) {
-    existing.score = numericScore
-    existing.categoryId = categoryId
-  } else {
-    data.value.scores.push({ tournamentId: selectedTournamentId.value, participantId, round: selectedRound.value, categoryId, score: numericScore })
+  const score = {
+    tournamentId: selectedTournamentId.value,
+    participantId,
+    round: selectedRound.value,
+    categoryId,
+    score: numericScore,
   }
+  await persistChange(
+    () => props.repository.saveScore(score),
+    () => {
+      if (existing) Object.assign(existing, score)
+      else data.value.scores.push(score)
+    },
+  )
 }
 
-function generateMatches() {
+async function generateMatches() {
   if (selectedTournament.value?.categoryIds.length && !selectedCategoryId.value) {
     notify('Select a tournament category before seeding Olympic matches')
     return
@@ -586,14 +600,25 @@ function generateMatches() {
       score2: '',
     }
   })
-  data.value.matches = [
-    ...data.value.matches.filter((match) =>
-      match.tournamentId !== selectedTournamentId.value
-        || (match.sourceRound || selectedTournament.value?.rounds?.[0]) !== selectedRound.value
-        || (match.categoryId || '') !== selectedCategoryId.value,
+  if (!await persistChange(
+    () => props.repository.replaceMatches(
+      selectedTournamentId.value,
+      selectedRound.value,
+      selectedCategoryId.value,
+      newMatches,
     ),
-    ...newMatches,
-  ]
+    () => {
+      data.value.matches = [
+        ...data.value.matches.filter((match) =>
+          match.tournamentId !== selectedTournamentId.value
+            || (match.sourceRound || selectedTournament.value?.rounds?.[0]) !== selectedRound.value
+            || (match.categoryId || '') !== selectedCategoryId.value,
+        ),
+        ...newMatches,
+      ]
+    },
+  )) return
+
   notify(`${newMatches.length} first-round matches seeded`)
 }
 
@@ -601,38 +626,34 @@ function participantById(id) {
   return data.value.participants.find((person) => person.id === id)
 }
 
-function recordMatchScore(match, side, value) {
-  match[side] = value === '' ? '' : Math.max(0, Number(value) || 0)
-}
-
-function resetDemoData() {
-  data.value = initialData()
-  selectedTournamentId.value = data.value.tournaments[0]?.id || ''
-  selectedRounds.value = {}
-  selectedCategories.value = {}
-  selectedTournamentTab.value = 'participants'
-  newRoundName.value = ''
-  selectedScoreParticipantId.value = ''
-  activePage.value = 'dashboard'
-  search.value = ''
-  tournamentQuery.value = ''
-  notify('Demo data restored')
+async function recordMatchScore(match, side, value) {
+  const score = value === '' ? '' : Math.max(0, Number(value) || 0)
+  if (!await persistChange(
+    () => props.repository.setMatchScore(match.id, side, score),
+    () => { match[side] = score },
+  )) return
 }
 </script>
 
 <template>
   <div class="app-shell">
-    <AppSidebar :active-page="currentNavPage" :nav-items="navItems" :tournament-count="data.tournaments.length" @navigate="activePage = $event" />
+    <AppSidebar :active-page="currentNavPage" :nav-items="navItems" :tournament-count="data.tournaments.length" :user-email="userEmail" @navigate="activePage = $event" />
 
     <main class="main-content">
       <header class="topbar">
         <div class="breadcrumbs"><span>Workspace</span><span class="crumb-slash">/</span><strong>{{ activePage === 'tournament-detail' ? selectedTournament?.name : navItems.find((item) => item.id === activePage)?.label }}</strong></div>
         <div class="topbar-actions">
-          <span class="demo-chip"><i></i> Demo data · saved on this device</span>
+          <span class="demo-chip"><i></i> Shared database</span>
+          <a class="portal-link" href="../">App launcher</a>
+          <button class="theme-toggle" type="button" :aria-pressed="theme === 'dark'" :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'" @click="toggleTheme">
+            <span aria-hidden="true">{{ theme === 'dark' ? '☀' : '☾' }}</span>
+            <span class="theme-toggle-label">{{ theme === 'dark' ? 'Light theme' : 'Dark theme' }}</span>
+          </button>
           <button class="icon-button" aria-label="Help" @click="notify('Your workspace is ready to use')">?</button>
         </div>
       </header>
 
+      <p v-if="databaseError" class="database-error" role="alert">{{ databaseError }}</p>
       <div class="page-container">
         <section v-if="activePage === 'dashboard'">
           <div class="page-heading heading-row">
@@ -886,7 +907,7 @@ function resetDemoData() {
               </div>
               <div v-if="scoreRows.length" class="table-wrap">
                 <table class="score-table"><thead><tr><th>SHOOTER</th><th>CATEGORY</th><th>WORLD ARCHERY ID</th><th>ROUND SCORE</th><th>STATUS</th></tr></thead>
-                  <tbody><tr v-for="row in scoreRows" :key="row.participant.id"><td><div class="person-cell"><span class="person-avatar">{{ row.participant.firstName.charAt(0) }}{{ row.participant.lastName.charAt(0) }}</span><strong>{{ fullName(row.participant) }}</strong></div></td><td>{{ categoryFor(row.categoryId)?.name || 'Unassigned' }}</td><td>{{ row.participant.waId || '—' }}</td><td><input class="score-input" type="number" min="0" :value="row.score" placeholder="Enter score" @change="saveScore(row.participant.id, $event.target.value)" /></td><td><span class="status-pill" :class="row.score !== '' ? 'status-active' : 'status-pending'"><i></i>{{ row.score !== '' ? 'Recorded' : 'Pending' }}</span></td></tr></tbody>
+                  <tbody><tr v-for="row in scoreRows" :key="row.participant.id"><td><div class="person-cell"><span class="person-avatar">{{ row.participant.firstName.charAt(0) }}{{ row.participant.lastName.charAt(0) }}</span><strong>{{ fullName(row.participant) }}</strong></div></td><td>{{ categoryFor(row.categoryId)?.name || 'Unassigned' }}</td><td>{{ row.participant.waId || '—' }}</td><td><input class="score-input sl-score" type="number" min="0" :value="row.score" placeholder="Enter score" @change="saveScore(row.participant.id, $event.target.value)" /></td><td><span class="status-pill" :class="row.score !== '' ? 'status-active' : 'status-pending'"><i></i>{{ row.score !== '' ? 'Recorded' : 'Pending' }}</span></td></tr></tbody>
                 </table>
               </div>
               <div v-else class="empty-state"><div class="empty-icon">♙</div><strong>No participants added</strong><p>Add shooters in the Participants section of this tournament before recording scores.</p><button class="button button-outline" @click="selectedTournamentTab = 'participants'">Manage participants</button></div>
@@ -902,9 +923,9 @@ function resetDemoData() {
               <div v-if="olympicMatches.length" class="matches-grid">
                 <section v-for="(match, index) in olympicMatches" :key="match.id" class="match-card">
                   <div class="match-head"><span>{{ match.round }}</span><span class="match-number">MATCH {{ String(index + 1).padStart(2, '0') }}</span></div>
-                  <div class="match-archer"><span class="seed-badge">{{ match.seed1 }}</span><strong>{{ fullName(participantById(match.seed1Id) || { firstName: 'Unknown', lastName: '' }) }}</strong><input type="number" min="0" :value="match.score1" placeholder="—" @change="recordMatchScore(match, 'score1', $event.target.value)" /></div>
+                  <div class="match-archer"><span class="seed-badge">{{ match.seed1 }}</span><strong>{{ fullName(participantById(match.seed1Id) || { firstName: 'Unknown', lastName: '' }) }}</strong><input class="sl-score" type="number" min="0" :value="match.score1" placeholder="—" @change="recordMatchScore(match, 'score1', $event.target.value)" /></div>
                   <div class="match-divider"><span>VS</span></div>
-                  <div class="match-archer"><span class="seed-badge">{{ match.seed2 }}</span><strong>{{ fullName(participantById(match.seed2Id) || { firstName: 'Unknown', lastName: '' }) }}</strong><input type="number" min="0" :value="match.score2" placeholder="—" @change="recordMatchScore(match, 'score2', $event.target.value)" /></div>
+                  <div class="match-archer"><span class="seed-badge">{{ match.seed2 }}</span><strong>{{ fullName(participantById(match.seed2Id) || { firstName: 'Unknown', lastName: '' }) }}</strong><input class="sl-score" type="number" min="0" :value="match.score2" placeholder="—" @change="recordMatchScore(match, 'score2', $event.target.value)" /></div>
                   <div class="match-foot"><span>{{ match.score1 !== '' && match.score2 !== '' ? 'Scores recorded' : 'Enter both match scores' }}</span><i :class="{ complete: match.score1 !== '' && match.score2 !== '' }"></i></div>
                 </section>
               </div>
@@ -971,13 +992,12 @@ function resetDemoData() {
             <label class="form-field full"><span>BIRTH DATE <b>*</b></span><input v-model="form.birthDate" required type="date" /></label>
             <label class="form-field"><span>WORLD ARCHERY ID <small>OPTIONAL</small></span><input v-model="form.waId" placeholder="Affiliation number" /></label>
             <label class="form-field"><span>AETAY ID <small>OPTIONAL</small></span><input v-model="form.aetayId" placeholder="Affiliation number" /></label>
-            <p class="privacy-note full">Participant details are stored in this browser in this demo version.</p>
+            <p class="privacy-note full">Participant details are stored in the shared manager database.</p>
           </div>
         </template>
         <div class="modal-actions"><button type="button" class="button button-outline" @click="closeModal">Cancel</button><button type="submit" class="button button-primary">{{ modalType === 'club' ? editingClubId ? 'Save changes' : 'Save club' : modalType === 'tournament' ? 'Create tournament' : modalType === 'tournamentType' ? editingTournamentTypeId ? 'Save type' : 'Create type' : modalType === 'category' ? editingCategoryId ? 'Save category' : 'Create category' : 'Save participant' }}</button></div>
       </form>
     </div>
     <Transition name="toast"><div v-if="toast" class="toast-message"><span>✓</span>{{ toast }}</div></Transition>
-    <button class="reset-demo" title="Restore example data" @click="resetDemoData">↻</button>
   </div>
 </template>

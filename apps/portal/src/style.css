@@ -1,0 +1,282 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #172033;
+  background: #f3f6fa;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 85% 8%, rgba(220, 184, 96, 0.13), transparent 25rem),
+    #f3f6fa;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.portal-shell {
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, calc(100% - 40px));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 28px 0 20px;
+}
+
+.portal-header,
+.brand,
+.welcome-row,
+.portal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.portal-header {
+  padding-bottom: 24px;
+  border-bottom: 1px solid #dfe5ec;
+}
+
+.brand {
+  justify-content: flex-start;
+  gap: 10px;
+  color: #172033;
+  font-size: 19px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.brand img {
+  width: 35px;
+  height: 35px;
+  border-radius: 9px;
+}
+
+.header-label,
+.signed-in-as,
+.portal-footer {
+  color: #697586;
+  font-size: 13px;
+}
+
+.portal-panel {
+  width: min(100%, 520px);
+  margin: auto;
+  padding: 40px;
+  border: 1px solid #e1e7ee;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 18px 60px rgba(28, 42, 63, 0.08);
+}
+
+.status-panel {
+  color: #526174;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 10px;
+  color: #172033;
+  font-size: clamp(30px, 5vw, 42px);
+  letter-spacing: -0.04em;
+}
+
+.sign-in-panel h1 {
+  font-size: 34px;
+}
+
+.panel-copy > p:last-child {
+  margin-bottom: 0;
+  color: #647184;
+}
+
+.eyebrow {
+  margin-bottom: 10px;
+  color: #9a7223;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sign-in-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.sign-in-form label {
+  display: grid;
+  gap: 7px;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.sign-in-form input {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid #cfd7e2;
+  border-radius: 9px;
+  color: #172033;
+  background: #fff;
+}
+
+.sign-in-form input:focus {
+  border-color: #b68b36;
+  outline: 3px solid rgba(220, 184, 96, 0.2);
+}
+
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 17px;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.primary-button {
+  color: #fff;
+  background: #1e293b;
+}
+
+.primary-button:hover {
+  background: #2b3c55;
+}
+
+.secondary-button {
+  border: 1px solid #d7dee7;
+  color: #344054;
+  background: #fff;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.workspace-section {
+  margin: auto 0;
+  padding: 54px 0;
+}
+
+.welcome-row {
+  align-items: flex-start;
+  margin-bottom: 28px;
+}
+
+.welcome-row h1 {
+  margin-bottom: 5px;
+}
+
+.signed-in-as {
+  margin: 0;
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.app-card {
+  display: flex;
+  min-height: 230px;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 24px;
+  border: 1px solid #e0e6ed;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 26px rgba(28, 42, 63, 0.05);
+}
+
+.app-card h2 {
+  margin-bottom: 8px;
+  color: #1c2738;
+  font-size: 19px;
+}
+
+.app-card > p:not(.card-status) {
+  color: #657286;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.card-status {
+  margin-bottom: 18px;
+  color: #94702b;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.app-action,
+.access-note {
+  margin-top: auto;
+}
+
+.access-note,
+.loading-message,
+.empty-access {
+  color: #6b7787;
+  font-size: 13px;
+}
+
+.error-message {
+  margin: 0;
+  color: #a12622;
+  font-size: 13px;
+}
+
+.access-error,
+.loading-message,
+.empty-access {
+  margin: 14px 0;
+}
+
+.portal-footer {
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 24px;
+  border-top: 1px solid #dfe5ec;
+}
+
+@media (max-width: 760px) {
+  .app-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-panel {
+    padding: 28px 22px;
+  }
+
+  .portal-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

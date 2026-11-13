@@ -3,13 +3,17 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "vue": "^3.5.44"
+    "dev": "npm run dev --workspace @shooting-line/portal",
+    "dev:manager": "npm run dev --workspace @shooting-line/manager",
+    "build": "npm run build:portal && npm run build:manager",
+    "build:portal": "npm run build --workspace @shooting-line/portal",
+    "build:manager": "npm run build --workspace @shooting-line/manager",
+    "preview": "npm run preview --workspace @shooting-line/portal"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.10",

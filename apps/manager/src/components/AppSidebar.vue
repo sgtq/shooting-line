@@ -1,18 +1,26 @@
 <script setup>
+import logoUrl from '../assets/shooting-line-logo.svg'
+import darkLogoUrl from '../assets/shooting-line-logo-dark.svg'
+
 defineProps({
   activePage: { type: String, required: true },
   navItems: { type: Array, required: true },
   tournamentCount: { type: Number, required: true },
+  userEmail: { type: String, default: '' },
 })
 
 const emit = defineEmits(['navigate'])
+const iconUrl = `${import.meta.env.BASE_URL}shooting-line-icon.svg`
+const darkIconUrl = `${import.meta.env.BASE_URL}shooting-line-icon-dark.svg`
 </script>
 
 <template>
   <aside class="sidebar">
-    <a class="brand" href="#" @click.prevent="emit('navigate', 'dashboard')">
-      <span class="brand-mark"><span></span><span></span><span></span></span>
-      <span class="brand-name">Shooting<span>Line</span></span>
+    <a class="brand" href="#" aria-label="ShootingLine home" @click.prevent="emit('navigate', 'dashboard')">
+      <img class="brand-logo brand-logo-light" :src="logoUrl" alt="ShootingLine" />
+      <img class="brand-logo brand-logo-dark" :src="darkLogoUrl" alt="" />
+      <img class="brand-icon brand-icon-light" :src="iconUrl" alt="" />
+      <img class="brand-icon brand-icon-dark" :src="darkIconUrl" alt="" />
     </a>
     <div class="workspace-label">WORKSPACE</div>
     <nav class="main-nav" aria-label="Main navigation">
@@ -38,7 +46,7 @@ const emit = defineEmits(['navigate'])
       </div>
       <button class="profile-button">
         <span class="avatar">A</span>
-        <span class="profile-copy"><strong>Administrator</strong><small>Demo workspace</small></span>
+        <span class="profile-copy"><strong>Workspace member</strong><small>{{ userEmail || 'Signed in' }}</small></span>
         <span class="profile-menu">···</span>
       </button>
     </div>
