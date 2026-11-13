@@ -40,4 +40,6 @@ Existing manager data in browser storage is left intact. If the manager database
 
 The workflow at `.github/workflows/pages.yml` builds and deploys the portal and manager. Vite uses the repository path for GitHub Pages project sites; `VITE_BASE_PATH` can override it for a custom domain.
 
-Shared favicons, PWA manifest/icons, store icon exports, and social preview image are in `public/`. Portal social metadata is in `apps/portal/index.html`.
+The sign-in portal remains at the site root; ShootingLine does not have a public marketing landing page. Shared favicons, PWA manifest/icons, store icons, and the active social preview image are in `public/`. The Google Play feature graphic and four phone screenshots are in `public/store-graphics/`.
+
+The feature-forward social card and store, legal, and press copy in `docs/` are drafts, not current product claims or public policy pages. The supplied copy describes features that are not implemented yet.

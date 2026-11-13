@@ -7,3 +7,5 @@
 - Keep documentation consistent with package scripts, environment variable names, migration names, and deployment paths.
 - Keep Git history organized as work progresses: after verifying each coherent milestone, create a focused commit and push it to the current branch unless the user says otherwise. Do not amend or rewrite existing history unless explicitly requested.
 - Before committing or pushing, review the worktree and diff, stage only files in scope, and exclude secrets, local configuration, generated output, and editor state. If pushing would deploy an incomplete or unconfigured change, do not push it to the deployment branch; use a feature branch or ask the user.
+- Keep the sign-in portal at the site root; do not add a public marketing landing page unless the user changes this requirement.
+- Keep store, legal, press, and marketing materials marked as drafts until their feature, data-practice, and publisher claims are verified. Do not publish placeholders or claim unfinished functionality as available.
