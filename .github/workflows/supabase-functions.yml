@@ -1,0 +1,45 @@
+name: Deploy Supabase functions
+
+on:
+  push:
+    branches:
+      - feat/supabase-monorepo
+      - main
+    paths:
+      - supabase/functions/admin-password-reset/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-functions-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate deployment settings
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_PROJECT_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Configure $name in this GitHub environment."
+              exit 1
+            fi
+          done
+
+      - name: Deploy password reset function
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: supabase functions deploy admin-password-reset --remote="$SUPABASE_PROJECT_ID" --use-api --yes

@@ -7,7 +7,7 @@ const appDefinitions = [
   {
     id: APP_IDS.manager,
     name: 'Tournament Manager',
-    description: 'Manage clubs, tournaments, participants, and scores.',
+    description: 'Manage clubs, tournaments, archers, and scores.',
     path: `${baseUrl}manager/`,
     ready: true,
   },
@@ -30,11 +30,15 @@ const configurationError = ref('')
 const errorMessage = ref('')
 const email = ref('')
 const password = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
 const isSubmitting = ref(false)
+const isUpdatingPassword = ref(false)
 const isSigningOut = ref(false)
 const session = ref(null)
 const accessibleApps = ref([])
 const isLoadingAccess = ref(false)
+const isPasswordRecovery = ref(false)
 let authSubscription
 
 try {
@@ -107,14 +111,43 @@ async function signOut() {
 
   session.value = null
   accessibleApps.value = []
+  isPasswordRecovery.value = false
   isSigningOut.value = false
+}
+
+async function updatePassword() {
+  if (newPassword.value.length < 8) {
+    errorMessage.value = 'Use a password with at least 8 characters.'
+    return
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    errorMessage.value = 'The passwords do not match.'
+    return
+  }
+
+  isUpdatingPassword.value = true
+  errorMessage.value = ''
+  const { error } = await client.value.auth.updateUser({ password: newPassword.value })
+  if (error) {
+    errorMessage.value = error.message
+  } else {
+    if (session.value) await updateAppAccess(session.value.user.id)
+    isPasswordRecovery.value = false
+    newPassword.value = ''
+    confirmPassword.value = ''
+  }
+  isUpdatingPassword.value = false
 }
 
 onMounted(() => {
   if (!client.value) return
 
-  authSubscription = client.value.auth.onAuthStateChange((_event, nextSession) => {
+  authSubscription = client.value.auth.onAuthStateChange((event, nextSession) => {
     session.value = nextSession
+    if (event === 'PASSWORD_RECOVERY') {
+      isPasswordRecovery.value = true
+      errorMessage.value = ''
+    }
     if (!nextSession) accessibleApps.value = []
   }).data.subscription
 
@@ -131,7 +164,6 @@ onUnmounted(() => authSubscription?.unsubscribe())
         <img :src="`${baseUrl}shooting-line-icon-dark.svg`" alt="" />
         <span>ShootingLine</span>
       </a>
-      <span class="header-label">Workspace portal</span>
     </header>
 
     <section v-if="configurationError" class="portal-panel status-panel" role="alert">
@@ -141,11 +173,33 @@ onUnmounted(() => authSubscription?.unsubscribe())
       <p>Copy <code>.env.example</code> to <code>.env</code>, configure the Supabase project values, and restart the app.</p>
     </section>
 
+    <section v-else-if="isPasswordRecovery" class="portal-panel sign-in-panel">
+      <div class="panel-copy">
+        <p class="eyebrow">Account recovery</p>
+        <h1>Choose a new password</h1>
+        <p>Your administrator requested this one-time recovery link.</p>
+      </div>
+      <form class="sign-in-form" @submit.prevent="updatePassword">
+        <label>
+          New password
+          <input v-model="newPassword" type="password" autocomplete="new-password" minlength="8" required />
+        </label>
+        <label>
+          Confirm new password
+          <input v-model="confirmPassword" type="password" autocomplete="new-password" minlength="8" required />
+        </label>
+        <p v-if="errorMessage" class="error-message" role="alert">{{ errorMessage }}</p>
+        <button class="primary-button" type="submit" :disabled="isUpdatingPassword">
+          {{ isUpdatingPassword ? 'Updating password…' : 'Update password' }}
+        </button>
+      </form>
+    </section>
+
     <section v-else-if="!session" class="portal-panel sign-in-panel">
       <div class="panel-copy">
         <p class="eyebrow">Your archery workspace</p>
         <h1>Sign in to ShootingLine</h1>
-        <p>Use an account invited by your workspace administrator.</p>
+        <p>Use an account invited by your ShootingLine administrator.</p>
       </div>
 
       <form class="sign-in-form" @submit.prevent="signIn">
@@ -167,7 +221,6 @@ onUnmounted(() => authSubscription?.unsubscribe())
     <section v-else class="workspace-section">
       <div class="welcome-row">
         <div>
-          <p class="eyebrow">Workspace portal</p>
           <h1>Choose an app</h1>
           <p class="signed-in-as">Signed in as {{ session.user.email }}</p>
         </div>
@@ -179,29 +232,37 @@ onUnmounted(() => authSubscription?.unsubscribe())
       <p v-if="errorMessage" class="error-message access-error" role="alert">{{ errorMessage }}</p>
       <p v-if="isLoadingAccess" class="loading-message" role="status">Checking your app access…</p>
       <div v-else class="app-grid">
-        <article v-for="app in visibleApps" :key="app.id" class="app-card">
-          <p class="card-status">{{ app.ready ? 'Available' : 'Planned' }}</p>
+        <component
+          :is="app.ready && app.hasAccess ? 'a' : 'article'"
+          v-for="app in visibleApps"
+          :key="app.id"
+          :href="app.ready && app.hasAccess ? app.path : null"
+          class="app-card"
+          :class="{
+            'app-card-link': app.ready && app.hasAccess,
+            'app-card-disabled': !app.ready || !app.hasAccess,
+          }"
+          :aria-disabled="app.ready && app.hasAccess ? null : 'true'"
+        >
+          <p v-if="!app.ready" class="card-status coming-soon-status">COMING SOON</p>
+          <p v-else-if="!app.hasAccess" class="card-status access-required-status">Access required</p>
           <h2>{{ app.name }}</h2>
           <p>{{ app.description }}</p>
-          <a
-            v-if="app.ready && app.hasAccess"
-            class="primary-button app-action"
-            :href="app.path"
-          >
-            Open app
-          </a>
-          <span v-else-if="app.ready" class="access-note">Access has not been assigned</span>
-          <span v-else class="access-note">Not available yet</span>
-        </article>
+          <p v-if="app.ready && app.hasAccess" class="card-action">
+            Open app <span aria-hidden="true">→</span>
+          </p>
+          <p v-else-if="app.ready" class="access-note">Contact ShootingLine administrators for access.</p>
+          <p v-else class="access-note">This app is not available yet</p>
+        </component>
       </div>
       <p v-if="!isLoadingAccess && !errorMessage && accessibleApps.length === 0" class="empty-access">
-        No apps are assigned to this account. Ask your workspace administrator for access.
+        No apps are assigned to this account. Contact ShootingLine administrators for access.
       </p>
     </section>
 
     <footer class="portal-footer">
       <span>One sign-in for your ShootingLine apps</span>
-      <span>Access is assigned by your workspace administrator</span>
+      <span>Contact ShootingLine administrators for access</span>
     </footer>
   </main>
 </template>

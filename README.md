@@ -21,12 +21,13 @@ Requirements: Node.js compatible with Vite 8 and npm.
 ```sh
 npm install
 npm run dev
+npm run dev:portal
 npm run dev:manager
 npm run build
 npm run preview
 ```
 
-`npm run dev` starts the portal. `npm run dev:manager` starts the manager directly. The production build publishes the portal at the site root and manager at `/manager/`. The two placeholder apps are not built or deployed.
+`npm run dev` starts the portal and manager together, with the manager available at `/manager/` on the portal's origin. `npm run dev:portal` starts only the portal; `npm run dev:manager` starts the manager's local Vite server on port 5174. The production build publishes the portal at the site root and manager at `/manager/`. The two placeholder apps are not built or deployed.
 
 ## Shared access and database
 
