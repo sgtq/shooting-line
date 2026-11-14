@@ -76,7 +76,6 @@ export const spanish = {
   upcoming: 'Próximos',
   past: 'Pasados',
   categories: 'Categorías',
-  'open tournament →': 'Abrir torneo →',
   'no tournaments found': 'No se encontraron torneos',
   'try a different search or create a tournament.': 'Prueba otra búsqueda o crea un torneo.',
   'event formats': 'Formatos de evento',

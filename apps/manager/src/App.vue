@@ -57,13 +57,13 @@ async function persistChange(operation, updateLocalState, errorTarget = 'page') 
 }
 
 const allNavItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: '◫' },
-  { id: 'tournaments', label: 'Tournaments', icon: '▦' },
-  { id: 'tournament-types', label: 'Tournament types', icon: '⚙' },
-  { id: 'categories', label: 'Categories', icon: '◇' },
-  { id: 'clubs', label: 'Clubs', icon: '⌂' },
-  { id: 'participants', label: 'Archers', icon: '♙' },
-  { id: 'user-access', label: 'User access', icon: '♙' },
+  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { id: 'tournaments', label: 'Tournaments', icon: 'tournaments' },
+  { id: 'tournament-types', label: 'Tournament types', icon: 'tournament-types' },
+  { id: 'categories', label: 'Categories', icon: 'categories' },
+  { id: 'clubs', label: 'Clubs', icon: 'clubs' },
+  { id: 'participants', label: 'Archers', icon: 'archers' },
+  { id: 'user-access', label: 'User access', icon: 'user-access' },
 ]
 const canManage = computed(() => ['admin', 'manager'].includes(props.userRole))
 const isAdmin = computed(() => props.userRole === 'admin')
@@ -898,6 +898,12 @@ function openTournament(tournamentId, tab = 'participants') {
   activePage.value = 'tournament-detail'
 }
 
+// A drag-select ends in a click on the card; skip opening so the selected text can be copied.
+function openTournamentFromCard(tournamentId) {
+  if (window.getSelection()?.toString()) return
+  openTournament(tournamentId)
+}
+
 function openScoreDetails(participantId) {
   selectedScoreParticipantId.value = participantId
   activePage.value = 'score-detail'
@@ -1596,7 +1602,14 @@ async function recordMatchScore(match, side, value) {
             </div>
           </div>
           <div class="tournament-list">
-            <article v-for="event in filteredTournaments" :key="event.id" class="tournament-card">
+            <article
+              v-for="event in filteredTournaments"
+              :key="event.id"
+              class="tournament-card"
+              tabindex="0"
+              @click="openTournamentFromCard(event.id)"
+              @keydown.enter.self="openTournament(event.id)"
+            >
               <div class="tournament-date">
                 <span>{{ formatMonth(event.date) }}</span><strong>{{
                   new Date(`${event.date}T00:00:00Z`).getUTCDate()
@@ -1615,9 +1628,6 @@ async function recordMatchScore(match, side, value) {
                   ><span>⌂ {{ clubFor(event.clubId)?.name || t('Independent') }}</span>
                 </div>
               </div>
-              <button class="button button-small button-outline" @click="openTournament(event.id)">
-                {{ t('Open tournament →') }}
-              </button>
             </article>
             <div v-if="!filteredTournaments.length" class="empty-state panel">
               <div class="empty-icon">▦</div>

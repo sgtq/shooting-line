@@ -1,5 +1,6 @@
 <script setup>
 import { t } from '@shooting-line/i18n'
+import NavIcon from './NavIcon.vue'
 import logoUrl from '../assets/shooting-line-logo.svg'
 import darkLogoUrl from '../assets/shooting-line-logo-dark.svg'
 
@@ -37,7 +38,7 @@ const darkIconUrl = `${import.meta.env.BASE_URL}shooting-line-icon-dark.svg`
         :title="item.label"
         @click="emit('navigate', item.id)"
       >
-        <span class="nav-icon">{{ item.icon }}</span>
+        <span class="nav-icon"><NavIcon :name="item.icon" /></span>
         <span>{{ item.label }}</span>
         <span v-if="item.id === 'tournaments'" class="nav-count">{{ tournamentCount }}</span>
       </button>
