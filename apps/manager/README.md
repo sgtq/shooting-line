@@ -10,6 +10,7 @@ The manager is the current archery club and tournament application. It is a Vue 
 - Per-tournament rounds and archer scores.
 - First-round Olympic-style match seeding and match score entry.
 - Light and dark themes.
+- English and Latin American Spanish interface with a shared browser language preference.
 - Dashboard count shortcuts and upcoming/past tournament filters.
 
 ## Data and access
@@ -65,3 +66,6 @@ npm run test:unit
 ## Limitations
 
 The manager is not a complete competition system. Byes, set points, tie-breaks, advancement, and later bracket rounds are not implemented. Archer birth dates and affiliation IDs are personal data.
+
+User-entered names and existing saved round labels are displayed as stored. Details returned by Supabase or other
+services may remain in their original language.

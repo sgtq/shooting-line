@@ -48,6 +48,8 @@ input {
 }
 
 .portal-header {
+  flex-wrap: wrap;
+  gap: 12px;
   padding-bottom: 24px;
   border-bottom: 1px solid #dfe5ec;
 }
