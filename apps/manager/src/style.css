@@ -465,6 +465,7 @@ h3 {
   background: transparent;
   text-align: left;
 }
+[data-theme='dark'] .stat-value-button:hover,
 .stat-value-button:hover {
   color: var(--green);
 }
@@ -822,7 +823,7 @@ h3 {
   padding: 0 12px;
   border: 0;
   border-radius: 4px;
-  color: var(--text-secondary);
+  color: #64748b;
   background: transparent;
   font-size: 10px;
   font-weight: 600;
