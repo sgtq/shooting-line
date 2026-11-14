@@ -1399,7 +1399,7 @@ async function recordMatchScore(match, side, value) {
                 >
                 <button
                   type="button"
-                  class="status-pill status-pill-button"
+                  class="status-pill status-pill-button details-control"
                   :title="t('Open club details')"
                   @click.stop="openUnlessSelecting(() => openClubDetails(club))"
                 >

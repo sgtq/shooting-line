@@ -101,6 +101,13 @@ function mountApp(repository = createRepository(), overrides = {}) {
 
 describe('participant and club workflows', () => {
   beforeEach(() => {
+    const localStorageMock = {
+      getItem: vi.fn(),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    }
+    vi.stubGlobal('localStorage', localStorageMock)
     localStorage.clear()
     vi.stubGlobal('crypto', { randomUUID: () => 'new-participant' })
   })
@@ -302,7 +309,7 @@ describe('participant and club workflows', () => {
     const repository = createRepository()
     const wrapper = mountApp(repository, { initialData, userRole: 'manager', userRoles: ['manager'] })
 
-    await wrapper.get('.club-preview-item .status-pill-button').trigger('click')
+    await wrapper.get('.club-preview-item .status-pill-button.status-active, .club-preview-item .status-pill-button.status-disabled').trigger('click')
     await flushPromises()
     expect(repository.setClubEnabled).toHaveBeenCalledWith('club-north', true)
     expect(wrapper.find('form.modal').exists()).toBe(false)
