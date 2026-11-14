@@ -1385,16 +1385,23 @@ async function recordMatchScore(match, side, value) {
               <button class="text-link" @click="activePage = 'clubs'">{{ t('Manage clubs') }} <span>→</span></button>
             </div>
             <div class="club-preview-list">
-              <div v-for="club in data.clubs.slice(0, 3)" :key="club.id" class="club-preview-item clickable-card">
+              <div
+                v-for="club in data.clubs.slice(0, 3)"
+                :key="club.id"
+                class="club-preview-item clickable-card"
+                tabindex="0"
+                @click="openUnlessSelecting(() => openClubDetails(club))"
+                @keydown.enter.self="openClubDetails(club)"
+              >
                 <span class="club-avatar">{{ club.name.charAt(0) }}</span><span class="club-preview-name"
                   ><strong>{{ club.name }}</strong
                   ><small>{{ club.representative }}</small></span
                 >
                 <button
                   type="button"
-                  class="status-pill"
+                  class="status-pill status-pill-button"
                   :title="t('Open club details')"
-                  @click="openUnlessSelecting(() => openClubDetails(club))"
+                  @click.stop="openUnlessSelecting(() => openClubDetails(club))"
                 >
                   {{ t('Details') }}
                 </button>
