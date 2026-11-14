@@ -13,6 +13,7 @@ const props = defineProps({
   userScope: { type: Object, default: () => ({}) },
 })
 
+const isDevelopmentPreview = import.meta.env.VITE_APP_ENV === 'development'
 const THEME_STORAGE_KEY = 'shooting-line-theme'
 const theme = ref(localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light')
 const data = ref(props.initialData)
@@ -977,6 +978,7 @@ async function recordMatchScore(match, side, value) {
       <header class="topbar">
         <div class="breadcrumbs"><span>Main menu</span><span class="crumb-slash">/</span><strong>{{ activePage === 'tournament-detail' ? selectedTournament?.name : allNavItems.find((item) => item.id === activePage)?.label }}</strong></div>
         <div class="topbar-actions">
+          <span v-if="isDevelopmentPreview" class="environment-badge">DEVELOPMENT / QA</span>
           <span class="demo-chip"><i></i> Shared database</span>
           <a class="portal-link" href="../">App launcher</a>
           <button class="theme-toggle" type="button" :aria-pressed="theme === 'dark'" :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'" @click="toggleTheme">

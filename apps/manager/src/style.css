@@ -47,6 +47,7 @@ a { color: inherit; }
 .breadcrumbs { display: flex; align-items: center; gap: 11px; color: #969b95; font-size: 12px; }
 .breadcrumbs strong { color: #4a514a; font-weight: 600; }.crumb-slash { color: #d3d6d1; }
 .topbar-actions { display: flex; align-items: center; gap: 15px; }
+.environment-badge { padding: 5px 8px; border: 1px solid #ead7a4; border-radius: 999px; color: #745a1c; background: #fff8e6; font-size: 8px; font-weight: 700; letter-spacing: .45px; white-space: nowrap; }
 .portal-link { color: #647184; font-size: 10px; text-decoration: none; }.portal-link:hover { color: #344054; text-decoration: underline; }
 .demo-chip { display: inline-flex; align-items: center; gap: 7px; color: #737e70; font-size: 10px; }
 .demo-chip i { width: 6px; height: 6px; border-radius: 50%; background: #9cae75; }
