@@ -108,10 +108,15 @@ a {
   font-weight: 600;
 }
 .nav-icon {
+  display: inline-flex;
   width: 18px;
-  text-align: center;
-  font-size: 17px;
-  line-height: 1;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+}
+.nav-icon-svg {
+  width: 18px;
+  height: 18px;
 }
 .nav-count {
   margin-left: auto;
@@ -1124,6 +1129,14 @@ tbody tr:last-child td {
   border-radius: 8px;
   background: #fff;
   box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.tournament-card:hover {
+  border-color: var(--green);
+}
+.tournament-card:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
 }
 .tournament-date {
   width: 52px;

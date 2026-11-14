@@ -151,12 +151,27 @@ describe('participant and club workflows', () => {
   it('filters tournament directory participants by club', async () => {
     const wrapper = mountApp()
     await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
-    await wrapper.get('.tournament-card .button').trigger('click')
+    await wrapper.get('.tournament-card').trigger('click')
     await wrapper.get('select[aria-label="Filter archers by club"]').setValue('club-north')
 
     const roster = wrapper.get('.roster-list').text()
     expect(roster).toContain('Archer, Alex')
     expect(roster).not.toContain('Shooter, Sam')
+  })
+
+  it('opens a tournament by clicking its card unless text is selected', async () => {
+    const wrapper = mountApp()
+    await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
+    expect(wrapper.find('.tournament-card .button').exists()).toBe(false)
+
+    const selection = vi.spyOn(window, 'getSelection').mockReturnValue({ toString: () => 'copied text' })
+    await wrapper.get('.tournament-card').trigger('click')
+    expect(wrapper.find('.tournament-card').exists()).toBe(true)
+
+    selection.mockReturnValue({ toString: () => '' })
+    await wrapper.get('.tournament-card').trigger('click')
+    expect(wrapper.find('.tournament-card').exists()).toBe(false)
+    expect(wrapper.find('.roster-list').exists()).toBe(true)
   })
 
   it('assigns an existing participant to a club', async () => {
@@ -225,7 +240,7 @@ describe('participant and club workflows', () => {
       userRoles: [userRole],
     })
     await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
-    await wrapper.get('.tournament-card .button').trigger('click')
+    await wrapper.get('.tournament-card').trigger('click')
     await wrapper.get('.tournament-tabs button:nth-child(2)').trigger('click')
 
     expect(wrapper.get('.category-roster-row input').element.disabled).toBe(true)
