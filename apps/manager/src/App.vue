@@ -1122,8 +1122,8 @@ async function recordMatchScore(match, side, value) {
           <div class="section-toolbar">
             <div class="toolbar-count">{{ filteredTournaments.length }} {{ tournamentStatusFilter }} tournaments</div>
             <div class="tournament-filters" role="group" aria-label="Filter tournaments by date">
-              <button :class="{ active: tournamentStatusFilter === 'upcoming' }" @click="tournamentStatusFilter = 'upcoming'">Upcoming</button>
-              <button :class="{ active: tournamentStatusFilter === 'past' }" @click="tournamentStatusFilter = 'past'">Past</button>
+              <button :class="{ active: tournamentStatusFilter === 'upcoming' }" :aria-pressed="tournamentStatusFilter === 'upcoming'" @click="tournamentStatusFilter = 'upcoming'">Upcoming</button>
+              <button :class="{ active: tournamentStatusFilter === 'past' }" :aria-pressed="tournamentStatusFilter === 'past'" @click="tournamentStatusFilter = 'past'">Past</button>
             </div>
             <div class="search-box"><span>⌕</span><input v-model="tournamentQuery" placeholder="Search tournaments..." /></div>
           </div>

@@ -10,6 +10,7 @@ The manager is the current archery club and tournament application. It is a Vue 
 - Per-tournament rounds and archer scores.
 - First-round Olympic-style match seeding and match score entry.
 - Light and dark themes.
+- Dashboard count shortcuts and upcoming/past tournament filters.
 
 ## Data and access
 

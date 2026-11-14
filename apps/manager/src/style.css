@@ -79,6 +79,9 @@ h3 { color: #303830; }
 .stat-icon.olive { color: #60764a; background: #eef2e8; }.stat-icon.sand { color: #9a7850; background: #f7f1e8; }.stat-icon.blue { color: #62808a; background: #edf3f4; }.stat-icon.peach { color: #a87353; background: #fbf0e9; }
 .stat-caption { color: #adb2ab; font-size: 8px; font-weight: 700; letter-spacing: 1px; }
 .stat-value { display: block; margin-top: 11px; color: #303a31; font: 700 27px/1 'Segoe UI', sans-serif; letter-spacing: -.8px; }
+.stat-value-button { padding: 0; border: 0; background: transparent; text-align: left; }
+.stat-value-button:hover { color: var(--green); }
+.stat-value-button:focus-visible { outline: 2px solid var(--brand-accent); outline-offset: 3px; border-radius: 2px; }
 .stat-label { display: block; margin-top: 5px; color: #6f766e; font-size: 10px; }
 .stat-foot { display: flex; align-items: center; gap: 6px; margin-top: 11px; padding-top: 9px; border-top: 1px solid #f0f1ef; color: #8e948d; font-size: 9px; }
 .stat-dot { width: 5px; height: 5px; border-radius: 50%; }.stat-dot.green { background: #91aa7f; }
@@ -107,10 +110,15 @@ h3 { color: #303830; }
 .status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 20px; font-size: 9px; white-space: nowrap; }.status-pill i { width: 5px; height: 5px; border-radius: 50%; }.status-active { color: #567b59; background: #eff6ed; }.status-active i { background: #78a378; }.status-disabled { color: #a6786d; background: #faf0ee; }.status-disabled i { background: #ca9387; }.status-pending { color: #a17d47; background: #faf5ea; }.status-pending i { background: #d8b576; }
 
 .section-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 7px 0 17px; }.toolbar-count { color: #81877f; font-size: 11px; }.toolbar-count span { padding: 0 5px; color: #c2c6c0; }
+.tournament-filters { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-surface-alt); }
+.tournament-filters button { min-height: 27px; padding: 0 12px; border: 0; border-radius: 4px; color: var(--text-secondary); background: transparent; font-size: 10px; font-weight: 600; }
+.tournament-filters button.active { color: var(--text-primary); background: var(--bg-surface); box-shadow: var(--shadow-card); }
+.tournament-filters button:focus-visible { outline: 2px solid var(--brand-accent); outline-offset: 1px; }
 .type-shortcut { display: flex; align-items: center; gap: 7px; margin: -13px 0 14px; color: #9aa198; font-size: 9px; }.type-shortcut .text-link { font-size: 9px; }
 .search-box { width: 230px; height: 35px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid #e7eae5; border-radius: 6px; background: #fff; }.search-box > span { color: #8f968d; font-size: 17px; }.search-box input { width: 100%; border: 0; outline: 0; color: #424a42; background: transparent; font-size: 10px; }.search-box input::placeholder { color: #a9ada7; }
 .clubs-grid,.category-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }.club-card,.category-card { min-width: 0; padding: 17px; border: 1px solid #eaede8; border-radius: 8px; background: #fff; box-shadow: var(--shadow); }
 .club-card-head { display: flex; justify-content: space-between; align-items: center; }.club-avatar.large { width: 38px; height: 38px; border-radius: 9px; font-size: 15px; }.more-button { border: 0; color: #9da39b; background: transparent; letter-spacing: 2px; }
+.club-logo { width: 38px; height: 38px; border-radius: 9px; object-fit: contain; }
 .club-card h3 { overflow: hidden; margin: 13px 0 5px; font: 700 13px 'Segoe UI', sans-serif; text-overflow: ellipsis; white-space: nowrap; }.club-location { min-height: 28px; display: block; margin: 0; color: #90978e; font-size: 9px; line-height: 1.5; text-decoration: none; }.club-location:hover { color: #567653; }
 .club-contact { display: grid; gap: 5px; margin-top: 14px; padding: 11px 0; border-top: 1px solid #f0f1ee; }.contact-label { color: #a0a69e; font-size: 8px; font-weight: 700; letter-spacing: .8px; }.club-contact strong, .club-contact a { overflow: hidden; color: #576057; font-size: 10px; font-weight: 500; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }.club-contact a:hover { color: #527453; }
 .club-user-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid #f0f1ee; }.club-user-row > div { min-width: 0; display: grid; gap: 5px; }.club-user-row strong { overflow: hidden; color: #596058; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
