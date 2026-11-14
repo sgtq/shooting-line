@@ -56,6 +56,7 @@ From the repository root:
 npm run dev
 npm run dev:manager
 npm run build:manager
+npm run test:unit
 ```
 
 `npm run dev` starts the portal and manager together, serving the manager at `/manager/` on the portal's origin. `npm run dev:manager` starts the manager Vite server on port 5174. The production manager bundle is written to `dist/manager/`.

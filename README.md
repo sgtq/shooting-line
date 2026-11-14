@@ -25,9 +25,13 @@ npm run dev:portal
 npm run dev:manager
 npm run build
 npm run preview
+npm run test:unit
+npm run test:e2e
 ```
 
 `npm run dev` starts the portal and manager together, with the manager available at `/manager/` on the portal's origin. `npm run dev:portal` starts only the portal; `npm run dev:manager` starts the manager's local Vite server on port 5174. The production build publishes the portal at the site root and manager at `/manager/`. The two placeholder apps are not built or deployed.
+
+Unit tests cover manager workflows and shared authentication access queries using mocked Supabase calls.
 
 ## Shared access and database
 
