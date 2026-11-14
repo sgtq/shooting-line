@@ -33,19 +33,24 @@ npm run preview
 
 The portal and manager authenticate through Supabase Auth. PostgreSQL schema and RLS policies are in `supabase/migrations/`. The `app_access` table controls which app IDs a signed-in user can open. Manager roles are `admin`, `manager`, `club`, and `archer`; database RLS scopes club and archer data access.
 
-The repository does not contain project credentials. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in a local `.env` file based on `.env.example`. The GitHub Pages workflow reads variables with those names from repository Actions variables. The browser app does not use a service-role key.
+The repository does not contain project credentials. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in a local `.env` file based on `.env.example`. GitHub Pages builds use separate repository Actions variables for production and development. These Supabase URL and publishable-key values are public client configuration; the browser app does not use a service-role key.
 
 Existing manager data in browser storage is left intact. If the manager database is empty, the app offers a one-time import into PostgreSQL and keeps the browser copy after import.
 
 ## GitHub Pages
 
-The workflow at `.github/workflows/pages.yml` builds and deploys the portal and manager. Vite uses the repository path for GitHub Pages project sites; `VITE_BASE_PATH` can override it for a custom domain.
+The workflow at `.github/workflows/pages.yml` builds the current `main` site at the GitHub Pages root and the current `develop` preview under `/develop/` (or `/<repository>/develop/` on the default project-site domain), then deploys both together. Production uses the existing repository Actions variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Configure these additional repository variables for the preview:
+
+- `PAGES_DEVELOPMENT_SUPABASE_URL` and `PAGES_DEVELOPMENT_SUPABASE_PUBLISHABLE_KEY`
+- Optional `PAGES_DEVELOPMENT_BASE_PATH` to override the default preview path. `VITE_BASE_PATH` continues to override the production base path.
+
+The preview uses a separate development Supabase project and is labeled **DEVELOPMENT / QA** in the UI. Supabase Auth and `app_access` restrict app use and data, but GitHub Pages still serves the static HTML and JavaScript publicly. Do not put personal or service-role tokens in a browser build.
 
 ## Branching and database deployment
 
 Use `develop` as the integration branch: branch feature work from `develop` and merge it back through pull requests. Promote changes from `develop` to `main` through a pull request; configure GitHub branch protection or a ruleset on `main` to require pull requests and block direct pushes. Repository instructions document this policy but cannot enforce it by themselves.
 
-Supabase migration and Edge Function workflows target `develop` with the GitHub `development` environment and `main` with `production`. Configure each environment with its own Supabase project credentials before merging changes that trigger those workflows.
+Supabase migration and Edge Function workflows target `develop` with the GitHub `development` environment and `main` with `production`. Configure each environment with its own Supabase project credentials before merging changes that trigger those workflows. The migration workflow needs the project's Session pooler connection URI in `SUPABASE_DB_URL` for GitHub Actions' IPv4 network. Functions deployments require `edge_functions_read` and `edge_functions_write` token scopes.
 
 The sign-in portal remains at the site root; ShootingLine does not have a public marketing landing page. Shared favicons, PWA manifest/icons, store icons, and the active social preview image are in `public/`. The Google Play feature graphic and four phone screenshots are in `public/store-graphics/`.
 

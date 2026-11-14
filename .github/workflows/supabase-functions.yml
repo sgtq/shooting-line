@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - supabase/functions/admin-password-reset/**
+  workflow_dispatch:
 
 permissions:
   contents: read

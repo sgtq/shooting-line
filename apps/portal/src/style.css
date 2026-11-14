@@ -47,6 +47,17 @@ input {
   border-bottom: 1px solid #dfe5ec;
 }
 
+.environment-badge {
+  padding: 6px 9px;
+  border: 1px solid #ead7a4;
+  border-radius: 999px;
+  color: #745a1c;
+  background: #fff8e6;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+}
+
 .brand {
   justify-content: flex-start;
   gap: 10px;

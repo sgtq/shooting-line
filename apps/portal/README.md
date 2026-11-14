@@ -10,6 +10,7 @@ The portal is the shared entry point for ShootingLine. It signs users in through
 - Links to Tournament Manager only when the user has the `manager` grant.
 - Shows the Ianseo Dashboard and Shooting Scorecard as unavailable placeholders.
 - Provides sign-out and reports missing Supabase configuration or access-query errors.
+- The GitHub Pages development preview uses its separate Supabase project and displays a Development / QA label.
 
 There is no sign-up flow or self-service password reset link. An admin or manager initiates password recovery from Tournament Manager; Supabase Auth sends the recovery email and the recipient chooses a new password from its one-time link. App grants are assigned in Supabase. RLS policies remain the enforcement layer for database access.
 
@@ -25,4 +26,4 @@ npm run dev:portal
 npm run build:portal
 ```
 
-`npm run dev` starts the portal and manager together so the manager link works locally at `/manager/`; `npm run dev:portal` starts only the portal. The portal is built at the site root for GitHub Pages deployment.
+`npm run dev` starts the portal and manager together so the manager link works locally at `/manager/`; `npm run dev:portal` starts only the portal. Production is built at the GitHub Pages root; the development preview is deployed under `/develop/`.

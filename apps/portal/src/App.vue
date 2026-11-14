@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { APP_IDS, createSupabaseClient, listAppAccess } from '@shooting-line/auth'
 
 const baseUrl = import.meta.env.BASE_URL
+const isDevelopmentPreview = import.meta.env.VITE_APP_ENV === 'development'
 const appDefinitions = [
   {
     id: APP_IDS.manager,
@@ -164,6 +165,7 @@ onUnmounted(() => authSubscription?.unsubscribe())
         <img :src="`${baseUrl}shooting-line-icon-dark.svg`" alt="" />
         <span>ShootingLine</span>
       </a>
+      <span v-if="isDevelopmentPreview" class="environment-badge">DEVELOPMENT / QA</span>
     </header>
 
     <section v-if="configurationError" class="portal-panel status-panel" role="alert">
