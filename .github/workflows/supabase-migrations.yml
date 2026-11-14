@@ -3,7 +3,7 @@ name: Apply Supabase migrations
 on:
   push:
     branches:
-      - feat/supabase-monorepo
+      - develop
       - main
     paths:
       - supabase/migrations/**
@@ -28,33 +28,21 @@ jobs:
 
       - name: Validate migration settings
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
           SYSTEM_ADMIN_EMAIL: ${{ vars.SYSTEM_ADMIN_EMAIL }}
           SYSTEM_ADMIN_DISPLAY_NAME: ${{ vars.SYSTEM_ADMIN_DISPLAY_NAME }}
         run: |
-          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_DB_URL \
-            SUPABASE_PROJECT_ID SYSTEM_ADMIN_EMAIL SYSTEM_ADMIN_DISPLAY_NAME; do
+          for name in SUPABASE_DB_URL SYSTEM_ADMIN_EMAIL SYSTEM_ADMIN_DISPLAY_NAME; do
             if [ -z "${!name}" ]; then
               echo "::error::Configure $name in this GitHub environment."
               exit 1
             fi
           done
 
-      - name: Link Supabase project
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --yes
-
       - name: Apply migrations in order
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: supabase db push --remote --password "$SUPABASE_DB_PASSWORD" --yes
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: supabase db push --remote="$SUPABASE_DB_URL" --yes
 
       - name: Bootstrap system administrator
         env:

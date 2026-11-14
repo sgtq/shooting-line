@@ -32,18 +32,16 @@ The GitHub Actions workflow in `.github/workflows/supabase-migrations.yml` runs 
 
 Configure these values in both GitHub environments under **Repository Settings → Environments**:
 
-- `SUPABASE_ACCESS_TOKEN` secret: create a token from your Supabase account's **Access Tokens** page. It must have project access, database migration permissions, and Edge Functions write permission.
-- `SUPABASE_DB_PASSWORD` secret: the project's database password, set when the project was created or reset under **Project Settings → Database**.
-- `SUPABASE_DB_URL` secret: copy the PostgreSQL URI from that project's **Connect** dialog. It contains the database password.
+- `SUPABASE_DB_URL` secret: copy the PostgreSQL URI from that project's **Connect** dialog. Use the **Session pooler** URI for GitHub Actions' IPv4 network. The URI contains the database password.
 - `SUPABASE_PROJECT_ID` secret: the project's **Reference ID**, under **Project Settings → General**.
 - `SYSTEM_ADMIN_EMAIL` variable: email for an account that already exists in that project's Supabase Auth users.
 - `SYSTEM_ADMIN_DISPLAY_NAME` variable: the name shown in the app.
 
-Use the development project's values in the `development` environment and the production project's values in `production`. The email and display-name settings are variables, not secrets. `.env.example` lists the same keys as blank placeholders; never put real credentials in that file.
+Use the development project's values in the `development` environment and the production project's values in `production`. The email and display-name settings are variables, not secrets. `.env.example` lists the keys used by Actions as blank placeholders; never put real credentials in that file.
 
-The workflow applies migrations before running the idempotent administrator bootstrap. The Auth user named by `SYSTEM_ADMIN_EMAIL` must already exist in the target Supabase project. Configure production environment approval rules in GitHub if production migrations require review.
+The migration workflow applies schema changes and then runs the idempotent administrator bootstrap through `SUPABASE_DB_URL`. The Auth user named by `SYSTEM_ADMIN_EMAIL` must already exist in the target Supabase project. Configure production environment approval rules in GitHub if production migrations require review.
 
-The separate `.github/workflows/supabase-functions.yml` deploys the password-reset Edge Function when its source changes. Its access token needs Edge Functions write permission; it uses `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_ID` from the same GitHub environment. Supabase supplies the function's URL and API keys. Set each project's Auth **Site URL** to the correct app origin, configure allowed redirect URLs, and configure email delivery (preferably custom SMTP); the recovery email uses that Site URL.
+The separate `.github/workflows/supabase-functions.yml` deploys the password-reset Edge Function when its source changes. Its Supabase access token needs project access, project metadata read, and Edge Functions write permission; it uses `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_ID` from the same GitHub environment. The database migration workflow uses the password inside `SUPABASE_DB_URL`, so it does not need a database write token scope. Supabase supplies the function's URL and API keys. Set each project's Auth **Site URL** to the correct app origin, configure allowed redirect URLs, and configure email delivery (preferably custom SMTP); the recovery email uses that Site URL.
 
 ## Commands
 

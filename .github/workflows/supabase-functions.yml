@@ -3,7 +3,7 @@ name: Deploy Supabase functions
 on:
   push:
     branches:
-      - feat/supabase-monorepo
+      - develop
       - main
     paths:
       - supabase/functions/admin-password-reset/**
