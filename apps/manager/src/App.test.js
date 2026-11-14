@@ -221,7 +221,7 @@ describe('participant and club workflows', () => {
     await wrapper.get('.club-card-actions button').trigger('click')
 
     expect(wrapper.get('input[type="email"]').element.value).toBe('gquittnerl+omarlions@gmail.com')
-    expect(wrapper.getAll('select')[1].element.value).toBe('club-north')
+    expect(wrapper.findAll('select')[1].element.value).toBe('club-north')
   })
 
   it('does not expose reset or profile editing to archers', () => {
