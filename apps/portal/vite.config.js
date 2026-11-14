@@ -10,6 +10,15 @@ export default defineConfig({
   envDir: fileURLToPath(new URL('../../', configDirectory)),
   plugins: [vue()],
   publicDir: fileURLToPath(new URL('../../public/', configDirectory)),
+  server: {
+    proxy: {
+      '/manager': {
+        target: 'http://127.0.0.1:5174',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
   build: {
     outDir: fileURLToPath(new URL('../../dist/', configDirectory)),
     emptyOutDir: true,

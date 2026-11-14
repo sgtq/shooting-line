@@ -12,6 +12,7 @@ function mapClub(row) {
     website: row.website,
     address: row.address,
     mapUrl: row.map_url,
+    logoUrl: row.logo_url || '',
     userEmail: row.user_email,
     userEnabled: row.user_enabled,
   }
@@ -25,6 +26,7 @@ function mapParticipant(row) {
     birthDate: row.birth_date || '',
     waId: row.wa_id,
     aetayId: row.aetay_id,
+    clubId: row.club_id || '',
   }
 }
 
@@ -37,6 +39,23 @@ function mapTournamentType(row) {
     targetType: row.target_type,
     ends: row.ends,
     arrowsPerEnd: row.arrows_per_end,
+  }
+}
+
+function mapTargetType(row) {
+  return {
+    id: row.id,
+    name: row.name,
+  }
+}
+
+function mapUserRole(row) {
+  return {
+    userId: row.user_id,
+    email: row.email,
+    role: row.role,
+    clubId: row.club_id || '',
+    participantId: row.participant_id || '',
   }
 }
 
@@ -67,7 +86,9 @@ export function readLegacyWorkspace() {
 
   return {
     clubs: Array.isArray(workspace.clubs) ? workspace.clubs : [],
-    participants: Array.isArray(workspace.participants) ? workspace.participants : [],
+    participants: Array.isArray(workspace.participants)
+      ? workspace.participants.map((participant) => ({ ...participant, clubId: participant.clubId || '' }))
+      : [],
     tournamentTypes: Array.isArray(workspace.tournamentTypes) ? workspace.tournamentTypes : [],
     categories: Array.isArray(workspace.categories) ? workspace.categories : [],
     tournaments: Array.isArray(workspace.tournaments)
@@ -91,11 +112,12 @@ export function createManagerRepository(client) {
     return `${tournamentId}:${roundName}`
   }
 
-  async function load() {
+  async function load({ includeUserRoles = false } = {}) {
     const tableNames = [
       'clubs',
       'participants',
       'tournament_types',
+      'target_types',
       'categories',
       'tournaments',
       'tournament_rounds',
@@ -104,12 +126,14 @@ export function createManagerRepository(client) {
       'round_scores',
       'matches',
     ]
+    if (includeUserRoles) tableNames.push('user_roles')
     const results = await Promise.all(tableNames.map((table) => client.from(table).select('*')))
     results.forEach(throwOnError)
     const [
       clubsResult,
       participantsResult,
       typesResult,
+      targetTypesResult,
       categoriesResult,
       tournamentsResult,
       roundsResult,
@@ -117,6 +141,7 @@ export function createManagerRepository(client) {
       tournamentParticipantsResult,
       scoresResult,
       matchesResult,
+      userRolesResult,
     ] = results
 
     roundIds.clear()
@@ -153,6 +178,7 @@ export function createManagerRepository(client) {
       clubs: clubsResult.data.map(mapClub),
       participants: participantsResult.data.map(mapParticipant),
       tournamentTypes: typesResult.data.map(mapTournamentType),
+      targetTypes: targetTypesResult.data.map(mapTargetType),
       categories: categoriesResult.data.map(mapCategory),
       tournaments: tournamentsResult.data.map((row) => ({
         id: row.id,
@@ -190,6 +216,7 @@ export function createManagerRepository(client) {
         score1: row.score1 === null ? '' : Number(row.score1),
         score2: row.score2 === null ? '' : Number(row.score2),
       })),
+      userRoles: userRolesResult ? userRolesResult.data.map(mapUserRole) : [],
     }
   }
 
@@ -232,6 +259,7 @@ export function createManagerRepository(client) {
         birth_date: participant.birthDate || null,
         wa_id: participant.waId || '',
         aetay_id: participant.aetayId || '',
+        club_id: clubIds.get(participant.clubId) || null,
       })),
       tournament_types: workspace.tournamentTypes.map((type) => ({
         id: typeIds.get(type.id),
@@ -332,10 +360,66 @@ export function createManagerRepository(client) {
       website: club.website,
       address: club.address,
       map_url: club.mapUrl,
+      logo_url: club.logoUrl || '',
       user_email: club.userEmail,
       user_enabled: club.userEnabled,
     })
     if (error) throw error
+  }
+
+  async function uploadClubLogo(clubId, file) {
+    const { error } = await client.storage
+      .from('club-logos')
+      .upload(`${clubId}/logo`, file, {
+        cacheControl: '3600',
+        contentType: file.type,
+        upsert: true,
+      })
+    if (error) throw error
+
+    return client.storage.from('club-logos').getPublicUrl(`${clubId}/logo`).data.publicUrl
+  }
+
+  async function assignUserRole(role) {
+    const { data, error } = await client.rpc('assign_user_role', {
+      p_email: role.email,
+      p_role: role.role,
+      p_club_id: role.clubId || null,
+      p_participant_id: role.participantId || null,
+      p_display_name: role.displayName || null,
+    })
+    if (error) throw error
+    return data
+  }
+
+  async function removeUserRole(userId, role) {
+    const { error } = await client.rpc('remove_user_role', {
+      p_user_id: userId,
+      p_role: role,
+    })
+    if (error) throw error
+  }
+
+  async function saveUserProfile(userId, displayName) {
+    const { error } = await client.from('user_profiles').upsert({
+      user_id: userId,
+      display_name: displayName,
+      updated_at: new Date().toISOString(),
+    })
+    if (error) throw error
+  }
+
+  async function sendAdminPasswordReset(email) {
+    const { error } = await client.functions.invoke('admin-password-reset', {
+      body: { email },
+    })
+    if (!error) return
+
+    if (error.context instanceof Response) {
+      const payload = await error.context.json()
+      if (payload.error) throw new Error(payload.error)
+    }
+    throw error
   }
 
   async function saveTournamentType(type) {
@@ -347,6 +431,14 @@ export function createManagerRepository(client) {
       target_type: type.targetType,
       ends: type.ends,
       arrows_per_end: type.arrowsPerEnd,
+    })
+    if (error) throw error
+  }
+
+  async function saveTargetType(type) {
+    const { error } = await client.from('target_types').insert({
+      id: type.id,
+      name: type.name,
     })
     if (error) throw error
   }
@@ -400,6 +492,7 @@ export function createManagerRepository(client) {
       birth_date: participant.birthDate || null,
       wa_id: participant.waId,
       aetay_id: participant.aetayId,
+      club_id: participant.clubId || null,
     })
     if (error) throw error
 
@@ -416,6 +509,13 @@ export function createManagerRepository(client) {
         throw assignmentError
       }
     }
+  }
+
+  async function setParticipantClub(participantId, clubId) {
+    const { error } = await client.from('participants')
+      .update({ club_id: clubId || null })
+      .eq('id', participantId)
+    if (error) throw error
   }
 
   async function setClubEnabled(clubId, enabled) {
@@ -523,10 +623,17 @@ export function createManagerRepository(client) {
     load,
     importLegacyWorkspace,
     saveClub,
+    uploadClubLogo,
+    assignUserRole,
+    removeUserRole,
+    saveUserProfile,
+    sendAdminPasswordReset,
     saveTournamentType,
+    saveTargetType,
     saveCategory,
     saveTournament,
     saveParticipant,
+    setParticipantClub,
     setClubEnabled,
     setTournamentCategory,
     setParticipantCategory,

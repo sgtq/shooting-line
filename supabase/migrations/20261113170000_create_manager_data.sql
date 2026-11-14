@@ -258,6 +258,16 @@ create table public.manager_data_imports (
 
 revoke all on table public.manager_data_imports from public, anon, authenticated;
 
+create function public.is_manager_or_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.has_app_access('manager');
+$$;
+
 create function public.import_manager_workspace(p_workspace jsonb)
 returns void
 language plpgsql
@@ -267,7 +277,7 @@ as $$
 declare
   importing_user uuid := (select auth.uid());
 begin
-  if importing_user is null or not public.has_app_access('manager') then
+  if importing_user is null or not public.is_manager_or_admin() then
     raise exception 'Manager app access is required';
   end if;
 

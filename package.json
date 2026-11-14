@@ -8,18 +8,29 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace @shooting-line/portal",
+    "dev": "concurrently --kill-others --names portal,manager \"npm:dev:portal\" \"npm:dev:manager\"",
+    "dev:portal": "npm run dev --workspace @shooting-line/portal",
     "dev:manager": "npm run dev --workspace @shooting-line/manager",
     "build": "npm run build:portal && npm run build:manager",
     "build:portal": "npm run build --workspace @shooting-line/portal",
     "build:manager": "npm run build --workspace @shooting-line/manager",
-    "preview": "npm run preview --workspace @shooting-line/portal"
+    "preview": "npm run preview --workspace @shooting-line/portal",
+    "test": "npm run test:unit",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:all": "npm run test:unit && npm run test:e2e"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@vitejs/plugin-vue": "^6.0.10",
+    "@vue/test-utils": "^2.5.1",
     "autoprefixer": "^10.6.2",
+    "concurrently": "^9.2.5",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.32",
     "tailwindcss": "^3.4.19",
-    "vite": "^8.3.6"
+    "vite": "^8.3.6",
+    "vitest": "^4.1.12"
   }
 }

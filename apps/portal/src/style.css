@@ -62,7 +62,6 @@ input {
   border-radius: 9px;
 }
 
-.header-label,
 .signed-in-as,
 .portal-footer {
   color: #697586;
@@ -235,9 +234,75 @@ h1 {
   text-transform: uppercase;
 }
 
-.app-action,
-.access-note {
+.coming-soon-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid #e2c47f;
+  border-radius: 999px;
+  color: #755515;
+  background: #fff4d7;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.access-note,
+.card-action {
   margin-top: auto;
+}
+
+.app-card-link {
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.app-card-link:hover {
+  transform: translateY(-2px);
+  border-color: #b68b36;
+  box-shadow: 0 14px 34px rgba(28, 42, 63, 0.12);
+}
+
+.app-card-link:focus-visible {
+  outline: 3px solid rgba(182, 139, 54, 0.35);
+  outline-offset: 3px;
+}
+
+.card-action {
+  color: #94702b;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.card-action span {
+  display: inline-block;
+  transition: transform 160ms ease;
+}
+
+.app-card-link:hover .card-action span {
+  transform: translateX(4px);
+}
+
+.app-card-disabled {
+  border-color: #e5e9ef;
+  background: #f7f8fa;
+  box-shadow: none;
+}
+
+.app-card-disabled h2 {
+  color: #778295;
+}
+
+.app-card-disabled > p:not(.card-status) {
+  color: #8993a2;
+}
+
+.app-card-disabled .card-status:not(.coming-soon-status) {
+  color: #8f9aaa;
 }
 
 .access-note,

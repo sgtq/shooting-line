@@ -8,6 +8,12 @@ const client = ref(null)
 const repository = ref(null)
 const workspace = ref(null)
 const userEmail = ref('')
+const userId = ref('')
+const userName = ref('')
+const userRole = ref('manager')
+const userRoles = ref(['manager'])
+const userScope = ref({})
+const userMetadata = ref({})
 const legacyWorkspace = ref(null)
 const configurationError = ref('')
 const legacyDataError = ref('')
@@ -44,9 +50,44 @@ async function checkAppAccess(userId) {
     return
   }
 
+  const [rolesResult, profileResult] = await Promise.all([
+    client.value.from('user_roles')
+      .select('role, club_id, participant_id')
+      .eq('user_id', userId),
+    client.value.from('user_profiles')
+      .select('display_name')
+      .eq('user_id', userId)
+      .maybeSingle(),
+  ])
+  if (rolesResult.error || profileResult.error) {
+    errorMessage.value = `Unable to load account details: ${
+      rolesResult.error?.message || profileResult.error?.message
+    }`
+    isChecking.value = false
+    return
+  }
+
+  const rolePriority = ['admin', 'manager', 'club', 'archer']
+  const assignedRoles = rolesResult.data.map((record) => record.role)
+  userRoles.value = assignedRoles.length ? assignedRoles : ['manager']
+  const currentRole = rolePriority.find((role) =>
+    assignedRoles.includes(role),
+  ) || 'manager'
+  userRole.value = currentRole
+  const currentRoleRecord = rolesResult.data.find((record) => record.role === currentRole)
+  userScope.value = {
+    clubId: currentRoleRecord?.club_id || '',
+    participantId: currentRoleRecord?.participant_id || '',
+  }
+  userName.value = profileResult.data?.display_name
+    || userMetadata.value.full_name
+    || userMetadata.value.name
+    || userMetadata.value.given_name
+    || ''
+
   const managerRepository = createManagerRepository(client.value)
   try {
-    workspace.value = await managerRepository.load()
+    workspace.value = await managerRepository.load({ includeUserRoles: currentRole === 'admin' })
   } catch (loadError) {
     errorMessage.value = `Unable to load the manager database: ${loadError.message}`
     isChecking.value = false
@@ -54,8 +95,10 @@ async function checkAppAccess(userId) {
   }
 
   repository.value = managerRepository
-  const databaseIsEmpty = Object.values(workspace.value).every((rows) => rows.length === 0)
-  if (databaseIsEmpty) {
+  const hasManagerData = Object.entries(workspace.value)
+    .some(([key, rows]) => key !== 'userRoles' && rows.length > 0)
+  const databaseIsEmpty = !hasManagerData
+  if (databaseIsEmpty && ['admin', 'manager'].includes(currentRole)) {
     try {
       legacyWorkspace.value = readLegacyWorkspace()
       if (legacyWorkspace.value && Object.values(legacyWorkspace.value).some((rows) => rows.length > 0)) {
@@ -111,6 +154,8 @@ async function restoreSession() {
   }
 
   userEmail.value = data.session.user.email || ''
+  userId.value = data.session.user.id
+  userMetadata.value = data.session.user.user_metadata || {}
   await checkAppAccess(data.session.user.id)
 }
 
@@ -133,7 +178,12 @@ onUnmounted(() => authSubscription?.unsubscribe())
     v-if="isAuthorized"
     :initial-data="workspace"
     :repository="repository"
+    :user-id="userId"
+    :user-name="userName"
     :user-email="userEmail"
+    :user-role="userRole"
+    :user-roles="userRoles"
+    :user-scope="userScope"
   />
 
   <main v-else-if="isImportPrompt" class="manager-access-state">
@@ -167,9 +217,9 @@ onUnmounted(() => authSubscription?.unsubscribe())
       <p v-else-if="legacyDataError">{{ legacyDataError }} The local copy has been left untouched.</p>
       <p v-else-if="errorMessage">{{ errorMessage }}</p>
       <p v-else-if="!isChecking && !hasAccess">
-        Sign in through the workspace portal or ask an administrator to assign the manager app.
+        Sign in from the main menu or ask an administrator to assign the Tournament Manager app.
       </p>
-      <a href="../">Return to workspace portal</a>
+      <a href="../">Return to main menu</a>
     </section>
   </main>
 </template>

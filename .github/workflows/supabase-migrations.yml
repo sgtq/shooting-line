@@ -1,0 +1,59 @@
+name: Apply Supabase migrations
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - supabase/migrations/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-migrations-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate migration settings
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SYSTEM_ADMIN_EMAIL: ${{ vars.SYSTEM_ADMIN_EMAIL }}
+          SYSTEM_ADMIN_DISPLAY_NAME: ${{ vars.SYSTEM_ADMIN_DISPLAY_NAME }}
+        run: |
+          for name in SUPABASE_DB_URL SYSTEM_ADMIN_EMAIL SYSTEM_ADMIN_DISPLAY_NAME; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Configure $name in this GitHub environment."
+              exit 1
+            fi
+          done
+
+      - name: Apply migrations in order
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: supabase db push --remote="$SUPABASE_DB_URL" --yes
+
+      - name: Bootstrap system administrator
+        env:
+          SYSTEM_ADMIN_EMAIL: ${{ vars.SYSTEM_ADMIN_EMAIL }}
+          SYSTEM_ADMIN_DISPLAY_NAME: ${{ vars.SYSTEM_ADMIN_DISPLAY_NAME }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+          psql "$SUPABASE_DB_URL" \
+            --set ON_ERROR_STOP=1 \
+            --set "admin_email=$SYSTEM_ADMIN_EMAIL" \
+            --set "admin_name=$SYSTEM_ADMIN_DISPLAY_NAME" \
+            --file supabase/bootstrap-system-admin.sql
