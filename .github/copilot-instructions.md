@@ -11,6 +11,10 @@
 - Prefer reusing existing helpers and patterns over rewriting or duplicating equivalent logic.
 - If requirements or intent are unclear, ask the user before proceeding; do not assume desired behavior, scope, environment, or permissions.
 - Keep tests aligned with behavior changes, focused, and efficient. Remove tests for retired behavior, and avoid redundant, flaky, or unnecessarily slow tests.
+- As soon as a development requirement is implemented, and before committing, pushing, or opening a pull request, analyse
+  whether it needs tests. Design and add Vitest unit tests for new or changed logic and Playwright functional tests for
+  new or changed user-facing flows, then run them. If a change needs no tests (for example documentation-only or purely
+  cosmetic changes), say so explicitly instead of skipping the analysis.
 - Use Vitest for unit and component tests and Playwright for browser end-to-end tests. Isolate tests from Supabase and other external services with fixtures or mocks, and run both suites in CI.
 - Keep Git history organized as work progresses: after verifying each coherent milestone, create a focused commit and push it to the current branch unless the user says otherwise. Do not amend or rewrite existing history unless explicitly requested.
 - Before committing or pushing, review the worktree and diff, stage only files in scope, and exclude secrets, local configuration, generated output, and editor state. If pushing would deploy an incomplete or unconfigured change, do not push it to the deployment branch; use a feature branch or ask the user.
