@@ -70,15 +70,15 @@ function mapCategory(row) {
 }
 
 export function readLegacyWorkspace() {
-  const saved = localStorage.getItem('shooting-line-workspace-v1')
-    ?? localStorage.getItem('archery-manager-workspace-v1')
+  const saved =
+    localStorage.getItem('shooting-line-workspace-v1') ?? localStorage.getItem('archery-manager-workspace-v1')
   if (!saved) return null
 
   let workspace
   try {
     workspace = JSON.parse(saved)
   } catch (error) {
-    throw new Error(`Saved browser data could not be parsed: ${error.message}`)
+    throw new Error(`Saved browser data could not be parsed: ${error.message}`, { cause: error })
   }
   if (!workspace || typeof workspace !== 'object') {
     throw new Error('Saved browser data has an invalid workspace format.')
@@ -93,12 +93,12 @@ export function readLegacyWorkspace() {
     categories: Array.isArray(workspace.categories) ? workspace.categories : [],
     tournaments: Array.isArray(workspace.tournaments)
       ? workspace.tournaments.map((tournament) => ({
-        ...tournament,
-        rounds: Array.isArray(tournament.rounds) ? tournament.rounds : ['Qualification'],
-        participantIds: Array.isArray(tournament.participantIds) ? tournament.participantIds : [],
-        categoryIds: Array.isArray(tournament.categoryIds) ? tournament.categoryIds : [],
-        categoryAssignments: tournament.categoryAssignments || {},
-      }))
+          ...tournament,
+          rounds: Array.isArray(tournament.rounds) ? tournament.rounds : ['Qualification'],
+          participantIds: Array.isArray(tournament.participantIds) ? tournament.participantIds : [],
+          categoryIds: Array.isArray(tournament.categoryIds) ? tournament.categoryIds : [],
+          categoryAssignments: tournament.categoryAssignments || {},
+        }))
       : [],
     scores: Array.isArray(workspace.scores) ? workspace.scores : [],
     matches: Array.isArray(workspace.matches) ? workspace.matches : [],
@@ -221,12 +221,13 @@ export function createManagerRepository(client) {
   }
 
   async function importLegacyWorkspace(workspace) {
-    const remapIds = (rows) => new Map(rows.map((row) => [
-      row.id,
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.id)
-        ? row.id
-        : makeId(),
-    ]))
+    const remapIds = (rows) =>
+      new Map(
+        rows.map((row) => [
+          row.id,
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.id) ? row.id : makeId(),
+        ]),
+      )
     const clubIds = remapIds(workspace.clubs)
     const participantIds = remapIds(workspace.participants)
     const typeIds = remapIds(workspace.tournamentTypes)
@@ -311,7 +312,11 @@ export function createManagerRepository(client) {
       round_scores: workspace.scores.map((score) => {
         const tournamentId = tournamentIds.get(score.tournamentId)
         const roundId = getRoundId(score.tournamentId, score.round)
-        if (!workspace.tournaments.find((tournament) => tournament.id === score.tournamentId)?.rounds.includes(score.round)) {
+        if (
+          !workspace.tournaments
+            .find((tournament) => tournament.id === score.tournamentId)
+            ?.rounds.includes(score.round)
+        ) {
           throw new Error(`Cannot import a score for missing round "${score.round}".`)
         }
         return {
@@ -368,13 +373,11 @@ export function createManagerRepository(client) {
   }
 
   async function uploadClubLogo(clubId, file) {
-    const { error } = await client.storage
-      .from('club-logos')
-      .upload(`${clubId}/logo`, file, {
-        cacheControl: '3600',
-        contentType: file.type,
-        upsert: true,
-      })
+    const { error } = await client.storage.from('club-logos').upload(`${clubId}/logo`, file, {
+      cacheControl: '3600',
+      contentType: file.type,
+      upsert: true,
+    })
     if (error) throw error
 
     return client.storage.from('club-logos').getPublicUrl(`${clubId}/logo`).data.publicUrl
@@ -512,7 +515,8 @@ export function createManagerRepository(client) {
   }
 
   async function setParticipantClub(participantId, clubId) {
-    const { error } = await client.from('participants')
+    const { error } = await client
+      .from('participants')
       .update({ club_id: clubId || null })
       .eq('id', participantId)
     if (error) throw error
@@ -533,7 +537,8 @@ export function createManagerRepository(client) {
   }
 
   async function setParticipantCategory(tournamentId, participantId, categoryId) {
-    const { error } = await client.from('tournament_participants')
+    const { error } = await client
+      .from('tournament_participants')
       .update({ category_id: categoryId || null })
       .eq('tournament_id', tournamentId)
       .eq('participant_id', participantId)
@@ -562,7 +567,8 @@ export function createManagerRepository(client) {
       return
     }
 
-    const { error } = await client.from('tournament_participants')
+    const { error } = await client
+      .from('tournament_participants')
       .delete()
       .eq('tournament_id', tournamentId)
       .eq('participant_id', participantId)
@@ -574,7 +580,8 @@ export function createManagerRepository(client) {
     if (!roundId) throw new Error(`Could not find round "${score.round}" in the database.`)
 
     if (score.score === null) {
-      const { error } = await client.from('round_scores')
+      const { error } = await client
+        .from('round_scores')
         .delete()
         .eq('round_id', roundId)
         .eq('participant_id', score.participantId)
@@ -615,7 +622,10 @@ export function createManagerRepository(client) {
   async function setMatchScore(matchId, side, value) {
     if (side !== 'score1' && side !== 'score2') throw new Error('Invalid match score side.')
     const score = value === '' ? null : Number(value)
-    const { error } = await client.from('matches').update({ [side]: score }).eq('id', matchId)
+    const { error } = await client
+      .from('matches')
+      .update({ [side]: score })
+      .eq('id', matchId)
     if (error) throw error
   }
 

@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const baseURL = 'http://127.0.0.1:5173'
+const baseURL = 'http://localhost:5173'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -19,12 +19,13 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
+    command: 'VITE_BASE_PATH=/ npm run dev',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
       ...process.env,
+      VITE_BASE_PATH: '/',
       VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || 'https://test.supabase.co',
       VITE_SUPABASE_PUBLISHABLE_KEY: process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'test-publishable-key',
     },

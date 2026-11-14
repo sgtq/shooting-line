@@ -51,18 +51,11 @@ async function checkAppAccess(userId) {
   }
 
   const [rolesResult, profileResult] = await Promise.all([
-    client.value.from('user_roles')
-      .select('role, club_id, participant_id')
-      .eq('user_id', userId),
-    client.value.from('user_profiles')
-      .select('display_name')
-      .eq('user_id', userId)
-      .maybeSingle(),
+    client.value.from('user_roles').select('role, club_id, participant_id').eq('user_id', userId),
+    client.value.from('user_profiles').select('display_name').eq('user_id', userId).maybeSingle(),
   ])
   if (rolesResult.error || profileResult.error) {
-    errorMessage.value = `Unable to load account details: ${
-      rolesResult.error?.message || profileResult.error?.message
-    }`
+    errorMessage.value = `Unable to load account details: ${rolesResult.error?.message || profileResult.error?.message}`
     isChecking.value = false
     return
   }
@@ -70,20 +63,19 @@ async function checkAppAccess(userId) {
   const rolePriority = ['admin', 'manager', 'club', 'archer']
   const assignedRoles = rolesResult.data.map((record) => record.role)
   userRoles.value = assignedRoles.length ? assignedRoles : ['manager']
-  const currentRole = rolePriority.find((role) =>
-    assignedRoles.includes(role),
-  ) || 'manager'
+  const currentRole = rolePriority.find((role) => assignedRoles.includes(role)) || 'manager'
   userRole.value = currentRole
   const currentRoleRecord = rolesResult.data.find((record) => record.role === currentRole)
   userScope.value = {
     clubId: currentRoleRecord?.club_id || '',
     participantId: currentRoleRecord?.participant_id || '',
   }
-  userName.value = profileResult.data?.display_name
-    || userMetadata.value.full_name
-    || userMetadata.value.name
-    || userMetadata.value.given_name
-    || ''
+  userName.value =
+    profileResult.data?.display_name ||
+    userMetadata.value.full_name ||
+    userMetadata.value.name ||
+    userMetadata.value.given_name ||
+    ''
 
   const managerRepository = createManagerRepository(client.value)
   try {
@@ -95,8 +87,7 @@ async function checkAppAccess(userId) {
   }
 
   repository.value = managerRepository
-  const hasManagerData = Object.entries(workspace.value)
-    .some(([key, rows]) => key !== 'userRoles' && rows.length > 0)
+  const hasManagerData = Object.entries(workspace.value).some(([key, rows]) => key !== 'userRoles' && rows.length > 0)
   const databaseIsEmpty = !hasManagerData
   if (databaseIsEmpty && ['admin', 'manager'].includes(currentRole)) {
     try {

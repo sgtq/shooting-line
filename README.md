@@ -4,13 +4,13 @@ ShootingLine is a Vue 3/npm-workspaces monorepo for archery club and tournament 
 
 ## Repository layout
 
-| Workspace | Path | Status |
-| --- | --- | --- |
-| Portal | `apps/portal` | Sign-in and app launcher |
-| Tournament Manager | `apps/manager` | Current club and tournament management app |
-| Ianseo Dashboard | `apps/ianseo-dashboard` | Placeholder |
-| Shooting Scorecard | `apps/scorecard` | Placeholder |
-| Shared auth | `packages/auth` | Supabase client and app-access queries |
+| Workspace          | Path                    | Status                                     |
+| ------------------ | ----------------------- | ------------------------------------------ |
+| Portal             | `apps/portal`           | Sign-in and app launcher                   |
+| Tournament Manager | `apps/manager`          | Current club and tournament management app |
+| Ianseo Dashboard   | `apps/ianseo-dashboard` | Placeholder                                |
+| Shooting Scorecard | `apps/scorecard`        | Placeholder                                |
+| Shared auth        | `packages/auth`         | Supabase client and app-access queries     |
 
 Each app has its own README with its current features and commands.
 
@@ -27,11 +27,17 @@ npm run build
 npm run preview
 npm run test:unit
 npm run test:e2e
+npm run cs-fix
+npm run cs-check
+npm run type-check
+npm run ci
+npm run test:all
 ```
 
 `npm run dev` starts the portal and manager together, with the manager available at `/manager/` on the portal's origin. `npm run dev:portal` starts only the portal; `npm run dev:manager` starts the manager's local Vite server on port 5174. The production build publishes the portal at the site root and manager at `/manager/`. The two placeholder apps are not built or deployed.
 
 Unit tests cover manager workflows and shared authentication access queries using mocked Supabase calls.
+The quality workflow runs ESLint, Prettier, `vue-tsc`, unit and end-to-end tests, and builds on pull requests and pushes to `develop` and `main`. The active Vue workspaces use JavaScript; `vue-tsc` checks Vue components and templates while `checkJs` remains disabled.
 
 ## Shared access and database
 

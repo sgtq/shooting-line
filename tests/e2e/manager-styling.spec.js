@@ -4,24 +4,35 @@ test('manager shortcuts and date filters retain their styling in both themes', a
   const projectUrl = process.env.VITE_SUPABASE_URL || 'https://test.supabase.co'
   const storageKey = `sb-${new URL(projectUrl).hostname.split('.')[0]}-auth-token`
   await page.addInitScript((key) => {
-    localStorage.setItem(key, JSON.stringify({
-      access_token: 'test-token',
-      refresh_token: 'test-refresh-token',
-      expires_at: Math.floor(Date.now() / 1000) + 3600,
-      token_type: 'bearer',
-      user: { id: 'test-user', email: 'manager@example.test', user_metadata: {} },
-    }))
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        access_token: 'test-token',
+        refresh_token: 'test-refresh-token',
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        token_type: 'bearer',
+        user: { id: 'test-user', email: 'manager@example.test', user_metadata: {} },
+      }),
+    )
   }, storageKey)
   await page.route('**/rest/v1/**', async (route) => {
     const table = new URL(route.request().url()).pathname.split('/').pop()
-    const data = table === 'app_access' ? { app_id: 'manager' }
-      : table === 'user_roles' ? [{ role: 'manager', club_id: null, participant_id: null }]
-        : table === 'user_profiles' ? null
-          : table === 'clubs' ? [{
-            id: 'club-1',
-            name: 'Test Club',
-            logo_url: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500"/>',
-          }] : []
+    const data =
+      table === 'app_access'
+        ? { app_id: 'manager' }
+        : table === 'user_roles'
+          ? [{ role: 'manager', club_id: null, participant_id: null }]
+          : table === 'user_profiles'
+            ? null
+            : table === 'clubs'
+              ? [
+                  {
+                    id: 'club-1',
+                    name: 'Test Club',
+                    logo_url: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500"/>',
+                  },
+                ]
+              : []
     await route.fulfill({ json: data })
   })
 

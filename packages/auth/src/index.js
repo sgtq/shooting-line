@@ -18,10 +18,7 @@ export function createSupabaseClient() {
 }
 
 export async function listAppAccess(client, userId) {
-  const { data, error } = await client
-    .from('app_access')
-    .select('app_id')
-    .eq('user_id', userId)
+  const { data, error } = await client.from('app_access').select('app_id').eq('user_id', userId)
 
   if (error) return { data: [], error }
   return { data: data.map((grant) => grant.app_id), error: null }

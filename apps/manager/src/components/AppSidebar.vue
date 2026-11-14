@@ -49,7 +49,10 @@ const darkIconUrl = `${import.meta.env.BASE_URL}shooting-line-icon-dark.svg`
       </div>
       <button class="profile-button" :disabled="!canEditProfile" @click="emit('edit-profile')">
         <span class="avatar">{{ userName.charAt(0).toUpperCase() || 'U' }}</span>
-        <span class="profile-copy"><strong>{{ userName || 'Your profile' }}</strong><small>{{ roleSummary || userEmail || 'Signed in' }}</small></span>
+        <span class="profile-copy"
+          ><strong>{{ userName || 'Your profile' }}</strong
+          ><small>{{ roleSummary || userEmail || 'Signed in' }}</small></span
+        >
         <span class="profile-menu">···</span>
       </button>
     </div>

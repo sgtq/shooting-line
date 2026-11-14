@@ -5,20 +5,25 @@ describe('legacy workspace', () => {
   beforeEach(() => localStorage.clear())
 
   it('reads the previous key and fills missing tournament and participant fields', () => {
-    localStorage.setItem('archery-manager-workspace-v1', JSON.stringify({
-      participants: [{ id: 'archer' }],
-      tournaments: [{ id: 'event' }],
-    }))
+    localStorage.setItem(
+      'archery-manager-workspace-v1',
+      JSON.stringify({
+        participants: [{ id: 'archer' }],
+        tournaments: [{ id: 'event' }],
+      }),
+    )
 
     const workspace = readLegacyWorkspace()
     expect(workspace.participants).toEqual([{ id: 'archer', clubId: '' }])
-    expect(workspace.tournaments).toEqual([{
-      id: 'event',
-      rounds: ['Qualification'],
-      participantIds: [],
-      categoryIds: [],
-      categoryAssignments: {},
-    }])
+    expect(workspace.tournaments).toEqual([
+      {
+        id: 'event',
+        rounds: ['Qualification'],
+        participantIds: [],
+        categoryIds: [],
+        categoryAssignments: {},
+      },
+    ])
     expect(workspace.clubs).toEqual([])
   })
 
@@ -42,9 +47,10 @@ describe('manager repository', () => {
     const client = {
       from: vi.fn((table) => ({
         select: vi.fn().mockResolvedValue({
-          data: table === 'tournament_rounds'
-            ? [{ id: 'round-1', tournament_id: 'event', name: 'Qualification', position: 0 }]
-            : [],
+          data:
+            table === 'tournament_rounds'
+              ? [{ id: 'round-1', tournament_id: 'event', name: 'Qualification', position: 0 }]
+              : [],
           error: null,
         }),
         upsert: save,
@@ -54,14 +60,24 @@ describe('manager repository', () => {
     const repository = createManagerRepository(client)
     await repository.load()
     await repository.saveScore({
-      tournamentId: 'event', round: 'Qualification', participantId: 'archer', score: 100,
+      tournamentId: 'event',
+      round: 'Qualification',
+      participantId: 'archer',
+      score: 100,
     })
     expect(save).toHaveBeenCalledWith({
-      tournament_id: 'event', round_id: 'round-1', participant_id: 'archer', category_id: null, score: 100,
+      tournament_id: 'event',
+      round_id: 'round-1',
+      participant_id: 'archer',
+      category_id: null,
+      score: 100,
     })
 
     await repository.saveScore({
-      tournamentId: 'event', round: 'Qualification', participantId: 'archer', score: null,
+      tournamentId: 'event',
+      round: 'Qualification',
+      participantId: 'archer',
+      score: null,
     })
     expect(filters.eq).toHaveBeenNthCalledWith(1, 'round_id', 'round-1')
     expect(filters.eq).toHaveBeenNthCalledWith(2, 'participant_id', 'archer')
@@ -71,44 +87,72 @@ describe('manager repository', () => {
     const assignmentError = new Error('Assignment failed')
     const cleanup = vi.fn().mockResolvedValue({ error: null })
     const client = {
-      from: vi.fn((table) => table === 'participants'
-        ? { insert: vi.fn().mockResolvedValue({ error: null }), delete: () => ({ eq: cleanup }) }
-        : { insert: vi.fn().mockResolvedValue({ error: assignmentError }) }),
+      from: vi.fn((table) =>
+        table === 'participants'
+          ? { insert: vi.fn().mockResolvedValue({ error: null }), delete: () => ({ eq: cleanup }) }
+          : { insert: vi.fn().mockResolvedValue({ error: assignmentError }) },
+      ),
     }
 
-    await expect(createManagerRepository(client).saveParticipant({
-      id: 'archer', firstName: 'Alex', lastName: 'Archer', waId: '', aetayId: '',
-    }, 'event')).rejects.toBe(assignmentError)
+    await expect(
+      createManagerRepository(client).saveParticipant(
+        {
+          id: 'archer',
+          firstName: 'Alex',
+          lastName: 'Archer',
+          waId: '',
+          aetayId: '',
+        },
+        'event',
+      ),
+    ).rejects.toBe(assignmentError)
     expect(cleanup).toHaveBeenCalledWith('id', 'archer')
   })
 
   it('reports both assignment and cleanup failures', async () => {
     const client = {
-      from: vi.fn((table) => table === 'participants'
-        ? {
-          insert: vi.fn().mockResolvedValue({ error: null }),
-          delete: () => ({ eq: vi.fn().mockResolvedValue({ error: new Error('Cleanup failed') }) }),
-        }
-        : { insert: vi.fn().mockResolvedValue({ error: new Error('Assignment failed') }) }),
+      from: vi.fn((table) =>
+        table === 'participants'
+          ? {
+              insert: vi.fn().mockResolvedValue({ error: null }),
+              delete: () => ({ eq: vi.fn().mockResolvedValue({ error: new Error('Cleanup failed') }) }),
+            }
+          : { insert: vi.fn().mockResolvedValue({ error: new Error('Assignment failed') }) },
+      ),
     }
 
-    await expect(createManagerRepository(client).saveParticipant({
-      id: 'archer', firstName: 'Alex', lastName: 'Archer', waId: '', aetayId: '',
-    }, 'event')).rejects.toThrow('Assignment failed; cleanup also failed: Cleanup failed')
+    await expect(
+      createManagerRepository(client).saveParticipant(
+        {
+          id: 'archer',
+          firstName: 'Alex',
+          lastName: 'Archer',
+          waId: '',
+          aetayId: '',
+        },
+        'event',
+      ),
+    ).rejects.toThrow('Assignment failed; cleanup also failed: Cleanup failed')
   })
 
   it('rejects a score for a round that has not been loaded or created', async () => {
     const client = { from: vi.fn() }
-    await expect(createManagerRepository(client).saveScore({
-      tournamentId: 'event', round: 'Missing', participantId: 'archer', score: 100,
-    })).rejects.toThrow('Could not find round "Missing" in the database.')
+    await expect(
+      createManagerRepository(client).saveScore({
+        tournamentId: 'event',
+        round: 'Missing',
+        participantId: 'archer',
+        score: 100,
+      }),
+    ).rejects.toThrow('Could not find round "Missing" in the database.')
     expect(client.from).not.toHaveBeenCalled()
   })
 
   it('rejects an invalid match score side before updating the database', async () => {
     const client = { from: vi.fn() }
-    await expect(createManagerRepository(client).setMatchScore('match', 'score3', '10'))
-      .rejects.toThrow('Invalid match score side.')
+    await expect(createManagerRepository(client).setMatchScore('match', 'score3', '10')).rejects.toThrow(
+      'Invalid match score side.',
+    )
     expect(client.from).not.toHaveBeenCalled()
   })
 })

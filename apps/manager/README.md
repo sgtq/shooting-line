@@ -21,7 +21,7 @@ Manager records are stored in Supabase PostgreSQL tables created and evolved by 
 - **Club:** can view its own club information and related tournaments and archers, and edit its own club details. Club accounts cannot create tournaments.
 - **Archer:** read-only access to their own archer record and tournament entries.
 
-Admins assign roles from **User access**. The account must already exist in Supabase Auth. Club and archer roles require a club or archer scope. Admins and managers can request a one-time password recovery email for an account; there is no self-service reset link in the main menu. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
+Admins assign roles from **User access**. The account must already exist in Supabase Auth. Club and archer roles require a club or archer scope. When a club record has a related user email, admins can also use **Assign club user** on that club card to prefill the club role assignment. Admins and managers can request a one-time password recovery email for an account; there is no self-service reset link in the main menu. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
 
 The GitHub Pages development preview is served at `/develop/` (or `/<repository>/develop/` on the default project-site domain) and connects to the development Supabase project. Access to manager data is controlled by Supabase Auth, app access, and RLS roles. The static preview bundle itself is public, as required by GitHub Pages; never include private credentials in it.
 

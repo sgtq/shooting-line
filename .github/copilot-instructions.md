@@ -9,6 +9,7 @@
 - Prefer lines of 120 characters or fewer. Treat this as a soft limit and exceed it when wrapping would reduce clarity or conflict with established formatting.
 - Keep classes and components small and cohesive; apply SOLID principles where they improve maintainability without adding unnecessary abstraction.
 - Prefer reusing existing helpers and patterns over rewriting or duplicating equivalent logic.
+- If requirements or intent are unclear, ask the user before proceeding; do not assume desired behavior, scope, environment, or permissions.
 - Keep tests aligned with behavior changes, focused, and efficient. Remove tests for retired behavior, and avoid redundant, flaky, or unnecessarily slow tests.
 - Use Vitest for unit and component tests and Playwright for browser end-to-end tests. Isolate tests from Supabase and other external services with fixtures or mocks, and run both suites in CI.
 - Keep Git history organized as work progresses: after verifying each coherent milestone, create a focused commit and push it to the current branch unless the user says otherwise. Do not amend or rewrite existing history unless explicitly requested.
