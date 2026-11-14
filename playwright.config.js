@@ -20,7 +20,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'VITE_BASE_PATH=/ npm run dev',
-    url: baseURL,
+    url: 'http://127.0.0.1:5174/manager/',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
