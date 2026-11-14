@@ -33,21 +33,21 @@ jobs:
         run: npm ci
       - name: Validate production Supabase settings
         env:
-          SUPABASE_URL: ${{ vars.PAGES_PRODUCTION_SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ vars.PAGES_PRODUCTION_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ vars.PAGES_PRD_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.PAGES_PRD_SUPABASE_PUBLISHABLE_KEY }}
         run: |
           for name in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY; do
             if [ -z "${!name}" ]; then
-              echo "::error::Configure PAGES_PRODUCTION_$name as a repository Actions variable."
+              echo "::error::Configure PAGES_PRD_$name as a repository Actions variable."
               exit 1
             fi
           done
       - name: Build production site
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ vars.PAGES_PRODUCTION_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.PAGES_PRODUCTION_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_BASE_PATH: ${{ vars.PAGES_PRODUCTION_BASE_PATH }}
+          VITE_SUPABASE_URL: ${{ vars.PAGES_PRD_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.PAGES_PRD_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_BASE_PATH: ${{ vars.PAGES_PRD_BASE_PATH }}
           VITE_APP_ENV: production
       - name: Upload production site
         uses: actions/upload-artifact@v4
@@ -72,21 +72,21 @@ jobs:
         run: npm ci
       - name: Validate development Supabase settings
         env:
-          SUPABASE_URL: ${{ vars.PAGES_DEVELOPMENT_SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ vars.PAGES_DEVELOPMENT_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ vars.PAGES_DEV_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.PAGES_DEV_SUPABASE_PUBLISHABLE_KEY }}
         run: |
           for name in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY; do
             if [ -z "${!name}" ]; then
-              echo "::error::Configure PAGES_DEVELOPMENT_$name as a repository Actions variable."
+              echo "::error::Configure PAGES_DEV_$name as a repository Actions variable."
               exit 1
             fi
           done
       - name: Build development preview
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ vars.PAGES_DEVELOPMENT_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.PAGES_DEVELOPMENT_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_BASE_PATH: ${{ vars.PAGES_DEVELOPMENT_BASE_PATH || format('/{0}/develop/', github.event.repository.name) }}
+          VITE_SUPABASE_URL: ${{ vars.PAGES_DEV_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.PAGES_DEV_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_BASE_PATH: ${{ vars.PAGES_DEV_BASE_PATH || format('/{0}/develop/', github.event.repository.name) }}
           VITE_APP_ENV: development
       - name: Upload development preview
         uses: actions/upload-artifact@v4

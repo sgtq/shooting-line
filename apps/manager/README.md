@@ -46,7 +46,7 @@ The migration workflow applies schema changes and then runs the idempotent admin
 
 The separate `.github/workflows/supabase-functions.yml` deploys the password-reset Edge Function when its source changes. Its Supabase access token needs project access and both `edge_functions_read` and `edge_functions_write` scopes; the CLI lists existing functions before deploying. It uses `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_ID` from the same GitHub environment. The database migration workflow uses the password inside `SUPABASE_DB_URL`, so it does not need a database write token scope. Supabase supplies the function's URL and API keys. Set each project's Auth **Site URL** to the correct app origin, configure allowed redirect URLs, and configure email delivery (preferably custom SMTP); the recovery email uses that Site URL.
 
-Configure these repository Actions variables for the Pages workflow: `PAGES_PRODUCTION_SUPABASE_URL` and `PAGES_PRODUCTION_SUPABASE_PUBLISHABLE_KEY` for production; `PAGES_DEVELOPMENT_SUPABASE_URL` and `PAGES_DEVELOPMENT_SUPABASE_PUBLISHABLE_KEY` for the development preview. Optional `PAGES_PRODUCTION_BASE_PATH` and `PAGES_DEVELOPMENT_BASE_PATH` override the default site paths. Grant Manager app access in the development Supabase project only to accounts that should use the preview.
+Configure these repository Actions variables for the Pages workflow: `PAGES_PRD_SUPABASE_URL` and `PAGES_PRD_SUPABASE_PUBLISHABLE_KEY` for production; `PAGES_DEV_SUPABASE_URL` and `PAGES_DEV_SUPABASE_PUBLISHABLE_KEY` for the development preview. Optional `PAGES_PRD_BASE_PATH` and `PAGES_DEV_BASE_PATH` override the default site paths. Grant Manager app access in the development Supabase project only to accounts that should use the preview.
 
 ## Commands
 

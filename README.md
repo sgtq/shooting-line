@@ -39,11 +39,11 @@ Existing manager data in browser storage is left intact. If the manager database
 
 ## GitHub Pages
 
-The workflow at `.github/workflows/pages.yml` builds the current `main` site at the GitHub Pages root and the current `develop` preview under `/develop/` (or `/<repository>/develop/` on the default project-site domain), then deploys both together. Configure these repository Actions variables, using the production project's values for `PAGES_PRODUCTION_*` and the separate development project's values for `PAGES_DEVELOPMENT_*`:
+The workflow at `.github/workflows/pages.yml` builds the current `main` site at the GitHub Pages root and the current `develop` preview under `/develop/` (or `/<repository>/develop/` on the default project-site domain), then deploys both together. Configure these repository Actions variables, using the production project's values for `PAGES_PRD_*` and the separate development project's values for `PAGES_DEV_*`:
 
-- `PAGES_PRODUCTION_SUPABASE_URL` and `PAGES_PRODUCTION_SUPABASE_PUBLISHABLE_KEY`
-- `PAGES_DEVELOPMENT_SUPABASE_URL` and `PAGES_DEVELOPMENT_SUPABASE_PUBLISHABLE_KEY`
-- Optional `PAGES_PRODUCTION_BASE_PATH` and `PAGES_DEVELOPMENT_BASE_PATH` to override the default production and preview paths.
+- `PAGES_PRD_SUPABASE_URL` and `PAGES_PRD_SUPABASE_PUBLISHABLE_KEY`
+- `PAGES_DEV_SUPABASE_URL` and `PAGES_DEV_SUPABASE_PUBLISHABLE_KEY`
+- Optional `PAGES_PRD_BASE_PATH` and `PAGES_DEV_BASE_PATH` to override the default production and preview paths.
 
 The preview uses a separate development Supabase project and is labeled **DEVELOPMENT / QA** in the UI. Supabase Auth and `app_access` restrict app use and data, but GitHub Pages still serves the static HTML and JavaScript publicly. Do not put personal or service-role tokens in a browser build.
 
