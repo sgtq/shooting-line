@@ -212,6 +212,18 @@ describe('participant and club workflows', () => {
     expect(repository.sendAdminPasswordReset).toHaveBeenCalledWith('archer@example.test')
   })
 
+  it('prefills the related club user assignment from a club card', async () => {
+    const initialData = createWorkspace()
+    initialData.clubs[0].userEmail = 'gquittnerl+omarlions@gmail.com'
+    const wrapper = mountApp(createRepository(), { initialData, userRole: 'admin', userRoles: ['admin'] })
+
+    await wrapper.get('button[aria-label="Clubs"]').trigger('click')
+    await wrapper.get('.club-card-actions button').trigger('click')
+
+    expect(wrapper.get('input[type="email"]').element.value).toBe('gquittnerl+omarlions@gmail.com')
+    expect(wrapper.findAll('select')[1].element.value).toBe('club-north')
+  })
+
   it('does not expose reset or profile editing to archers', () => {
     const wrapper = mountApp(createRepository(), { userRole: 'archer', userRoles: ['archer'] })
 

@@ -422,6 +422,13 @@ function openModal(type, assignToCurrentTournament = false) {
   showModal.value = true
 }
 
+function assignClubUser(club) {
+  openModal('userRole')
+  form.value.email = club.userEmail || ''
+  form.value.role = 'club'
+  form.value.clubId = club.id
+}
+
 function openTournamentChildModal(type) {
   modalFlow.value = {
     parentType: 'tournament',
@@ -1319,6 +1326,13 @@ async function recordMatchScore(match, side, value) {
                 >
               </div>
               <div class="club-card-actions">
+                <button
+                  v-if="isAdmin && club.userEmail"
+                  class="button button-small button-outline"
+                  @click="assignClubUser(club)"
+                >
+                  Assign club user
+                </button>
                 <button
                   v-if="canManage"
                   class="button button-small button-outline"
