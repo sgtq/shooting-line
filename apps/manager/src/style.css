@@ -979,6 +979,18 @@ h3 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.club-user-row > .club-user-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
 .club-card-actions {
   display: flex;
   justify-content: space-between;

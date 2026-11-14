@@ -65,10 +65,15 @@ const allNavItems = [
 ]
 const canManage = computed(() => ['admin', 'manager'].includes(props.userRole))
 const isAdmin = computed(() => props.userRole === 'admin')
+const isClubUser = computed(() => props.userRole === 'club')
+const canManageParticipants = computed(() => canManage.value || (isClubUser.value && Boolean(props.userScope.clubId)))
 function canEditClub(club) {
-  return canManage.value || (props.userRole === 'club' && club.id === props.userScope.clubId)
+  return canManage.value || (isClubUser.value && club.id === props.userScope.clubId)
 }
-const visibleNavItems = computed(() => allNavItems.filter((item) => item.id !== 'user-access' || canManage.value))
+function canEditParticipant(person) {
+  return canManage.value || (isClubUser.value && person.clubId === props.userScope.clubId)
+}
+const visibleNavItems = computed(() => allNavItems.filter((item) => item.id !== 'user-access' || isAdmin.value))
 const activePage = ref('dashboard')
 const search = ref('')
 const participantClubFilter = ref('')
@@ -91,6 +96,7 @@ const targetTypeName = ref('')
 const targetTypeError = ref('')
 const assignNewParticipant = ref(false)
 const editingClubId = ref('')
+const editingParticipantId = ref('')
 const toast = ref('')
 const tournamentQuery = ref('')
 const userName = ref(props.userName)
@@ -317,13 +323,11 @@ const blankParticipant = () => ({
   birthDate: '',
   waId: '',
   aetayId: '',
-  clubId: '',
+  clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : '',
 })
 const blankUserRole = () => ({
   email: '',
   role: 'manager',
-  clubId: '',
-  participantId: '',
   displayName: '',
 })
 const form = ref({})
@@ -400,6 +404,7 @@ function openModal(type, assignToCurrentTournament = false) {
   modalType.value = type
   assignNewParticipant.value = assignToCurrentTournament
   editingClubId.value = ''
+  editingParticipantId.value = ''
   editingTournamentTypeId.value = ''
   editingCategoryId.value = ''
   editingUserRoleId.value = ''
@@ -420,13 +425,6 @@ function openModal(type, assignToCurrentTournament = false) {
                   ? { displayName: userName.value }
                   : blankParticipant()
   showModal.value = true
-}
-
-function assignClubUser(club) {
-  openModal('userRole')
-  form.value.email = club.userEmail || ''
-  form.value.role = 'club'
-  form.value.clubId = club.id
 }
 
 function openTournamentChildModal(type) {
@@ -492,6 +490,13 @@ function editClub(club) {
   showModal.value = true
 }
 
+function editParticipant(person) {
+  modalType.value = 'participant'
+  editingParticipantId.value = person.id
+  form.value = { ...person }
+  showModal.value = true
+}
+
 function editTournamentType(type) {
   modalType.value = 'tournamentType'
   editingTournamentTypeId.value = type.id
@@ -523,6 +528,7 @@ function closeModal() {
   modalError.value = ''
   targetTypeError.value = ''
   editingClubId.value = ''
+  editingParticipantId.value = ''
   editingTournamentTypeId.value = ''
   editingCategoryId.value = ''
   editingUserRoleId.value = ''
@@ -530,21 +536,28 @@ function closeModal() {
 
 async function saveClub() {
   const isEditing = Boolean(editingClubId.value)
+  const existingClub = isEditing ? clubFor(editingClubId.value) : null
+  const hadUserEnabled = Boolean(existingClub?.userEnabled)
   const { logoFile } = form.value
   const clubForm = { ...form.value }
   delete clubForm.logoFile
   delete clubForm.logoPreview
+  clubForm.email = (clubForm.email || '').trim()
+  clubForm.userEmail = clubForm.email || (clubForm.userEmail || '').trim()
+  if (!clubForm.userEmail) clubForm.userEnabled = false
   const club = { ...clubForm, id: editingClubId.value || makeId() }
   const saved = await persistChange(
     async () => {
       if (logoFile) club.logoUrl = await props.repository.uploadClubLogo(club.id, logoFile)
-      await props.repository.saveClub(club)
+      await props.repository.saveClub(club, {
+        syncUserAccess: canManage.value,
+        hadUserEnabled,
+      })
     },
     () => {
-      if (isEditing) {
-        const existing = clubFor(club.id)
-        if (existing) Object.assign(existing, club)
-      } else {
+      if (isEditing && existingClub) {
+        Object.assign(existingClub, club)
+      } else if (!isEditing) {
         data.value.clubs.unshift(club)
       }
     },
@@ -689,8 +702,8 @@ async function saveCategory() {
 
 async function saveUserRole() {
   const role = {
-    ...form.value,
     email: form.value.email.trim(),
+    role: 'manager',
     displayName: form.value.displayName.trim(),
   }
   let userId
@@ -703,8 +716,8 @@ async function saveUserRole() {
         userId,
         email: role.email,
         role: role.role,
-        clubId: role.clubId || '',
-        participantId: role.participantId || '',
+        clubId: '',
+        participantId: '',
       }
       const existing = data.value.userRoles.find((item) => item.userId === userId && item.role === role.role)
       if (existing) Object.assign(existing, assigned)
@@ -715,7 +728,7 @@ async function saveUserRole() {
   if (!saved) return
 
   closeModal()
-  notify('User role assigned')
+  notify('Manager role assigned')
 }
 
 async function removeUserRole(role) {
@@ -875,14 +888,24 @@ async function addRound() {
 }
 
 async function saveParticipant() {
-  const participant = { ...form.value, id: makeId() }
-  const tournament = assignNewParticipant.value ? selectedTournament.value : null
+  const isEditing = Boolean(editingParticipantId.value)
+  const participant = {
+    ...form.value,
+    id: editingParticipantId.value || makeId(),
+    clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : form.value.clubId || '',
+  }
+  const tournament = !isEditing && assignNewParticipant.value ? selectedTournament.value : null
   if (
     !(await persistChange(
-      () => props.repository.saveParticipant(participant, tournament?.id || ''),
+      () => props.repository.saveParticipant(participant, tournament?.id || '', isEditing),
       () => {
-        data.value.participants.unshift(participant)
-        if (tournament) tournament.participantIds.push(participant.id)
+        if (isEditing) {
+          const existing = participantById(participant.id)
+          if (existing) Object.assign(existing, participant)
+        } else {
+          data.value.participants.unshift(participant)
+          if (tournament) tournament.participantIds.push(participant.id)
+        }
       },
       'modal',
     ))
@@ -890,9 +913,27 @@ async function saveParticipant() {
     return
 
   closeModal()
-  notify('Archer saved')
+  notify(isEditing ? 'Archer details updated' : 'Archer saved')
 }
 
+async function toggleClub(club) {
+  if (!club.email && !club.userEmail && !club.userEnabled) {
+    notify('Add a club email before enabling access')
+    return
+  }
+  const enabled = !club.userEnabled
+  if (
+    !(await persistChange(
+      () => props.repository.setClubEnabled(club.id, enabled),
+      () => {
+        club.userEnabled = enabled
+      },
+    ))
+  )
+    return
+
+  notify(`Club user ${club.userEnabled ? 'enabled' : 'disabled'}`)
+}
 async function toggleParticipant(tournament, participantId) {
   const index = tournament.participantIds.indexOf(participantId)
   const included = index === -1
@@ -1211,7 +1252,7 @@ async function recordMatchScore(match, side, value) {
                   <p>Keep things moving</p>
                 </div>
               </div>
-              <button v-if="canManage" class="quick-action" @click="openModal('participant')">
+              <button v-if="canManageParticipants" class="quick-action" @click="openModal('participant')">
                 <span class="quick-icon lavender">♙</span
                 ><span><strong>Add archer</strong><small>Grow your archer directory</small></span
                 ><b>→</b>
@@ -1303,38 +1344,26 @@ async function recordMatchScore(match, side, value) {
               </div>
               <div v-if="canManage || userRole === 'club'" class="club-user-row">
                 <div>
-                  <span class="contact-label">CLUB USER</span
-                  ><strong>{{
-                    data.userRoles.find((role) => role.role === 'club' && role.clubId === club.id)?.email ||
-                    club.userEmail ||
-                    'No user assigned'
-                  }}</strong>
+                  <span class="contact-label">CLUB USER</span>
+                  <strong>{{ club.email || club.userEmail || 'No email set' }}</strong>
                 </div>
-                <span
-                  class="status-pill"
-                  :class="
-                    data.userRoles.some((role) => role.role === 'club' && role.clubId === club.id)
-                      ? 'status-active'
-                      : 'status-disabled'
-                  "
-                  ><i></i
-                  >{{
-                    data.userRoles.some((role) => role.role === 'club' && role.clubId === club.id)
-                      ? 'Enabled'
-                      : 'Disabled'
-                  }}</span
-                >
+                <div class="club-user-controls">
+                  <span class="status-pill" :class="club.userEnabled ? 'status-active' : 'status-disabled'"
+                    ><i></i>{{ club.userEnabled ? 'Enabled' : 'Disabled' }}</span
+                  >
+                  <button
+                    v-if="canManage"
+                    type="button"
+                    class="button button-small button-outline"
+                    @click="toggleClub(club)"
+                  >
+                    {{ club.userEnabled ? 'Disable' : 'Enable' }}
+                  </button>
+                </div>
               </div>
               <div class="club-card-actions">
                 <button
-                  v-if="isAdmin && club.userEmail"
-                  class="button button-small button-outline"
-                  @click="assignClubUser(club)"
-                >
-                  Assign club user
-                </button>
-                <button
-                  v-if="canManage"
+                  v-if="canManage || (isClubUser && club.id === userScope.clubId)"
                   class="button button-small button-outline"
                   @click="addParticipantToClub(club.id)"
                 >
@@ -1366,7 +1395,7 @@ async function recordMatchScore(match, side, value) {
               <h1>Archers</h1>
               <p class="page-subtitle">A reusable directory of archers for your tournaments.</p>
             </div>
-            <button v-if="canManage" class="button button-primary" @click="openModal('participant')">
+            <button v-if="canManageParticipants" class="button button-primary" @click="openModal('participant')">
               <span>＋</span> Add archer
             </button>
           </div>
@@ -1437,13 +1466,23 @@ async function recordMatchScore(match, side, value) {
                       }}
                     </td>
                     <td>
-                      <button
-                        class="text-link"
-                        :aria-label="`View scores for ${fullName(person)}`"
-                        @click="openScoreDetails(person.id)"
-                      >
-                        View scores →
-                      </button>
+                      <div class="table-actions">
+                        <button
+                          v-if="canEditParticipant(person)"
+                          class="text-link"
+                          :aria-label="`Edit ${fullName(person)}`"
+                          @click="editParticipant(person)"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          class="text-link"
+                          :aria-label="`View scores for ${fullName(person)}`"
+                          @click="openScoreDetails(person.id)"
+                        >
+                          View scores →
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   <tr v-if="!filteredParticipants.length">
@@ -1603,27 +1642,19 @@ async function recordMatchScore(match, side, value) {
           </div>
         </section>
 
-        <section v-else-if="activePage === 'user-access' && canManage">
+        <section v-else-if="activePage === 'user-access' && isAdmin">
           <div class="page-heading heading-row">
             <div>
               <p class="eyebrow">ACCOUNT MANAGEMENT</p>
               <h1>User access</h1>
-              <p class="page-subtitle">
-                {{
-                  isAdmin
-                    ? 'Assign roles and send password reset emails.'
-                    : 'Send password reset emails to users who need account help.'
-                }}
-              </p>
+              <p class="page-subtitle">Assign manager roles and send password reset emails.</p>
             </div>
             <div class="heading-actions">
               <button class="button button-outline" @click="openModal('passwordReset')">Send password reset</button>
-              <button v-if="isAdmin" class="button button-primary" @click="openModal('userRole')">
-                <span>＋</span> Assign role
-              </button>
+              <button class="button button-primary" @click="openModal('userRole')"><span>＋</span> Add manager</button>
             </div>
           </div>
-          <section v-if="isAdmin" class="panel table-panel">
+          <section class="panel table-panel">
             <div class="table-wrap">
               <table>
                 <thead>
@@ -1635,22 +1666,13 @@ async function recordMatchScore(match, side, value) {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="role in data.userRoles" :key="`${role.userId}-${role.role}`">
+                  <tr
+                    v-for="role in data.userRoles.filter((item) => ['admin', 'manager'].includes(item.role))"
+                    :key="`${role.userId}-${role.role}`"
+                  >
                     <td>{{ role.email }}</td>
-                    <td>
-                      {{
-                        role.role === 'admin' ? 'System admin' : role.role.charAt(0).toUpperCase() + role.role.slice(1)
-                      }}
-                    </td>
-                    <td>
-                      {{
-                        role.role === 'club'
-                          ? clubFor(role.clubId)?.name
-                          : role.role === 'archer'
-                            ? fullName(participantById(role.participantId) || { firstName: '', lastName: '' })
-                            : 'All records'
-                      }}
-                    </td>
+                    <td>{{ role.role === 'admin' ? 'System admin' : 'Manager' }}</td>
+                    <td>All records</td>
                     <td>
                       <button
                         class="text-link"
@@ -1665,15 +1687,15 @@ async function recordMatchScore(match, side, value) {
                       </button>
                     </td>
                   </tr>
-                  <tr v-if="!data.userRoles.length">
-                    <td colspan="4"><div class="table-empty">No role assignments found.</div></td>
+                  <tr v-if="!data.userRoles.filter((item) => ['admin', 'manager'].includes(item.role)).length">
+                    <td colspan="4"><div class="table-empty">No manager assignments found.</div></td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </section>
           <p class="privacy-note">
-            A reset email can only be requested by an admin or manager. The account must already exist in Supabase Auth.
+            A reset email can only be requested by an admin. The account must already exist in Supabase Auth.
           </p>
         </section>
 
@@ -2171,12 +2193,14 @@ async function recordMatchScore(match, side, value) {
                           ? 'Edit category'
                           : 'Create category'
                         : modalType === 'userRole'
-                          ? 'Assign user role'
+                          ? 'Add manager'
                           : modalType === 'passwordReset'
                             ? 'Send password reset'
                             : modalType === 'profile'
                               ? 'Edit profile'
-                              : 'Add archer'
+                              : editingParticipantId
+                                ? 'Edit archer'
+                                : 'Add archer'
               }}
             </h2>
           </div>
@@ -2385,39 +2409,14 @@ async function recordMatchScore(match, side, value) {
           <div class="form-grid">
             <label class="form-field full">
               <span>ACCOUNT EMAIL <b>*</b></span>
-              <input v-model="form.email" required type="email" placeholder="archer@example.com" />
-            </label>
-            <label class="form-field full">
-              <span>ROLE <b>*</b></span>
-              <select v-model="form.role" required>
-                <option value="admin">System admin</option>
-                <option value="manager">Manager</option>
-                <option value="club">Club</option>
-                <option value="archer">Archer</option>
-              </select>
-            </label>
-            <label v-if="form.role === 'club'" class="form-field full">
-              <span>CLUB <b>*</b></span>
-              <select v-model="form.clubId" required>
-                <option value="" disabled>Select a club</option>
-                <option v-for="club in data.clubs" :key="club.id" :value="club.id">{{ club.name }}</option>
-              </select>
-            </label>
-            <label v-if="form.role === 'archer'" class="form-field full">
-              <span>ARCHER <b>*</b></span>
-              <select v-model="form.participantId" required>
-                <option value="" disabled>Select an archer</option>
-                <option v-for="person in data.participants" :key="person.id" :value="person.id">
-                  {{ person.lastName }}, {{ person.firstName }} — {{ person.waId || person.aetayId || 'No ID' }}
-                </option>
-              </select>
+              <input v-model="form.email" required type="email" placeholder="manager@example.com" />
             </label>
             <label class="form-field full">
               <span>DISPLAY NAME <small>OPTIONAL</small></span>
               <input v-model="form.displayName" placeholder="Name shown in the app" />
             </label>
             <p class="address-preview full">
-              The account must already exist in Supabase Auth before a role can be assigned.
+              The account must already exist in Supabase Auth before a manager role can be assigned.
             </p>
           </div>
         </template>
@@ -2450,13 +2449,19 @@ async function recordMatchScore(match, side, value) {
               ><span>BIRTH DATE <b>*</b></span
               ><input v-model="form.birthDate" required type="date"
             /></label>
-            <label class="form-field full"
-              ><span>CLUB <small>OPTIONAL</small></span
-              ><select v-model="form.clubId">
-                <option value="">No club / independent archer</option>
-                <option v-for="club in data.clubs" :key="club.id" :value="club.id">{{ club.name }}</option>
-              </select></label
-            >
+            <label class="form-field full">
+              <span>CLUB <small v-if="canManage">OPTIONAL</small><b v-else>*</b></span>
+              <select v-model="form.clubId" :disabled="!canManage">
+                <option v-if="canManage" value="">No club / independent archer</option>
+                <option
+                  v-for="club in canManage ? data.clubs : data.clubs.filter((item) => item.id === userScope.clubId)"
+                  :key="club.id"
+                  :value="club.id"
+                >
+                  {{ club.name }}
+                </option>
+              </select>
+            </label>
             <label class="form-field"
               ><span>WORLD ARCHERY ID <small>OPTIONAL</small></span
               ><input v-model="form.waId" placeholder="Affiliation number"
@@ -2487,12 +2492,14 @@ async function recordMatchScore(match, side, value) {
                         ? 'Save category'
                         : 'Create category'
                       : modalType === 'userRole'
-                        ? 'Assign role'
+                        ? 'Add manager'
                         : modalType === 'passwordReset'
                           ? 'Send reset email'
                           : modalType === 'profile'
                             ? 'Save profile'
-                            : 'Save archer'
+                            : editingParticipantId
+                              ? 'Save changes'
+                              : 'Save archer'
             }}
           </button>
         </div>

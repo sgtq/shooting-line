@@ -155,4 +155,44 @@ describe('manager repository', () => {
     )
     expect(client.from).not.toHaveBeenCalled()
   })
+
+  it('calls set_club_user_access when enabling or disabling a club user', async () => {
+    const rpc = vi.fn().mockResolvedValue({ error: null })
+    const client = { rpc }
+    await createManagerRepository(client).setClubEnabled('club-1', true)
+
+    expect(rpc).toHaveBeenCalledWith('set_club_user_access', {
+      p_club_id: 'club-1',
+      p_enabled: true,
+    })
+  })
+
+  it('updates an existing participant when editing', async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null })
+    const update = vi.fn().mockReturnValue({ eq })
+    const client = { from: vi.fn().mockReturnValue({ update }) }
+    await createManagerRepository(client).saveParticipant(
+      {
+        id: 'archer-1',
+        firstName: 'Alex',
+        lastName: 'Archer',
+        birthDate: '2000-01-01',
+        waId: 'WA-1',
+        aetayId: '',
+        clubId: 'club-1',
+      },
+      '',
+      true,
+    )
+
+    expect(update).toHaveBeenCalledWith({
+      first_name: 'Alex',
+      last_name: 'Archer',
+      birth_date: '2000-01-01',
+      wa_id: 'WA-1',
+      aetay_id: '',
+      club_id: 'club-1',
+    })
+    expect(eq).toHaveBeenCalledWith('id', 'archer-1')
+  })
 })
