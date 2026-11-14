@@ -1,4 +1,6 @@
 <script setup>
+import { t } from '@shooting-line/i18n'
+import LanguageSwitcher from '@shooting-line/i18n/LanguageSwitcher.vue'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { APP_IDS, createSupabaseClient, hasAppAccess } from '@shooting-line/auth'
 import { createManagerRepository, readLegacyWorkspace } from './services/workspace.js'
@@ -39,7 +41,7 @@ function goToPortal() {
 async function checkAppAccess(userId) {
   const { allowed, error } = await hasAppAccess(client.value, userId, APP_IDS.manager)
   if (error) {
-    errorMessage.value = `Unable to verify manager access: ${error.message}`
+    errorMessage.value = `${t('Unable to verify manager access')}: ${error.message}`
     isChecking.value = false
     return
   }
@@ -55,7 +57,7 @@ async function checkAppAccess(userId) {
     client.value.from('user_profiles').select('display_name').eq('user_id', userId).maybeSingle(),
   ])
   if (rolesResult.error || profileResult.error) {
-    errorMessage.value = `Unable to load account details: ${rolesResult.error?.message || profileResult.error?.message}`
+    errorMessage.value = `${t('Unable to load account details')}: ${rolesResult.error?.message || profileResult.error?.message}`
     isChecking.value = false
     return
   }
@@ -81,7 +83,7 @@ async function checkAppAccess(userId) {
   try {
     workspace.value = await managerRepository.load({ includeUserRoles: currentRole === 'admin' })
   } catch (loadError) {
-    errorMessage.value = `Unable to load the manager database: ${loadError.message}`
+    errorMessage.value = `${t('Unable to load the manager database')}: ${loadError.message}`
     isChecking.value = false
     return
   }
@@ -121,7 +123,7 @@ async function importLegacyData() {
     isImportPrompt.value = false
     isAuthorized.value = true
   } catch (error) {
-    errorMessage.value = `Unable to import saved browser data: ${error.message}`
+    errorMessage.value = `${t('Unable to import saved browser data')}: ${error.message}`
   }
   isImporting.value = false
 }
@@ -134,7 +136,7 @@ function continueWithoutImporting() {
 async function restoreSession() {
   const { data, error } = await client.value.auth.getSession()
   if (error) {
-    errorMessage.value = `Unable to verify your sign-in: ${error.message}`
+    errorMessage.value = `${t('Unable to verify your sign-in')}: ${error.message}`
     isChecking.value = false
     return
   }
@@ -179,18 +181,21 @@ onUnmounted(() => authSubscription?.unsubscribe())
 
   <main v-else-if="isImportPrompt" class="manager-access-state">
     <section class="manager-access-panel">
-      <p class="manager-access-eyebrow">Saved browser data found</p>
-      <h1 v-if="legacyDataError">Could not read saved browser data</h1>
-      <h1 v-else>Import into the shared database?</h1>
-      <p v-if="legacyDataError">{{ legacyDataError }} The local copy has been left untouched.</p>
-      <p v-else>Existing local workspace data will be copied into Supabase. The browser copy will not be deleted.</p>
+      <LanguageSwitcher />
+      <p class="manager-access-eyebrow">{{ t('Saved browser data found') }}</p>
+      <h1 v-if="legacyDataError">{{ t('Could not read saved browser data') }}</h1>
+      <h1 v-else>{{ t('Import into the shared database?') }}</h1>
+      <p v-if="legacyDataError">{{ legacyDataError }} {{ t('The local copy has been left untouched.') }}</p>
+      <p v-else>
+        {{ t('Existing local workspace data will be copied into Supabase. The browser copy will not be deleted.') }}
+      </p>
       <p v-if="errorMessage" class="manager-access-error" role="alert">{{ errorMessage }}</p>
       <div class="manager-access-actions">
         <button type="button" :disabled="isImporting || !legacyWorkspace" @click="importLegacyData">
-          {{ isImporting ? 'Importing…' : 'Import saved data' }}
+          {{ isImporting ? t('Importing…') : t('Import saved data') }}
         </button>
         <button type="button" class="secondary-action" :disabled="isImporting" @click="continueWithoutImporting">
-          Continue without import
+          {{ t('Continue without import') }}
         </button>
       </div>
     </section>
@@ -198,19 +203,20 @@ onUnmounted(() => authSubscription?.unsubscribe())
 
   <main v-else class="manager-access-state">
     <section class="manager-access-panel" role="status">
-      <p class="manager-access-eyebrow">ShootingLine access</p>
-      <h1 v-if="isChecking">Checking your account…</h1>
-      <h1 v-else-if="configurationError">Access service needs setup</h1>
-      <h1 v-else-if="errorMessage">Unable to verify access</h1>
-      <h1 v-else-if="hasAccess">Opening Tournament Manager…</h1>
-      <h1 v-else>Your account does not have access</h1>
+      <LanguageSwitcher />
+      <p class="manager-access-eyebrow">{{ t('ShootingLine access') }}</p>
+      <h1 v-if="isChecking">{{ t('Checking your account…') }}</h1>
+      <h1 v-else-if="configurationError">{{ t('Access service needs setup') }}</h1>
+      <h1 v-else-if="errorMessage">{{ t('Unable to verify access') }}</h1>
+      <h1 v-else-if="hasAccess">{{ t('Opening Tournament Manager…') }}</h1>
+      <h1 v-else>{{ t('Your account does not have access') }}</h1>
       <p v-if="configurationError">{{ configurationError }}</p>
-      <p v-else-if="legacyDataError">{{ legacyDataError }} The local copy has been left untouched.</p>
+      <p v-else-if="legacyDataError">{{ legacyDataError }} {{ t('The local copy has been left untouched.') }}</p>
       <p v-else-if="errorMessage">{{ errorMessage }}</p>
       <p v-else-if="!isChecking && !hasAccess">
-        Sign in from the main menu or ask an administrator to assign the Tournament Manager app.
+        {{ t('Sign in from the main menu or ask an administrator to assign the Tournament Manager app.') }}
       </p>
-      <a href="../">Return to main menu</a>
+      <a href="../">{{ t('Return to main menu') }}</a>
     </section>
   </main>
 </template>

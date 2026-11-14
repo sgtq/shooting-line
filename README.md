@@ -11,6 +11,7 @@ ShootingLine is a Vue 3/npm-workspaces monorepo for archery club and tournament 
 | Ianseo Dashboard   | `apps/ianseo-dashboard` | Placeholder                                |
 | Shooting Scorecard | `apps/scorecard`        | Placeholder                                |
 | Shared auth        | `packages/auth`         | Supabase client and app-access queries     |
+| Shared language    | `packages/i18n`         | English and Latin American Spanish         |
 
 Each app has its own README with its current features and commands.
 
@@ -46,6 +47,9 @@ The portal and manager authenticate through Supabase Auth. PostgreSQL schema and
 The repository does not contain project credentials. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in a local `.env` file based on `.env.example`. GitHub Pages builds use separate repository Actions variables for production and development. These Supabase URL and publishable-key values are public client configuration; the browser app does not use a service-role key.
 
 Existing manager data in browser storage is left intact. If the manager database is empty, the app offers a one-time import into PostgreSQL and keeps the browser copy after import.
+
+The portal and manager share an English/Latin American Spanish language selection, stored in the browser for the same
+origin. The selection affects display only; user-entered records and stored values are not translated.
 
 ## GitHub Pages
 

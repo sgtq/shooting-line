@@ -1,5 +1,6 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setLanguage } from '@shooting-line/i18n'
 import App from './App.vue'
 
 function createWorkspace() {
@@ -105,7 +106,38 @@ describe('participant and club workflows', () => {
   })
 
   afterEach(() => {
+    setLanguage('en')
     vi.unstubAllGlobals()
+  })
+
+  it('switches language without changing saved category values or user-entered names', async () => {
+    const repository = createRepository({ saveCategory: vi.fn().mockResolvedValue(undefined) })
+    const wrapper = mountApp(repository)
+    await wrapper.get('.language-switcher select').setValue('es-419')
+    expect(wrapper.get('button[aria-label="Categorías"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('North Archery Club')
+    await wrapper.get('button[aria-label="Categorías"]').trigger('click')
+    await wrapper.get('.page-heading .button-primary').trigger('click')
+    await wrapper.get('input[required]').setValue('My custom name')
+    const bowSelect = wrapper.get('form.modal select')
+    expect(bowSelect.get('option[value="Recurve"]').text()).toBe('Recurvo')
+    await bowSelect.setValue('Recurve')
+    await wrapper.get('form.modal').trigger('submit')
+    await flushPromises()
+    expect(repository.saveCategory).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'My custom name', bowType: 'Recurve' }),
+    )
+    expect(wrapper.text()).toContain('My custom name')
+  })
+
+  it('updates event month tiles when switching languages', async () => {
+    const wrapper = mountApp()
+    const month = wrapper.get('.date-tile span')
+    expect(month.text()).toBe('Jan')
+    await wrapper.get('.language-switcher select').setValue('es-419')
+    expect(month.text()).toBe(
+      new Intl.DateTimeFormat('es-419', { month: 'short', timeZone: 'UTC' }).format(new Date('2099-01-01T00:00:00Z')),
+    )
   })
 
   it('preselects the club when adding a participant from a club card', async () => {

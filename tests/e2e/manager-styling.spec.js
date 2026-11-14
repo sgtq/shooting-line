@@ -63,3 +63,48 @@ test('manager shortcuts and date filters retain their styling in both themes', a
   expect(logoBox.width).toBeLessThanOrEqual(40)
   expect(logoBox.height).toBeLessThanOrEqual(40)
 })
+
+test('shares the selected language between the portal and manager', async ({ page }) => {
+  const projectUrl = process.env.VITE_SUPABASE_URL || 'https://test.supabase.co'
+  const storageKey = `sb-${new URL(projectUrl).hostname.split('.')[0]}-auth-token`
+  await page.route('**/rest/v1/**', async (route) => {
+    const table = new URL(route.request().url()).pathname.split('/').pop()
+    const data =
+      table === 'app_access'
+        ? { app_id: 'manager' }
+        : table === 'user_roles'
+          ? [{ role: 'manager', club_id: null, participant_id: null }]
+          : table === 'user_profiles'
+            ? null
+            : []
+    await route.fulfill({ json: data })
+  })
+
+  await page.goto('/')
+  await page.getByLabel('Language').selectOption('es-419')
+  await expect(page.getByRole('heading', { name: 'Inicia sesión en ShootingLine' })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es-419')
+  await page.evaluate((key) => {
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        access_token: 'test-token',
+        refresh_token: 'test-refresh-token',
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        token_type: 'bearer',
+        user: { id: 'test-user', email: 'manager@example.test', user_metadata: {} },
+      }),
+    )
+  }, storageKey)
+
+  await page.goto('/manager/')
+  await expect(page.getByRole('button', { name: 'Torneos', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Idioma')).toHaveValue('es-419')
+  await page.setViewportSize({ width: 360, height: 800 })
+  const switcherBox = await page.getByLabel('Idioma').boundingBox()
+  expect(switcherBox.x + switcherBox.width).toBeLessThanOrEqual(360)
+  await page.getByLabel('Idioma').selectOption('en')
+  await expect(page.getByRole('button', { name: 'Tournaments', exact: true })).toBeVisible()
+  await page.goto('/')
+  await expect(page.getByLabel('Language')).toHaveValue('en')
+})
