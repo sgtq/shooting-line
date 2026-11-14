@@ -389,6 +389,22 @@ h3 {
   padding: 0 10px;
   font-size: 10px;
 }
+.button-icon {
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  color: #596258;
+  background: #fff;
+  border-color: #e4e8e2;
+}
+.button-icon:hover:not(:disabled) {
+  background: #f8faf7;
+  border-color: #cbd4c8;
+}
+.button-icon svg {
+  width: 18px;
+  height: 18px;
+}
 .button-soft-danger {
   color: #9b5250;
   background: #fff5f4;
