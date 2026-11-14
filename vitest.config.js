@@ -6,7 +6,7 @@ export default defineConfig({
   test: {
     clearMocks: true,
     environment: 'jsdom',
-    include: ['apps/**/*.{test,spec}.{js,ts}'],
+    include: ['apps/**/*.{test,spec}.{js,ts}', 'packages/**/*.{test,spec}.{js,ts}'],
     restoreMocks: true,
   },
 })
