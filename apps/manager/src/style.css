@@ -449,6 +449,20 @@ h3 {
   color: #a87353;
   background: #fbf0e9;
 }
+.stat-icon .nav-icon-svg,
+.quick-icon .nav-icon-svg {
+  width: 16px;
+  height: 16px;
+}
+.empty-icon .nav-icon-svg {
+  width: 22px;
+  height: 22px;
+}
+.tournament-meta .nav-icon-svg {
+  width: 11px;
+  height: 11px;
+  vertical-align: -2px;
+}
 .stat-caption {
   color: #adb2ab;
   font-size: 8px;
@@ -632,12 +646,12 @@ h3 {
 .row-arrow {
   width: 24px;
   height: 24px;
-  border: 0;
+  display: grid;
+  place-items: center;
   color: #a4aaa2;
-  background: transparent;
   font-size: 13px;
 }
-.row-arrow:hover {
+.clickable-card:hover .row-arrow {
   color: #486b4c;
 }
 .quick-panel {
@@ -772,6 +786,18 @@ h3 {
   border-radius: 20px;
   font-size: 9px;
   white-space: nowrap;
+}
+.status-pill-button {
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+.status-pill-button:hover {
+  filter: brightness(0.95);
+}
+.status-pill-button:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
 }
 .status-pill i {
   width: 5px;
@@ -1129,12 +1155,14 @@ tbody tr:last-child td {
   border-radius: 8px;
   background: #fff;
   box-shadow: var(--shadow);
+}
+.clickable-card {
   cursor: pointer;
 }
-.tournament-card:hover {
+.clickable-card:hover {
   border-color: var(--green);
 }
-.tournament-card:focus-visible {
+.clickable-card:focus-visible {
   outline: 2px solid var(--text-primary);
   outline-offset: 2px;
 }
