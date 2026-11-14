@@ -355,7 +355,27 @@ export function createManagerRepository(client) {
     if (error) throw error
   }
 
-  async function saveClub(club) {
+  async function saveClub(club, { syncUserAccess = false, hadUserEnabled = false } = {}) {
+    if (!syncUserAccess) {
+      const { error } = await client
+        .from('clubs')
+        .update({
+          name: club.name,
+          representative: club.representative,
+          phone: club.phone,
+          email: club.email,
+          website: club.website,
+          address: club.address,
+          map_url: club.mapUrl,
+          logo_url: club.logoUrl || '',
+        })
+        .eq('id', club.id)
+      if (error) throw error
+      return
+    }
+
+    const clubEmail = (club.email || club.userEmail || '').trim()
+    const shouldEnable = Boolean(club.userEnabled && clubEmail)
     const { error } = await client.from('clubs').upsert({
       id: club.id,
       name: club.name,
@@ -366,10 +386,14 @@ export function createManagerRepository(client) {
       address: club.address,
       map_url: club.mapUrl,
       logo_url: club.logoUrl || '',
-      user_email: club.userEmail,
-      user_enabled: club.userEnabled,
+      user_email: clubEmail,
+      user_enabled: false,
     })
     if (error) throw error
+
+    if (shouldEnable || hadUserEnabled) {
+      await setClubEnabled(club.id, shouldEnable)
+    }
   }
 
   async function uploadClubLogo(clubId, file) {
@@ -487,15 +511,24 @@ export function createManagerRepository(client) {
     roundIds.set(roundKey(tournament.id, 'Qualification'), roundId)
   }
 
-  async function saveParticipant(participant, tournamentId = '') {
-    const { error } = await client.from('participants').insert({
-      id: participant.id,
+  async function saveParticipant(participant, tournamentId = '', isEditing = false) {
+    const payload = {
       first_name: participant.firstName,
       last_name: participant.lastName,
       birth_date: participant.birthDate || null,
       wa_id: participant.waId,
       aetay_id: participant.aetayId,
       club_id: participant.clubId || null,
+    }
+    if (isEditing) {
+      const { error } = await client.from('participants').update(payload).eq('id', participant.id)
+      if (error) throw error
+      return
+    }
+
+    const { error } = await client.from('participants').insert({
+      id: participant.id,
+      ...payload,
     })
     if (error) throw error
 
@@ -523,7 +556,10 @@ export function createManagerRepository(client) {
   }
 
   async function setClubEnabled(clubId, enabled) {
-    const { error } = await client.from('clubs').update({ user_enabled: enabled }).eq('id', clubId)
+    const { error } = await client.rpc('set_club_user_access', {
+      p_club_id: clubId,
+      p_enabled: enabled,
+    })
     if (error) throw error
   }
 

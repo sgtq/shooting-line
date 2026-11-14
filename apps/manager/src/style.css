@@ -108,10 +108,15 @@ a {
   font-weight: 600;
 }
 .nav-icon {
+  display: inline-flex;
   width: 18px;
-  text-align: center;
-  font-size: 17px;
-  line-height: 1;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+}
+.nav-icon-svg {
+  width: 18px;
+  height: 18px;
 }
 .nav-count {
   margin-left: auto;
@@ -459,6 +464,21 @@ h3 {
     sans-serif;
   letter-spacing: -0.8px;
 }
+.stat-value-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+[data-theme='dark'] .stat-value-button:hover,
+.stat-value-button:hover {
+  color: var(--green);
+}
+.stat-value-button:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
 .stat-label {
   display: block;
   margin-top: 5px;
@@ -795,6 +815,33 @@ h3 {
   padding: 0 5px;
   color: #c2c6c0;
 }
+.tournament-filters {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-surface-alt);
+}
+.tournament-filters button {
+  min-height: 27px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text-primary);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 600;
+}
+.tournament-filters button.active {
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+}
+.tournament-filters button:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 1px;
+}
 .type-shortcut {
   display: flex;
   align-items: center;
@@ -857,6 +904,12 @@ h3 {
   height: 38px;
   border-radius: 9px;
   font-size: 15px;
+}
+.club-logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  object-fit: contain;
 }
 .more-button {
   border: 0;
@@ -930,6 +983,18 @@ h3 {
   font-size: 9px;
   font-weight: 500;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.club-user-row > .club-user-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   white-space: nowrap;
 }
 .club-card-actions {
@@ -1064,6 +1129,14 @@ tbody tr:last-child td {
   border-radius: 8px;
   background: #fff;
   box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.tournament-card:hover {
+  border-color: var(--green);
+}
+.tournament-card:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
 }
 .tournament-date {
   width: 52px;
@@ -2010,7 +2083,14 @@ tbody tr:last-child td {
     margin-left: 64px;
   }
   .topbar {
+    height: auto;
+    min-height: 66px;
+    flex-wrap: wrap;
+    gap: 8px;
     padding: 0 22px;
+  }
+  .topbar-actions {
+    flex-wrap: wrap;
   }
   .page-container {
     padding: 32px 22px 50px;
@@ -2043,8 +2123,8 @@ tbody tr:last-child td {
     min-width: 360px;
   }
   .topbar {
-    height: 56px;
-    padding: 0 15px;
+    min-height: 56px;
+    padding: 8px 15px;
   }
   .demo-chip {
     max-width: 140px;

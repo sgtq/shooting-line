@@ -11,6 +11,7 @@ ShootingLine is a Vue 3/npm-workspaces monorepo for archery club and tournament 
 | Ianseo Dashboard   | `apps/ianseo-dashboard` | Placeholder                                |
 | Shooting Scorecard | `apps/scorecard`        | Placeholder                                |
 | Shared auth        | `packages/auth`         | Supabase client and app-access queries     |
+| Shared language    | `packages/i18n`         | English and Latin American Spanish         |
 
 Each app has its own README with its current features and commands.
 
@@ -25,6 +26,8 @@ npm run dev:portal
 npm run dev:manager
 npm run build
 npm run preview
+npm run test:unit
+npm run test:e2e
 npm run cs-fix
 npm run cs-check
 npm run type-check
@@ -34,6 +37,7 @@ npm run test:all
 
 `npm run dev` starts the portal and manager together, with the manager available at `/manager/` on the portal's origin. `npm run dev:portal` starts only the portal; `npm run dev:manager` starts the manager's local Vite server on port 5174. The production build publishes the portal at the site root and manager at `/manager/`. The two placeholder apps are not built or deployed.
 
+Unit tests cover manager workflows and shared authentication access queries using mocked Supabase calls.
 The quality workflow runs ESLint, Prettier, `vue-tsc`, unit and end-to-end tests, and builds on pull requests and pushes to `develop` and `main`. The active Vue workspaces use JavaScript; `vue-tsc` checks Vue components and templates while `checkJs` remains disabled.
 
 ## Shared access and database
@@ -43,6 +47,9 @@ The portal and manager authenticate through Supabase Auth. PostgreSQL schema and
 The repository does not contain project credentials. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in a local `.env` file based on `.env.example`. GitHub Pages builds use separate repository Actions variables for production and development. These Supabase URL and publishable-key values are public client configuration; the browser app does not use a service-role key.
 
 Existing manager data in browser storage is left intact. If the manager database is empty, the app offers a one-time import into PostgreSQL and keeps the browser copy after import.
+
+The portal and manager share an English/Latin American Spanish language selection, stored in the browser for the same
+origin. The selection affects display only; user-entered records and stored values are not translated.
 
 ## GitHub Pages
 

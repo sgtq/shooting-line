@@ -10,17 +10,19 @@ The manager is the current archery club and tournament application. It is a Vue 
 - Per-tournament rounds and archer scores.
 - First-round Olympic-style match seeding and match score entry.
 - Light and dark themes.
+- English and Latin American Spanish interface with a shared browser language preference.
+- Dashboard count shortcuts and upcoming/past tournament filters.
 
 ## Data and access
 
 Manager records are stored in Supabase PostgreSQL tables created and evolved by the migrations in `supabase/migrations/`. A signed-in account needs a Tournament Manager app grant. Database row-level security applies each user's access rules.
 
-- **System admin:** can manage all records and assign or remove user roles.
-- **Manager:** can manage all clubs, archers, tournaments, categories, and scores.
-- **Club:** can view its own club information and related tournaments and archers, and edit its own club details. Club accounts cannot create tournaments.
+- **System admin:** can manage all records, assign or remove manager roles in **User access**, and request password recovery emails.
+- **Manager:** can create and manage clubs, tournament types, categories, tournaments, archers, and scores, and enable or disable club users on the **Clubs** screen.
+- **Club:** can view its own club information and related tournaments and archers, edit its own club details, and create or edit archers for its own club only. Club accounts cannot create tournaments, clubs, categories, or tournament types.
 - **Archer:** read-only access to their own archer record and tournament entries.
 
-Admins assign roles from **User access**. The account must already exist in Supabase Auth. Club and archer roles require a club or archer scope. When a club record has a related user email, admins can also use **Assign club user** on that club card to prefill the club role assignment. Admins and managers can request a one-time password recovery email for an account; there is no self-service reset link in the main menu. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
+Admins manage manager roles from **User access**; the account must already exist in Supabase Auth. Club user access is enabled or disabled directly from the **Clubs** screen using the club's email and name (which grants or revokes the `club` role automatically). Admins can request a one-time password recovery email for an account; there is no self-service reset link in the main menu. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
 
 The GitHub Pages development preview is served at `/develop/` (or `/<repository>/develop/` on the default project-site domain) and connects to the development Supabase project. Access to manager data is controlled by Supabase Auth, app access, and RLS roles. The static preview bundle itself is public, as required by GitHub Pages; never include private credentials in it.
 
@@ -56,6 +58,7 @@ From the repository root:
 npm run dev
 npm run dev:manager
 npm run build:manager
+npm run test:unit
 ```
 
 `npm run dev` starts the portal and manager together, serving the manager at `/manager/` on the portal's origin. `npm run dev:manager` starts the manager Vite server on port 5174. The production manager bundle is written to `dist/manager/`.
@@ -63,3 +66,6 @@ npm run build:manager
 ## Limitations
 
 The manager is not a complete competition system. Byes, set points, tie-breaks, advancement, and later bracket rounds are not implemented. Archer birth dates and affiliation IDs are personal data.
+
+User-entered names and existing saved round labels are displayed as stored. Details returned by Supabase or other
+services may remain in their original language.

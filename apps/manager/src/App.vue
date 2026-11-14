@@ -1,4 +1,6 @@
 <script setup>
+import { language, t } from '@shooting-line/i18n'
+import LanguageSwitcher from '@shooting-line/i18n/LanguageSwitcher.vue'
 import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 
@@ -46,7 +48,7 @@ async function persistChange(operation, updateLocalState, errorTarget = 'page') 
     targetTypeError.value = ''
     return true
   } catch (error) {
-    const message = `Save failed: ${error.message}`
+    const message = `${t('Save failed')}: ${error.message}`
     if (errorTarget === 'modal') modalError.value = message
     else if (errorTarget === 'targetType') targetTypeError.value = message
     else databaseError.value = message
@@ -55,20 +57,32 @@ async function persistChange(operation, updateLocalState, errorTarget = 'page') 
 }
 
 const allNavItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: '◫' },
-  { id: 'tournaments', label: 'Tournaments', icon: '▦' },
-  { id: 'tournament-types', label: 'Tournament types', icon: '⚙' },
-  { id: 'categories', label: 'Categories', icon: '◇' },
-  { id: 'clubs', label: 'Clubs', icon: '⌂' },
-  { id: 'participants', label: 'Archers', icon: '♙' },
-  { id: 'user-access', label: 'User access', icon: '♙' },
+  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { id: 'tournaments', label: 'Tournaments', icon: 'tournaments' },
+  { id: 'tournament-types', label: 'Tournament types', icon: 'tournament-types' },
+  { id: 'categories', label: 'Categories', icon: 'categories' },
+  { id: 'clubs', label: 'Clubs', icon: 'clubs' },
+  { id: 'participants', label: 'Archers', icon: 'archers' },
+  { id: 'user-access', label: 'User access', icon: 'user-access' },
 ]
 const canManage = computed(() => ['admin', 'manager'].includes(props.userRole))
 const isAdmin = computed(() => props.userRole === 'admin')
+const isClubUser = computed(() => props.userRole === 'club')
+const canManageParticipants = computed(() => canManage.value || (isClubUser.value && Boolean(props.userScope.clubId)))
 function canEditClub(club) {
-  return canManage.value || (props.userRole === 'club' && club.id === props.userScope.clubId)
+  return canManage.value || (isClubUser.value && club.id === props.userScope.clubId)
 }
-const visibleNavItems = computed(() => allNavItems.filter((item) => item.id !== 'user-access' || canManage.value))
+function canEditParticipant(person) {
+  return canManage.value || (isClubUser.value && person.clubId === props.userScope.clubId)
+}
+const visibleNavItems = computed(() =>
+  allNavItems
+    .filter((item) => item.id !== 'user-access' || isAdmin.value)
+    .map((item) => ({
+      ...item,
+      label: t(item.label),
+    })),
+)
 const activePage = ref('dashboard')
 const search = ref('')
 const participantClubFilter = ref('')
@@ -91,6 +105,7 @@ const targetTypeName = ref('')
 const targetTypeError = ref('')
 const assignNewParticipant = ref(false)
 const editingClubId = ref('')
+const editingParticipantId = ref('')
 const toast = ref('')
 const tournamentQuery = ref('')
 const userName = ref(props.userName)
@@ -132,9 +147,9 @@ const currentNavPage = computed(() =>
 )
 const salutation = computed(() => {
   const hour = new Date().getHours()
-  return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  return t(hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening')
 })
-const greeting = computed(() => `${salutation.value}, ${userName.value || 'there'}`)
+const greeting = computed(() => `${salutation.value}, ${userName.value || t('there')}`)
 const roleSummary = computed(() => {
   const roleLabels = {
     admin: 'System admin',
@@ -143,7 +158,7 @@ const roleSummary = computed(() => {
     archer: 'Archer',
   }
   return props.userRoles
-    .map((role) => roleLabels[role])
+    .map((role) => roleLabels[role] && t(roleLabels[role]))
     .filter(Boolean)
     .join(' · ')
 })
@@ -253,7 +268,7 @@ const selectedParticipantScoreRows = computed(() =>
               item.participantId
             ],
         ),
-        scoreType: 'Round score',
+        scoreType: t('Round score'),
       })),
     ...data.value.matches.flatMap((match) => {
       const shooterIsFirst = match.seed1Id === selectedScoreParticipantId.value && match.score1 !== ''
@@ -265,9 +280,9 @@ const selectedParticipantScoreRows = computed(() =>
           tournamentId: match.tournamentId,
           tournament: data.value.tournaments.find((event) => event.id === match.tournamentId),
           category: categoryFor(match.categoryId),
-          round: `${match.round} vs ${fullName(participantById(opponentId) || { firstName: 'Unknown', lastName: '' })}`,
+          round: `${match.round} ${t('vs')} ${fullName(participantById(opponentId) || { firstName: t('Unknown'), lastName: '' })}`,
           score: shooterIsFirst ? match.score1 : match.score2,
-          scoreType: 'Olympic match',
+          scoreType: t('Olympic match'),
         },
       ]
     }),
@@ -317,13 +332,11 @@ const blankParticipant = () => ({
   birthDate: '',
   waId: '',
   aetayId: '',
-  clubId: '',
+  clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : '',
 })
 const blankUserRole = () => ({
   email: '',
   role: 'manager',
-  clubId: '',
-  participantId: '',
   displayName: '',
 })
 const form = ref({})
@@ -333,10 +346,35 @@ function today() {
 }
 
 function formatDate(value) {
-  if (!value) return 'Date to be confirmed'
-  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(
+  if (!value) return t('Date to be confirmed')
+  return new Intl.DateTimeFormat(language.value, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${value}T00:00:00Z`))
+}
+
+function formatMonth(value) {
+  return new Intl.DateTimeFormat(language.value, { month: 'short', timeZone: 'UTC' }).format(
     new Date(`${value}T00:00:00Z`),
   )
+}
+
+function displayChoice(value) {
+  return [
+    'Outdoor target',
+    'Indoor target',
+    'Field',
+    'Other',
+    'Recurve',
+    'Compound',
+    'Barebow',
+    'Longbow',
+    'Traditional',
+  ].includes(value)
+    ? t(value)
+    : value
 }
 
 function fullName(person) {
@@ -358,11 +396,13 @@ function categoryFor(id) {
 function categoryDescription(category) {
   const ageRange =
     category.minAge !== null && category.minAge !== ''
-      ? `Age ${category.minAge}${category.maxAge !== null && category.maxAge !== '' ? `–${category.maxAge}` : '+'}`
+      ? t('Age {age}', {
+          age: `${category.minAge}${category.maxAge !== null && category.maxAge !== '' ? `–${category.maxAge}` : '+'}`,
+        })
       : category.maxAge !== null && category.maxAge !== ''
-        ? `Up to age ${category.maxAge}`
-        : 'All ages'
-  return [ageRange, category.bowType || 'Any bow type'].join(' · ')
+        ? t('Up to age {age}', { age: category.maxAge })
+        : t('All ages')
+  return [ageRange, category.bowType ? displayChoice(category.bowType) : t('Any bow type')].join(' · ')
 }
 
 function ageAtTournament(participant, tournament) {
@@ -380,13 +420,14 @@ function venueFor(tournament) {
   if (!tournament) return ''
   return tournament.venueMode === 'custom'
     ? tournament.customAddress
-    : clubFor(tournament.clubId)?.address || 'Club address not set'
+    : clubFor(tournament.clubId)?.address || t('Club address not set')
 }
 
-function notify(message) {
-  toast.value = message
+function notify(message, values) {
+  const translated = t(message, values)
+  toast.value = translated
   window.setTimeout(() => {
-    if (toast.value === message) toast.value = ''
+    if (toast.value === translated) toast.value = ''
   }, 2800)
 }
 
@@ -400,6 +441,7 @@ function openModal(type, assignToCurrentTournament = false) {
   modalType.value = type
   assignNewParticipant.value = assignToCurrentTournament
   editingClubId.value = ''
+  editingParticipantId.value = ''
   editingTournamentTypeId.value = ''
   editingCategoryId.value = ''
   editingUserRoleId.value = ''
@@ -420,13 +462,6 @@ function openModal(type, assignToCurrentTournament = false) {
                   ? { displayName: userName.value }
                   : blankParticipant()
   showModal.value = true
-}
-
-function assignClubUser(club) {
-  openModal('userRole')
-  form.value.email = club.userEmail || ''
-  form.value.role = 'club'
-  form.value.clubId = club.id
 }
 
 function openTournamentChildModal(type) {
@@ -462,7 +497,7 @@ function handleClubLogoSelection(event) {
   const file = event.target.files?.[0]
   if (!file) return
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2_000_000) {
-    modalError.value = 'Choose a JPG, PNG, or WebP logo smaller than 2 MB.'
+    modalError.value = t('Choose a JPG, PNG, or WebP logo smaller than 2 MB.')
     event.target.value = ''
     return
   }
@@ -489,6 +524,13 @@ function editClub(club) {
   modalType.value = 'club'
   editingClubId.value = club.id
   form.value = { ...club, logoFile: null, logoPreview: club.logoUrl }
+  showModal.value = true
+}
+
+function editParticipant(person) {
+  modalType.value = 'participant'
+  editingParticipantId.value = person.id
+  form.value = { ...person }
   showModal.value = true
 }
 
@@ -523,6 +565,7 @@ function closeModal() {
   modalError.value = ''
   targetTypeError.value = ''
   editingClubId.value = ''
+  editingParticipantId.value = ''
   editingTournamentTypeId.value = ''
   editingCategoryId.value = ''
   editingUserRoleId.value = ''
@@ -530,21 +573,28 @@ function closeModal() {
 
 async function saveClub() {
   const isEditing = Boolean(editingClubId.value)
+  const existingClub = isEditing ? clubFor(editingClubId.value) : null
+  const hadUserEnabled = Boolean(existingClub?.userEnabled)
   const { logoFile } = form.value
   const clubForm = { ...form.value }
   delete clubForm.logoFile
   delete clubForm.logoPreview
+  clubForm.email = (clubForm.email || '').trim()
+  clubForm.userEmail = clubForm.email || (clubForm.userEmail || '').trim()
+  if (!clubForm.userEmail) clubForm.userEnabled = false
   const club = { ...clubForm, id: editingClubId.value || makeId() }
   const saved = await persistChange(
     async () => {
       if (logoFile) club.logoUrl = await props.repository.uploadClubLogo(club.id, logoFile)
-      await props.repository.saveClub(club)
+      await props.repository.saveClub(club, {
+        syncUserAccess: canManage.value,
+        hadUserEnabled,
+      })
     },
     () => {
-      if (isEditing) {
-        const existing = clubFor(club.id)
-        if (existing) Object.assign(existing, club)
-      } else {
+      if (isEditing && existingClub) {
+        Object.assign(existingClub, club)
+      } else if (!isEditing) {
         data.value.clubs.unshift(club)
       }
     },
@@ -634,7 +684,7 @@ function closeTargetTypeModal() {
 async function saveTargetType() {
   const name = targetTypeName.value.trim()
   if (!name) {
-    targetTypeError.value = 'Enter a target type name.'
+    targetTypeError.value = t('Enter a target type name.')
     return
   }
 
@@ -689,8 +739,8 @@ async function saveCategory() {
 
 async function saveUserRole() {
   const role = {
-    ...form.value,
     email: form.value.email.trim(),
+    role: 'manager',
     displayName: form.value.displayName.trim(),
   }
   let userId
@@ -703,8 +753,8 @@ async function saveUserRole() {
         userId,
         email: role.email,
         role: role.role,
-        clubId: role.clubId || '',
-        participantId: role.participantId || '',
+        clubId: '',
+        participantId: '',
       }
       const existing = data.value.userRoles.find((item) => item.userId === userId && item.role === role.role)
       if (existing) Object.assign(existing, assigned)
@@ -715,7 +765,7 @@ async function saveUserRole() {
   if (!saved) return
 
   closeModal()
-  notify('User role assigned')
+  notify('Manager role assigned')
 }
 
 async function removeUserRole(role) {
@@ -736,7 +786,7 @@ async function removeUserRole(role) {
 async function saveUserProfile() {
   const displayName = form.value.displayName.trim()
   if (!displayName) {
-    modalError.value = 'Enter a display name.'
+    modalError.value = t('Enter a display name.')
     return
   }
 
@@ -758,7 +808,7 @@ async function saveUserProfile() {
 async function sendAdminPasswordReset() {
   const email = form.value.email.trim()
   if (!email) {
-    modalError.value = 'Enter the account email address.'
+    modalError.value = t('Enter the account email address.')
     return
   }
 
@@ -808,12 +858,12 @@ async function setParticipantCategory(tournament, participant, event) {
     }
     const age = ageAtTournament(participant, tournament)
     if (age !== null && category.minAge !== null && category.minAge !== '' && age < category.minAge) {
-      notify(`${fullName(participant)} is below this category's minimum age`)
+      notify("{name} is below this category's minimum age", { name: fullName(participant) })
       event.target.value = tournament.categoryAssignments[participant.id] || ''
       return
     }
     if (age !== null && category.maxAge !== null && category.maxAge !== '' && age > category.maxAge) {
-      notify(`${fullName(participant)} is above this category's maximum age`)
+      notify("{name} is above this category's maximum age", { name: fullName(participant) })
       event.target.value = tournament.categoryAssignments[participant.id] || ''
       return
     }
@@ -848,6 +898,12 @@ function openTournament(tournamentId, tab = 'participants') {
   activePage.value = 'tournament-detail'
 }
 
+// A drag-select ends in a click on the card; skip opening so the selected text can be copied.
+function openTournamentFromCard(tournamentId) {
+  if (window.getSelection()?.toString()) return
+  openTournament(tournamentId)
+}
+
 function openScoreDetails(participantId) {
   selectedScoreParticipantId.value = participantId
   activePage.value = 'score-detail'
@@ -875,14 +931,24 @@ async function addRound() {
 }
 
 async function saveParticipant() {
-  const participant = { ...form.value, id: makeId() }
-  const tournament = assignNewParticipant.value ? selectedTournament.value : null
+  const isEditing = Boolean(editingParticipantId.value)
+  const participant = {
+    ...form.value,
+    id: editingParticipantId.value || makeId(),
+    clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : form.value.clubId || '',
+  }
+  const tournament = !isEditing && assignNewParticipant.value ? selectedTournament.value : null
   if (
     !(await persistChange(
-      () => props.repository.saveParticipant(participant, tournament?.id || ''),
+      () => props.repository.saveParticipant(participant, tournament?.id || '', isEditing),
       () => {
-        data.value.participants.unshift(participant)
-        if (tournament) tournament.participantIds.push(participant.id)
+        if (isEditing) {
+          const existing = participantById(participant.id)
+          if (existing) Object.assign(existing, participant)
+        } else {
+          data.value.participants.unshift(participant)
+          if (tournament) tournament.participantIds.push(participant.id)
+        }
       },
       'modal',
     ))
@@ -890,9 +956,27 @@ async function saveParticipant() {
     return
 
   closeModal()
-  notify('Archer saved')
+  notify(isEditing ? 'Archer details updated' : 'Archer saved')
 }
 
+async function toggleClub(club) {
+  if (!club.email && !club.userEmail && !club.userEnabled) {
+    notify('Add a club email before enabling access')
+    return
+  }
+  const enabled = !club.userEnabled
+  if (
+    !(await persistChange(
+      () => props.repository.setClubEnabled(club.id, enabled),
+      () => {
+        club.userEnabled = enabled
+      },
+    ))
+  )
+    return
+
+  notify(club.userEnabled ? 'Club user enabled' : 'Club user disabled')
+}
 async function toggleParticipant(tournament, participantId) {
   const index = tournament.participantIds.indexOf(participantId)
   const included = index === -1
@@ -1040,7 +1124,7 @@ async function generateMatches() {
   )
     return
 
-  notify(`${newMatches.length} first-round matches seeded`)
+  notify('{count} first-round matches seeded', { count: newMatches.length })
 }
 
 function participantById(id) {
@@ -1078,28 +1162,29 @@ async function recordMatchScore(match, side, value) {
     <main class="main-content">
       <header class="topbar">
         <div class="breadcrumbs">
-          <span>Main menu</span><span class="crumb-slash">/</span
+          <span>{{ t('Main menu') }}</span><span class="crumb-slash">/</span
           ><strong>{{
             activePage === 'tournament-detail'
               ? selectedTournament?.name
-              : allNavItems.find((item) => item.id === activePage)?.label
+              : visibleNavItems.find((item) => item.id === activePage)?.label
           }}</strong>
         </div>
         <div class="topbar-actions">
-          <span v-if="isDevelopmentPreview" class="environment-badge">DEVELOPMENT / QA</span>
-          <span class="demo-chip"><i></i> Shared database</span>
-          <a class="portal-link" href="../">App launcher</a>
+          <span v-if="isDevelopmentPreview" class="environment-badge">{{ t('DEVELOPMENT / QA') }}</span>
+          <span class="demo-chip"><i></i> {{ t('Shared database') }}</span>
+          <a class="portal-link" href="../">{{ t('App launcher') }}</a>
+          <LanguageSwitcher />
           <button
             class="theme-toggle"
             type="button"
             :aria-pressed="theme === 'dark'"
-            :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+            :aria-label="theme === 'dark' ? t('Switch to light theme') : t('Switch to dark theme')"
             @click="toggleTheme"
           >
             <span aria-hidden="true">{{ theme === 'dark' ? '☀' : '☾' }}</span>
-            <span class="theme-toggle-label">{{ theme === 'dark' ? 'Light theme' : 'Dark theme' }}</span>
+            <span class="theme-toggle-label">{{ theme === 'dark' ? t('Light theme') : t('Dark theme') }}</span>
           </button>
-          <button class="icon-button" aria-label="Help" @click="notify('ShootingLine is ready to use')">?</button>
+          <button class="icon-button" :aria-label="t('Help')" @click="notify('ShootingLine is ready to use')">?</button>
         </div>
       </header>
 
@@ -1108,64 +1193,64 @@ async function recordMatchScore(match, side, value) {
         <section v-if="activePage === 'dashboard'">
           <div class="page-heading heading-row">
             <div>
-              <p class="eyebrow">OVERVIEW</p>
+              <p class="eyebrow">{{ t('OVERVIEW') }}</p>
               <h1>{{ greeting }} <span class="wave">✳</span></h1>
-              <p class="page-subtitle">Here’s what’s happening across your archery community.</p>
+              <p class="page-subtitle">{{ t('Here’s what’s happening across your archery community.') }}</p>
             </div>
             <button v-if="canManage" class="button button-primary" @click="openModal('tournament')">
-              <span>＋</span> Create tournament
+              <span>＋</span> {{ t('Create tournament') }}
             </button>
           </div>
 
           <div class="stats-grid">
             <article class="stat-card">
               <div class="stat-top">
-                <span class="stat-icon olive">▦</span><span class="stat-caption">ALL TIME</span>
+                <span class="stat-icon olive">▦</span><span class="stat-caption">{{ t('ALL TIME') }}</span>
               </div>
               <button
                 class="stat-value stat-value-button"
-                aria-label="Open tournaments"
+                :aria-label="t('Open tournaments')"
                 @click="activePage = 'tournaments'"
               >
                 {{ data.tournaments.length }}
               </button>
-              <span class="stat-label">Total tournaments</span>
-              <div class="stat-foot"><span class="stat-dot green"></span> Open event calendar</div>
+              <span class="stat-label">{{ t('Total tournaments') }}</span>
+              <div class="stat-foot"><span class="stat-dot green"></span> {{ t('Open event calendar') }}</div>
             </article>
             <article class="stat-card">
               <div class="stat-top">
-                <span class="stat-icon sand">⌂</span><span class="stat-caption">REGISTERED</span>
+                <span class="stat-icon sand">⌂</span><span class="stat-caption">{{ t('REGISTERED') }}</span>
               </div>
-              <button class="stat-value stat-value-button" aria-label="Open clubs" @click="activePage = 'clubs'">
+              <button class="stat-value stat-value-button" :aria-label="t('Open clubs')" @click="activePage = 'clubs'">
                 {{ data.clubs.length }}
               </button>
-              <span class="stat-label">Clubs</span>
-              <div class="stat-foot"><span class="stat-dot green"></span> Open club directory</div>
+              <span class="stat-label">{{ t('Clubs') }}</span>
+              <div class="stat-foot"><span class="stat-dot green"></span> {{ t('Open club directory') }}</div>
             </article>
             <article class="stat-card">
               <div class="stat-top">
-                <span class="stat-icon blue">♙</span><span class="stat-caption">DATABASE</span>
+                <span class="stat-icon blue">♙</span><span class="stat-caption">{{ t('DATABASE') }}</span>
               </div>
               <button
                 class="stat-value stat-value-button"
-                aria-label="Open archers"
+                :aria-label="t('Open archers')"
                 @click="activePage = 'participants'"
               >
                 {{ data.participants.length }}
               </button>
-              <span class="stat-label">Archers</span>
-              <div class="stat-foot">Open archer directory</div>
+              <span class="stat-label">{{ t('Archers') }}</span>
+              <div class="stat-foot">{{ t('Open archer directory') }}</div>
             </article>
             <article class="stat-card next-stat">
               <div class="stat-top">
-                <span class="stat-icon peach">◷</span><span class="stat-caption">UP NEXT</span>
+                <span class="stat-icon peach">◷</span><span class="stat-caption">{{ t('UP NEXT') }}</span>
               </div>
-              <strong class="next-event">{{ nextTournament?.name || 'No upcoming events' }}</strong>
+              <strong class="next-event">{{ nextTournament?.name || t('No upcoming events') }}</strong>
               <span class="stat-label">{{
-                nextTournament ? formatDate(nextTournament.date) : 'No event scheduled'
+                nextTournament ? formatDate(nextTournament.date) : t('No event scheduled')
               }}</span>
               <button v-if="nextTournament" class="text-link" @click="openTournament(nextTournament.id)">
-                View tournament <span>→</span>
+                {{ t('View tournament') }} <span>→</span>
               </button>
             </article>
           </div>
@@ -1174,51 +1259,62 @@ async function recordMatchScore(match, side, value) {
             <section class="panel events-panel">
               <div class="panel-heading">
                 <div>
-                  <h2>Upcoming tournaments</h2>
-                  <p>Your next events at a glance</p>
+                  <h2>{{ t('Upcoming tournaments') }}</h2>
+                  <p>{{ t('Your next events at a glance') }}</p>
                 </div>
-                <button class="text-link" @click="activePage = 'tournaments'">View all <span>→</span></button>
+                <button class="text-link" @click="activePage = 'tournaments'">
+                  {{ t('View all') }} <span>→</span>
+                </button>
               </div>
               <div v-if="upcomingTournaments.length" class="event-list">
                 <article v-for="event in upcomingTournaments.slice(0, 4)" :key="event.id" class="event-row">
                   <div class="date-tile">
-                    <span>{{ formatDate(event.date).split(' ')[0] }}</span><strong>{{
+                    <span>{{ formatMonth(event.date) }}</span><strong>{{
                       new Date(`${event.date}T00:00:00Z`).getUTCDate()
                     }}</strong>
                   </div>
                   <div class="event-info">
                     <strong>{{ event.name }}</strong><span
-                      >{{ clubFor(event.clubId)?.name || 'Independent event' }} · {{ event.discipline }}</span
+                      >{{ clubFor(event.clubId)?.name || t('Independent event') }} ·
+                      {{ displayChoice(event.discipline) }}</span
                     >
                   </div>
-                  <span class="event-attendees">{{ event.participantIds.length }} <small>archers</small></span>
-                  <button class="row-arrow" aria-label="Open tournament" @click="openTournament(event.id)">↗</button>
+                  <span class="event-attendees"
+                    >{{ event.participantIds.length }} <small>{{ t('archers') }}</small></span
+                  >
+                  <button class="row-arrow" :aria-label="t('Open tournament')" @click="openTournament(event.id)">
+                    ↗
+                  </button>
                 </article>
               </div>
               <div v-else class="empty-state">
                 <div class="empty-icon">▦</div>
-                <strong>No tournaments yet</strong>
-                <p>{{ canManage ? 'Create an event to get started.' : 'Upcoming events will appear here.' }}</p>
+                <strong>{{ t('No tournaments yet') }}</strong>
+                <p>{{ canManage ? t('Create an event to get started.') : t('Upcoming events will appear here.') }}</p>
                 <button v-if="canManage" class="button button-outline" @click="openModal('tournament')">
-                  Create tournament
+                  {{ t('Create tournament') }}
                 </button>
               </div>
             </section>
             <section class="panel quick-panel">
               <div class="panel-heading">
                 <div>
-                  <h2>Quick actions</h2>
-                  <p>Keep things moving</p>
+                  <h2>{{ t('Quick actions') }}</h2>
+                  <p>{{ t('Keep things moving') }}</p>
                 </div>
               </div>
-              <button v-if="canManage" class="quick-action" @click="openModal('participant')">
+              <button v-if="canManageParticipants" class="quick-action" @click="openModal('participant')">
                 <span class="quick-icon lavender">♙</span
-                ><span><strong>Add archer</strong><small>Grow your archer directory</small></span
+                ><span
+                  ><strong>{{ t('Add archer') }}</strong
+                  ><small>{{ t('Grow your archer directory') }}</small></span
                 ><b>→</b>
               </button>
               <button v-if="canManage" class="quick-action" @click="openModal('club')">
                 <span class="quick-icon peach">⌂</span
-                ><span><strong>Add a club</strong><small>Register a new archery club</small></span
+                ><span
+                  ><strong>{{ t('Add a club') }}</strong
+                  ><small>{{ t('Register a new archery club') }}</small></span
                 ><b>→</b>
               </button>
               <button
@@ -1229,22 +1325,28 @@ async function recordMatchScore(match, side, value) {
                 "
               >
                 <span class="quick-icon mint">▤</span
-                ><span><strong>Enter scores</strong><small>Record a tournament round</small></span
+                ><span
+                  ><strong>{{ t('Enter scores') }}</strong
+                  ><small>{{ t('Record a tournament round') }}</small></span
                 ><b>→</b>
               </button>
               <div class="tip-box">
                 <span>✦</span>
-                <p><strong>Good to know</strong><br />Archers can be reused across multiple tournaments.</p>
+                <p>
+                  <strong>{{ t('Good to know') }}</strong><br />{{
+                    t('Archers can be reused across multiple tournaments.')
+                  }}
+                </p>
               </div>
             </section>
           </div>
           <section class="panel clubs-preview">
             <div class="panel-heading">
               <div>
-                <h2>Your clubs</h2>
-                <p>Club accounts and representatives</p>
+                <h2>{{ t('Your clubs') }}</h2>
+                <p>{{ t('Club accounts and representatives') }}</p>
               </div>
-              <button class="text-link" @click="activePage = 'clubs'">Manage clubs <span>→</span></button>
+              <button class="text-link" @click="activePage = 'clubs'">{{ t('Manage clubs') }} <span>→</span></button>
             </div>
             <div class="club-preview-list">
               <div v-for="club in data.clubs.slice(0, 3)" :key="club.id" class="club-preview-item">
@@ -1253,7 +1355,7 @@ async function recordMatchScore(match, side, value) {
                   ><small>{{ club.representative }}</small></span
                 >
                 <span class="status-pill" :class="club.userEnabled ? 'status-active' : 'status-disabled'"
-                  ><i></i>{{ club.userEnabled ? 'Enabled' : 'Disabled' }}</span
+                  ><i></i>{{ club.userEnabled ? t('Enabled') : t('Disabled') }}</span
                 >
               </div>
             </div>
@@ -1263,17 +1365,17 @@ async function recordMatchScore(match, side, value) {
         <section v-else-if="activePage === 'clubs'">
           <div class="page-heading heading-row">
             <div>
-              <p class="eyebrow">YOUR COMMUNITY</p>
-              <h1>Archery clubs</h1>
-              <p class="page-subtitle">View clubs and manage your club details.</p>
+              <p class="eyebrow">{{ t('YOUR COMMUNITY') }}</p>
+              <h1>{{ t('Archery clubs') }}</h1>
+              <p class="page-subtitle">{{ t('View clubs and manage your club details.') }}</p>
             </div>
             <button v-if="canManage" class="button button-primary" @click="openModal('club')">
-              <span>＋</span> Add club
+              <span>＋</span> {{ t('Add club') }}
             </button>
           </div>
           <div class="section-toolbar">
-            <div class="toolbar-count">{{ data.clubs.length }} clubs in the directory</div>
-            <div class="search-box"><span>⌕</span><input v-model="search" placeholder="Search clubs..." /></div>
+            <div class="toolbar-count">{{ data.clubs.length }} {{ t('clubs in the directory') }}</div>
+            <div class="search-box"><span>⌕</span><input v-model="search" :placeholder="t('Search clubs...')" /></div>
           </div>
           <div class="clubs-grid">
             <article
@@ -1284,61 +1386,51 @@ async function recordMatchScore(match, side, value) {
               class="club-card"
             >
               <div class="club-card-head">
-                <img v-if="club.logoUrl" class="club-logo" :src="club.logoUrl" :alt="`${club.name} logo`" /><span
-                  v-else
-                  class="club-avatar large"
-                  >{{ club.name.charAt(0) }}</span
-                >
+                <img
+                  v-if="club.logoUrl"
+                  class="club-logo"
+                  :src="club.logoUrl"
+                  :alt="t('{name} logo', { name: club.name })"
+                /><span v-else class="club-avatar large">{{ club.name.charAt(0) }}</span>
               </div>
               <h3>{{ club.name }}</h3>
               <a v-if="club.mapUrl" class="club-location" :href="club.mapUrl" target="_blank" rel="noreferrer"
-                >⌖ {{ club.address || 'Open map' }} ↗</a
+                >⌖ {{ club.address || t('Open map') }} ↗</a
               >
-              <p v-else class="club-location">⌖ {{ club.address || 'No address added' }}</p>
+              <p v-else class="club-location">⌖ {{ club.address || t('No address added') }}</p>
               <div class="club-contact">
-                <span class="contact-label">REPRESENTATIVE</span
-                ><strong>{{ club.representative || 'Not provided' }}</strong
-                ><a :href="`tel:${club.phone}`">{{ club.phone || 'No phone number' }}</a
+                <span class="contact-label">{{ t('REPRESENTATIVE') }}</span><strong>{{
+                  club.representative || t('Not provided')
+                }}</strong
+                ><a :href="`tel:${club.phone}`">{{ club.phone || t('No phone number') }}</a
                 ><a v-if="club.email" :href="`mailto:${club.email}`">{{ club.email }}</a>
               </div>
               <div v-if="canManage || userRole === 'club'" class="club-user-row">
                 <div>
-                  <span class="contact-label">CLUB USER</span
-                  ><strong>{{
-                    data.userRoles.find((role) => role.role === 'club' && role.clubId === club.id)?.email ||
-                    club.userEmail ||
-                    'No user assigned'
-                  }}</strong>
+                  <span class="contact-label">{{ t('CLUB USER') }}</span>
+                  <strong>{{ club.email || club.userEmail || t('No email set') }}</strong>
                 </div>
-                <span
-                  class="status-pill"
-                  :class="
-                    data.userRoles.some((role) => role.role === 'club' && role.clubId === club.id)
-                      ? 'status-active'
-                      : 'status-disabled'
-                  "
-                  ><i></i
-                  >{{
-                    data.userRoles.some((role) => role.role === 'club' && role.clubId === club.id)
-                      ? 'Enabled'
-                      : 'Disabled'
-                  }}</span
-                >
+                <div class="club-user-controls">
+                  <span class="status-pill" :class="club.userEnabled ? 'status-active' : 'status-disabled'"
+                    ><i></i>{{ club.userEnabled ? t('Enabled') : t('Disabled') }}</span
+                  >
+                  <button
+                    v-if="canManage"
+                    type="button"
+                    class="button button-small button-outline"
+                    @click="toggleClub(club)"
+                  >
+                    {{ club.userEnabled ? t('Disable') : t('Enable') }}
+                  </button>
+                </div>
               </div>
               <div class="club-card-actions">
                 <button
-                  v-if="isAdmin && club.userEmail"
-                  class="button button-small button-outline"
-                  @click="assignClubUser(club)"
-                >
-                  Assign club user
-                </button>
-                <button
-                  v-if="canManage"
+                  v-if="canManage || (isClubUser && club.id === userScope.clubId)"
                   class="button button-small button-outline"
                   @click="addParticipantToClub(club.id)"
                 >
-                  ＋ Add archer
+                  {{ t('＋ Add archer') }}
                 </button>
                 <a
                   v-if="club.website"
@@ -1346,15 +1438,16 @@ async function recordMatchScore(match, side, value) {
                   target="_blank"
                   rel="noreferrer"
                   class="button button-small button-outline"
-                  >Website ↗</a
+                  >{{ t('Website ↗') }}</a
                 >
                 <button v-if="canEditClub(club)" class="button button-small button-outline" @click="editClub(club)">
-                  Edit club
+                  {{ t('Edit club') }}
                 </button>
               </div>
             </article>
             <button v-if="canManage" class="add-card" @click="openModal('club')">
-              <span>＋</span><strong>Add a club</strong><small>Add club contact and location details</small>
+              <span>＋</span><strong>{{ t('Add a club') }}</strong
+              ><small>{{ t('Add club contact and location details') }}</small>
             </button>
           </div>
         </section>
@@ -1362,20 +1455,20 @@ async function recordMatchScore(match, side, value) {
         <section v-else-if="activePage === 'participants'">
           <div class="page-heading heading-row">
             <div>
-              <p class="eyebrow">ARCHER DIRECTORY</p>
-              <h1>Archers</h1>
-              <p class="page-subtitle">A reusable directory of archers for your tournaments.</p>
+              <p class="eyebrow">{{ t('ARCHER DIRECTORY') }}</p>
+              <h1>{{ t('Archers') }}</h1>
+              <p class="page-subtitle">{{ t('A reusable directory of archers for your tournaments.') }}</p>
             </div>
-            <button v-if="canManage" class="button button-primary" @click="openModal('participant')">
-              <span>＋</span> Add archer
+            <button v-if="canManageParticipants" class="button button-primary" @click="openModal('participant')">
+              <span>＋</span> {{ t('Add archer') }}
             </button>
           </div>
           <div class="section-toolbar">
             <div class="toolbar-count">
-              {{ data.participants.length }} archers <span>·</span> Saved for future events
+              {{ data.participants.length }} {{ t('archers') }} <span>·</span> {{ t('Saved for future events') }}
             </div>
             <div class="search-box">
-              <span>⌕</span><input v-model="search" placeholder="Search last name or affiliation..." />
+              <span>⌕</span><input v-model="search" :placeholder="t('Search last name or affiliation...')" />
             </div>
           </div>
           <section class="panel table-panel">
@@ -1383,13 +1476,13 @@ async function recordMatchScore(match, side, value) {
               <table>
                 <thead>
                   <tr>
-                    <th>ARCHER</th>
-                    <th>BIRTH DATE</th>
-                    <th>WORLD ARCHERY ID</th>
-                    <th>AETAY ID</th>
-                    <th>CLUB</th>
-                    <th>TOURNAMENTS</th>
-                    <th>SCORES</th>
+                    <th>{{ t('ARCHER') }}</th>
+                    <th>{{ t('BIRTH DATE') }}</th>
+                    <th>{{ t('WORLD ARCHERY ID') }}</th>
+                    <th>{{ t('AETAY ID') }}</th>
+                    <th>{{ t('CLUB') }}</th>
+                    <th>{{ t('TOURNAMENTS') }}</th>
+                    <th>{{ t('SCORES') }}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -1401,7 +1494,7 @@ async function recordMatchScore(match, side, value) {
                           >{{ person.firstName.charAt(0) }}{{ person.lastName.charAt(0) }}</span
                         ><span
                           ><strong>{{ person.lastName }}, {{ person.firstName }}</strong
-                          ><small>Archer</small></span
+                          ><small>{{ t('Archer') }}</small></span
                         >
                       </div>
                     </td>
@@ -1412,11 +1505,11 @@ async function recordMatchScore(match, side, value) {
                       <select
                         v-if="canManage"
                         class="category-select participant-club-select"
-                        :aria-label="`${fullName(person)} club`"
+                        :aria-label="t('{name} club', { name: fullName(person) })"
                         :value="person.clubId || ''"
                         @change="setParticipantClub(person, $event)"
                       >
-                        <option value="">No club</option>
+                        <option value="">{{ t('No club') }}</option>
                         <option v-for="club in data.clubs" :key="club.id" :value="club.id">
                           {{ club.name }}
                         </option></select
@@ -1424,30 +1517,40 @@ async function recordMatchScore(match, side, value) {
                     </td>
                     <td>
                       <span class="tournament-count"
-                        >{{
-                          data.tournaments.filter((event) => event.participantIds.includes(person.id)).length
-                        }}
-                        events</span
+                        >{{ data.tournaments.filter((event) => event.participantIds.includes(person.id)).length }}
+                        {{ t('events') }}</span
                       >
                     </td>
                     <td>
                       {{
                         scoreSummaries.find((summary) => summary.participant.id === person.id)?.scoreCount ||
-                        'No scores yet'
+                        t('No scores yet')
                       }}
                     </td>
                     <td>
-                      <button
-                        class="text-link"
-                        :aria-label="`View scores for ${fullName(person)}`"
-                        @click="openScoreDetails(person.id)"
-                      >
-                        View scores →
-                      </button>
+                      <div class="table-actions">
+                        <button
+                          v-if="canEditParticipant(person)"
+                          class="text-link"
+                          :aria-label="t('Edit {name}', { name: fullName(person) })"
+                          @click="editParticipant(person)"
+                        >
+                          {{ t('Edit') }}
+                        </button>
+                        <button
+                          class="text-link"
+                          :aria-label="t('View scores for {name}', { name: fullName(person) })"
+                          @click="openScoreDetails(person.id)"
+                        >
+                          {{ t('View scores →') }}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   <tr v-if="!filteredParticipants.length">
-                    <td colspan="8"><div class="table-empty">No archers found.</div></td>
+                    <td colspan="8">
+                      <div class="table-empty">{{ t('No archers found.') }}</div>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -1458,61 +1561,78 @@ async function recordMatchScore(match, side, value) {
         <section v-else-if="activePage === 'tournaments'">
           <div class="page-heading heading-row">
             <div>
-              <p class="eyebrow">EVENT MANAGEMENT</p>
-              <h1>Tournaments</h1>
-              <p class="page-subtitle">Create events, select archers, and manage event details.</p>
+              <p class="eyebrow">{{ t('EVENT MANAGEMENT') }}</p>
+              <h1>{{ t('Tournaments') }}</h1>
+              <p class="page-subtitle">{{ t('Create events, select archers, and manage event details.') }}</p>
             </div>
             <button v-if="canManage" class="button button-primary" @click="openModal('tournament')">
-              <span>＋</span> Create tournament
+              <span>＋</span> {{ t('Create tournament') }}
             </button>
           </div>
           <div v-if="canManage" class="type-shortcut">
-            <span>Need a different event format?</span
-            ><button class="text-link" @click="activePage = 'tournament-types'">Manage tournament types →</button>
+            <span>{{ t('Need a different event format?') }}</span><button
+              class="text-link"
+              @click="activePage = 'tournament-types'"
+            >
+              {{ t('Manage tournament types →') }}
+            </button>
           </div>
           <div class="section-toolbar">
-            <div class="toolbar-count">{{ filteredTournaments.length }} {{ tournamentStatusFilter }} tournaments</div>
-            <div class="tournament-filters" role="group" aria-label="Filter tournaments by date">
+            <div class="toolbar-count">
+              {{ filteredTournaments.length }} {{ t(tournamentStatusFilter) }} {{ t('tournaments') }}
+            </div>
+            <div class="tournament-filters" role="group" :aria-label="t('Filter tournaments by date')">
               <button
                 :class="{ active: tournamentStatusFilter === 'upcoming' }"
+                :aria-pressed="tournamentStatusFilter === 'upcoming'"
                 @click="tournamentStatusFilter = 'upcoming'"
               >
-                Upcoming
+                {{ t('Upcoming') }}
               </button>
-              <button :class="{ active: tournamentStatusFilter === 'past' }" @click="tournamentStatusFilter = 'past'">
-                Past
+              <button
+                :class="{ active: tournamentStatusFilter === 'past' }"
+                :aria-pressed="tournamentStatusFilter === 'past'"
+                @click="tournamentStatusFilter = 'past'"
+              >
+                {{ t('Past') }}
               </button>
             </div>
             <div class="search-box">
-              <span>⌕</span><input v-model="tournamentQuery" placeholder="Search tournaments..." />
+              <span>⌕</span><input v-model="tournamentQuery" :placeholder="t('Search tournaments...')" />
             </div>
           </div>
           <div class="tournament-list">
-            <article v-for="event in filteredTournaments" :key="event.id" class="tournament-card">
+            <article
+              v-for="event in filteredTournaments"
+              :key="event.id"
+              class="tournament-card"
+              tabindex="0"
+              @click="openTournamentFromCard(event.id)"
+              @keydown.enter.self="openTournament(event.id)"
+            >
               <div class="tournament-date">
-                <span>{{ formatDate(event.date).split(' ')[0] }}</span><strong>{{
+                <span>{{ formatMonth(event.date) }}</span><strong>{{
                   new Date(`${event.date}T00:00:00Z`).getUTCDate()
                 }}</strong
                 ><small>{{ new Date(`${event.date}T00:00:00Z`).getUTCFullYear() }}</small>
               </div>
               <div class="tournament-details">
-                <span class="event-tag">{{ tournamentTypeFor(event.tournamentTypeId)?.name || event.discipline }}</span>
+                <span class="event-tag">{{
+                  tournamentTypeFor(event.tournamentTypeId)?.name || displayChoice(event.discipline)
+                }}</span>
                 <h3>{{ event.name }}</h3>
                 <div class="tournament-meta">
                   <span>⌖ {{ venueFor(event) }}</span
-                  ><span>♙ {{ event.participantIds.length }} archers</span
-                  ><span>◇ {{ event.categoryIds.length }} categories</span
-                  ><span>⌂ {{ clubFor(event.clubId)?.name || 'Independent' }}</span>
+                  ><span>♙ {{ event.participantIds.length }} {{ t('archers') }}</span
+                  ><span>◇ {{ event.categoryIds.length }} {{ t('categories') }}</span
+                  ><span>⌂ {{ clubFor(event.clubId)?.name || t('Independent') }}</span>
                 </div>
               </div>
-              <button class="button button-small button-outline" @click="openTournament(event.id)">
-                Open tournament →
-              </button>
             </article>
             <div v-if="!filteredTournaments.length" class="empty-state panel">
               <div class="empty-icon">▦</div>
-              <strong>No tournaments found</strong>
-              <p>Try a different search or create a tournament.</p>
+              <strong>{{ t('No tournaments found') }}</strong>
+              <p>{{ t('Try a different search or create a tournament.') }}</p>
             </div>
           </div>
         </section>
@@ -1520,12 +1640,14 @@ async function recordMatchScore(match, side, value) {
         <section v-else-if="activePage === 'tournament-types'">
           <div class="page-heading heading-row">
             <div>
-              <p class="eyebrow">EVENT FORMATS</p>
-              <h1>Tournament types</h1>
-              <p class="page-subtitle">Create reusable formats with a distance, target, ends, and arrows per end.</p>
+              <p class="eyebrow">{{ t('EVENT FORMATS') }}</p>
+              <h1>{{ t('Tournament types') }}</h1>
+              <p class="page-subtitle">
+                {{ t('Create reusable formats with a distance, target, ends, and arrows per end.') }}
+              </p>
             </div>
             <button v-if="canManage" class="button button-primary" @click="openModal('tournamentType')">
-              <span>＋</span> Create tournament type
+              <span>＋</span> {{ t('Create tournament type') }}
             </button>
           </div>
           <div class="format-grid">
@@ -1533,35 +1655,36 @@ async function recordMatchScore(match, side, value) {
               <div class="format-card-head">
                 <span class="quick-icon mint">◎</span
                 ><button v-if="canManage" class="button button-small button-outline" @click="editTournamentType(type)">
-                  Edit type
+                  {{ t('Edit type') }}
                 </button>
               </div>
               <h2>{{ type.name }}</h2>
               <div class="format-distance">
                 <strong>{{ type.distance }}</strong><span>{{ type.distanceUnit }}</span
-                ><small>distance</small>
+                ><small>{{ t('distance') }}</small>
               </div>
               <div class="format-details">
                 <div>
-                  <span>TARGET</span><strong>{{ type.targetType }}</strong>
+                  <span>{{ t('TARGET') }}</span><strong>{{ type.targetType }}</strong>
                 </div>
                 <div>
-                  <span>ENDS</span><strong>{{ type.ends }}</strong>
+                  <span>{{ t('ENDS') }}</span><strong>{{ type.ends }}</strong>
                 </div>
                 <div>
-                  <span>ARROWS / END</span><strong>{{ type.arrowsPerEnd }}</strong>
+                  <span>{{ t('ARROWS / END') }}</span><strong>{{ type.arrowsPerEnd }}</strong>
                 </div>
               </div>
               <div class="format-total">
-                Total arrows per archer <strong>{{ Number(type.ends) * Number(type.arrowsPerEnd) }}</strong>
+                {{ t('Total arrows per archer') }} <strong>{{ Number(type.ends) * Number(type.arrowsPerEnd) }}</strong>
               </div>
               <div class="format-usage">
-                {{ data.tournaments.filter((event) => event.tournamentTypeId === type.id).length }} tournaments use this
-                type
+                {{ data.tournaments.filter((event) => event.tournamentTypeId === type.id).length }}
+                {{ t('tournaments use this type') }}
               </div>
             </article>
             <button v-if="canManage" class="add-card format-add-card" @click="openModal('tournamentType')">
-              <span>＋</span><strong>Create a tournament type</strong><small>Set a reusable shooting format</small>
+              <span>＋</span><strong>{{ t('Create a tournament type') }}</strong
+              ><small>{{ t('Set a reusable shooting format') }}</small>
             </button>
           </div>
         </section>
@@ -1569,12 +1692,14 @@ async function recordMatchScore(match, side, value) {
         <section v-else-if="activePage === 'categories'">
           <div class="page-heading heading-row">
             <div>
-              <p class="eyebrow">CATEGORY DIRECTORY</p>
-              <h1>Categories</h1>
-              <p class="page-subtitle">Create age and/or bow-type divisions, then add them to each tournament.</p>
+              <p class="eyebrow">{{ t('CATEGORY DIRECTORY') }}</p>
+              <h1>{{ t('Categories') }}</h1>
+              <p class="page-subtitle">
+                {{ t('Create age and/or bow-type divisions, then add them to each tournament.') }}
+              </p>
             </div>
             <button v-if="canManage" class="button button-primary" @click="openModal('category')">
-              <span>＋</span> Create category
+              <span>＋</span> {{ t('Create category') }}
             </button>
           </div>
           <div class="category-grid">
@@ -1582,70 +1707,58 @@ async function recordMatchScore(match, side, value) {
               <div class="format-card-head">
                 <span class="quick-icon lavender">◇</span
                 ><button v-if="canManage" class="button button-small button-outline" @click="editCategory(category)">
-                  Edit category
+                  {{ t('Edit category') }}
                 </button>
               </div>
               <h2>{{ category.name }}</h2>
               <p>{{ categoryDescription(category) }}</p>
               <div class="format-usage">
-                {{ data.tournaments.filter((event) => event.categoryIds.includes(category.id)).length }} tournaments use
-                this category
+                {{ data.tournaments.filter((event) => event.categoryIds.includes(category.id)).length }}
+                {{ t('tournaments use this category') }}
               </div>
             </article>
             <button v-if="canManage" class="add-card format-add-card" @click="openModal('category')">
-              <span>＋</span><strong>Create a category</strong><small>Set an age range, bow type, or both</small>
+              <span>＋</span><strong>{{ t('Create a category') }}</strong
+              ><small>{{ t('Set an age range, bow type, or both') }}</small>
             </button>
           </div>
         </section>
 
-        <section v-else-if="activePage === 'user-access' && canManage">
+        <section v-else-if="activePage === 'user-access' && isAdmin">
           <div class="page-heading heading-row">
             <div>
-              <p class="eyebrow">ACCOUNT MANAGEMENT</p>
-              <h1>User access</h1>
-              <p class="page-subtitle">
-                {{
-                  isAdmin
-                    ? 'Assign roles and send password reset emails.'
-                    : 'Send password reset emails to users who need account help.'
-                }}
-              </p>
+              <p class="eyebrow">{{ t('ACCOUNT MANAGEMENT') }}</p>
+              <h1>{{ t('User access') }}</h1>
+              <p class="page-subtitle">{{ t('Assign manager roles and send password reset emails.') }}</p>
             </div>
             <div class="heading-actions">
-              <button class="button button-outline" @click="openModal('passwordReset')">Send password reset</button>
-              <button v-if="isAdmin" class="button button-primary" @click="openModal('userRole')">
-                <span>＋</span> Assign role
+              <button class="button button-outline" @click="openModal('passwordReset')">
+                {{ t('Send password reset') }}
+              </button>
+              <button class="button button-primary" @click="openModal('userRole')">
+                <span>＋</span> {{ t('Add manager') }}
               </button>
             </div>
           </div>
-          <section v-if="isAdmin" class="panel table-panel">
+          <section class="panel table-panel">
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>ACCOUNT</th>
-                    <th>ROLE</th>
-                    <th>SCOPE</th>
+                    <th>{{ t('ACCOUNT') }}</th>
+                    <th>{{ t('ROLE') }}</th>
+                    <th>{{ t('SCOPE') }}</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="role in data.userRoles" :key="`${role.userId}-${role.role}`">
+                  <tr
+                    v-for="role in data.userRoles.filter((item) => ['admin', 'manager'].includes(item.role))"
+                    :key="`${role.userId}-${role.role}`"
+                  >
                     <td>{{ role.email }}</td>
-                    <td>
-                      {{
-                        role.role === 'admin' ? 'System admin' : role.role.charAt(0).toUpperCase() + role.role.slice(1)
-                      }}
-                    </td>
-                    <td>
-                      {{
-                        role.role === 'club'
-                          ? clubFor(role.clubId)?.name
-                          : role.role === 'archer'
-                            ? fullName(participantById(role.participantId) || { firstName: '', lastName: '' })
-                            : 'All records'
-                      }}
-                    </td>
+                    <td>{{ role.role === 'admin' ? t('System admin') : t('Manager') }}</td>
+                    <td>{{ t('All records') }}</td>
                     <td>
                       <button
                         class="text-link"
@@ -1656,35 +1769,37 @@ async function recordMatchScore(match, side, value) {
                         "
                         @click="removeUserRole(role)"
                       >
-                        Remove role
+                        {{ t('Remove role') }}
                       </button>
                     </td>
                   </tr>
-                  <tr v-if="!data.userRoles.length">
-                    <td colspan="4"><div class="table-empty">No role assignments found.</div></td>
+                  <tr v-if="!data.userRoles.filter((item) => ['admin', 'manager'].includes(item.role)).length">
+                    <td colspan="4">
+                      <div class="table-empty">{{ t('No manager assignments found.') }}</div>
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </section>
           <p class="privacy-note">
-            A reset email can only be requested by an admin or manager. The account must already exist in Supabase Auth.
+            {{ t('A reset email can only be requested by an admin. The account must already exist in Supabase Auth.') }}
           </p>
         </section>
 
         <section v-else-if="activePage === 'score-detail'">
           <div class="page-heading heading-row">
             <div>
-              <button class="text-link back-link" @click="activePage = 'participants'">← All archers</button>
-              <p class="eyebrow">ARCHER RECORD</p>
+              <button class="text-link back-link" @click="activePage = 'participants'">{{ t('← All archers') }}</button>
+              <p class="eyebrow">{{ t('ARCHER RECORD') }}</p>
               <h1>
                 {{
                   selectedScoreParticipant
                     ? `${selectedScoreParticipant.lastName}, ${selectedScoreParticipant.firstName}`
-                    : 'Archer details'
+                    : t('Archer details')
                 }}
               </h1>
-              <p class="page-subtitle">Tournament round and Olympic match scores for this archer.</p>
+              <p class="page-subtitle">{{ t('Tournament round and Olympic match scores for this archer.') }}</p>
             </div>
           </div>
           <section class="panel table-panel">
@@ -1692,12 +1807,12 @@ async function recordMatchScore(match, side, value) {
               <table>
                 <thead>
                   <tr>
-                    <th>TOURNAMENT</th>
-                    <th>DATE</th>
-                    <th>CATEGORY</th>
-                    <th>ENTRY</th>
-                    <th>ROUND / MATCH</th>
-                    <th>SCORE</th>
+                    <th>{{ t('TOURNAMENT') }}</th>
+                    <th>{{ t('DATE') }}</th>
+                    <th>{{ t('CATEGORY') }}</th>
+                    <th>{{ t('ENTRY') }}</th>
+                    <th>{{ t('ROUND / MATCH') }}</th>
+                    <th>{{ t('SCORE') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1705,9 +1820,9 @@ async function recordMatchScore(match, side, value) {
                     v-for="(row, index) in selectedParticipantScoreRows"
                     :key="`${row.tournamentId}-${row.round}-${index}`"
                   >
-                    <td>{{ row.tournament?.name || 'Tournament removed' }}</td>
+                    <td>{{ row.tournament?.name || t('Tournament removed') }}</td>
                     <td>{{ row.tournament ? formatDate(row.tournament.date) : '—' }}</td>
-                    <td>{{ row.category?.name || 'Unassigned' }}</td>
+                    <td>{{ row.category?.name || t('Unassigned') }}</td>
                     <td>{{ row.scoreType }}</td>
                     <td>{{ row.round }}</td>
                     <td>
@@ -1719,9 +1834,11 @@ async function recordMatchScore(match, side, value) {
             </div>
             <div v-else class="empty-state">
               <div class="empty-icon">▤</div>
-              <strong>No scores recorded yet</strong>
-              <p>Scores for this archer will appear here after you record them in a tournament.</p>
-              <button class="button button-outline" @click="activePage = 'participants'">Back to archers</button>
+              <strong>{{ t('No scores recorded yet') }}</strong>
+              <p>{{ t('Scores for this archer will appear here after you record them in a tournament.') }}</p>
+              <button class="button button-outline" @click="activePage = 'participants'">
+                {{ t('Back to archers') }}
+              </button>
             </div>
           </section>
         </section>
@@ -1730,31 +1847,33 @@ async function recordMatchScore(match, side, value) {
           <template v-if="selectedTournament">
             <div class="page-heading heading-row">
               <div>
-                <button class="text-link back-link" @click="activePage = 'tournaments'">← All tournaments</button>
-                <p class="eyebrow">TOURNAMENT DETAILS</p>
+                <button class="text-link back-link" @click="activePage = 'tournaments'">
+                  {{ t('← All tournaments') }}
+                </button>
+                <p class="eyebrow">{{ t('TOURNAMENT DETAILS') }}</p>
                 <h1>{{ selectedTournament.name }}</h1>
                 <p class="page-subtitle">
-                  {{ formatDate(selectedTournament.date) }} · {{ selectedTournament.discipline }}
+                  {{ formatDate(selectedTournament.date) }} · {{ displayChoice(selectedTournament.discipline) }}
                 </p>
               </div>
             </div>
             <section class="tournament-summary">
               <div>
-                <span>HOST CLUB</span
-                ><strong>{{ clubFor(selectedTournament.clubId)?.name || 'Independent event' }}</strong>
+                <span>{{ t('HOST CLUB') }}</span><strong>{{
+                  clubFor(selectedTournament.clubId)?.name || t('Independent event')
+                }}</strong>
               </div>
               <div>
-                <span>LOCATION</span><strong>{{ venueFor(selectedTournament) }}</strong>
+                <span>{{ t('LOCATION') }}</span><strong>{{ venueFor(selectedTournament) }}</strong>
               </div>
               <div>
-                <span>ARCHERS</span><strong>{{ selectedTournament.participantIds.length }}</strong>
+                <span>{{ t('ARCHERS') }}</span><strong>{{ selectedTournament.participantIds.length }}</strong>
               </div>
               <div>
-                <span>CATEGORIES</span><strong>{{ selectedTournament.categoryIds.length }}</strong>
+                <span>{{ t('CATEGORIES') }}</span><strong>{{ selectedTournament.categoryIds.length }}</strong>
               </div>
               <div v-if="tournamentTypeFor(selectedTournament.tournamentTypeId)" class="format-summary">
-                <span>FORMAT</span
-                ><strong
+                <span>{{ t('FORMAT') }}</span><strong
                   >{{ tournamentTypeFor(selectedTournament.tournamentTypeId).distance }}
                   {{ tournamentTypeFor(selectedTournament.tournamentTypeId).distanceUnit }} ·
                   {{ tournamentTypeFor(selectedTournament.tournamentTypeId).targetType }} ·
@@ -1768,64 +1887,64 @@ async function recordMatchScore(match, side, value) {
                 target="_blank"
                 rel="noreferrer"
                 class="button button-small button-outline"
-                >Open map ↗</a
+                >{{ t('Open map ↗') }}</a
               >
             </section>
-            <div class="tournament-tabs" role="tablist" aria-label="Tournament sections">
+            <div class="tournament-tabs" role="tablist" :aria-label="t('Tournament sections')">
               <button
                 :class="{ active: selectedTournamentTab === 'participants' }"
                 @click="selectedTournamentTab = 'participants'"
               >
-                Archers
+                {{ t('Archers') }}
               </button>
               <button
                 :class="{ active: selectedTournamentTab === 'categories' }"
                 @click="selectedTournamentTab = 'categories'"
               >
-                Categories
+                {{ t('Categories') }}
               </button>
               <button :class="{ active: selectedTournamentTab === 'scores' }" @click="selectedTournamentTab = 'scores'">
-                Rounds & scores
+                {{ t('Rounds & scores') }}
               </button>
               <button
                 :class="{ active: selectedTournamentTab === 'olympic' }"
                 @click="selectedTournamentTab = 'olympic'"
               >
-                Olympic matches
+                {{ t('Olympic matches') }}
               </button>
             </div>
             <section v-if="selectedTournamentTab === 'participants'" class="panel roster-panel">
               <div class="panel-heading">
                 <div>
-                  <h2>Tournament archers</h2>
+                  <h2>{{ t('Tournament archers') }}</h2>
                   <p>
                     {{
                       canManage
-                        ? 'Select archers from your directory or add a new one.'
-                        : 'Archers entered in this tournament.'
+                        ? t('Select archers from your directory or add a new one.')
+                        : t('Archers entered in this tournament.')
                     }}
                   </p>
                 </div>
                 <button v-if="canManage" class="button button-small button-outline" @click="addParticipantToTournament">
-                  ＋ Add archer
+                  {{ t('＋ Add archer') }}
                 </button>
               </div>
               <div class="participant-directory-filter">
                 <label class="select-field"
-                  ><span>FILTER BY CLUB</span
-                  ><select v-model="participantClubFilter" aria-label="Filter archers by club">
-                    <option value="">All clubs</option>
-                    <option value="__unassigned__">No club assigned</option>
+                  ><span>{{ t('FILTER BY CLUB') }}</span
+                  ><select v-model="participantClubFilter" :aria-label="t('Filter archers by club')">
+                    <option value="">{{ t('All clubs') }}</option>
+                    <option value="__unassigned__">{{ t('No club assigned') }}</option>
                     <option v-for="club in data.clubs" :key="club.id" :value="club.id">{{ club.name }}</option>
                   </select></label
                 >
                 <label class="select-field"
-                  ><span>SEARCH LAST NAME OR AFFILIATION</span
+                  ><span>{{ t('SEARCH LAST NAME OR AFFILIATION') }}</span
                   ><input
                     v-model="participantDirectorySearch"
                     list="archer-search-options"
-                    aria-label="Search archers by last name or affiliation"
-                    placeholder="Type a last name or ID"
+                    :aria-label="t('Search archers by last name or affiliation')"
+                    :placeholder="t('Type a last name or ID')"
                 /></label>
                 <datalist id="archer-search-options">
                   <option v-for="value in participantSearchOptions" :key="value" :value="value" />
@@ -1835,7 +1954,7 @@ async function recordMatchScore(match, side, value) {
                 <div v-for="person in filteredTournamentParticipantsDirectory" :key="person.id" class="roster-row">
                   <input
                     type="checkbox"
-                    :aria-label="`Add ${fullName(person)} to tournament`"
+                    :aria-label="t('Add {name} to tournament', { name: fullName(person) })"
                     :checked="selectedTournament.participantIds.includes(person.id)"
                     :disabled="!canManage"
                     @change="toggleParticipant(selectedTournament, person.id)"
@@ -1844,22 +1963,24 @@ async function recordMatchScore(match, side, value) {
                   <span class="roster-name"
                     ><strong>{{ person.lastName }}, {{ person.firstName }}</strong
                     ><small
-                      >{{ person.waId ? `World Archery ${person.waId}` : person.aetayId || 'No affiliation number' }} ·
-                      {{ clubFor(person.clubId)?.name || 'No club' }} ·
-                      {{ ageAtTournament(person, selectedTournament) ?? 'Age unknown' }} at event</small
+                      >{{
+                        person.waId ? `World Archery ${person.waId}` : person.aetayId || t('No affiliation number')
+                      }}
+                      · {{ clubFor(person.clubId)?.name || t('No club') }} ·
+                      {{ ageAtTournament(person, selectedTournament) ?? t('Age unknown') }} {{ t('at event') }}</small
                     ></span
                   >
                   <span class="roster-state">{{
                     selectedTournament.participantIds.includes(person.id)
-                      ? 'Added'
+                      ? t('Added')
                       : canManage
-                        ? 'Directory'
-                        : 'Not entered'
+                        ? t('Directory')
+                        : t('Not entered')
                   }}</span>
                   <select
                     v-if="canManage"
                     class="category-select"
-                    :aria-label="`${fullName(person)} category`"
+                    :aria-label="t('{name} category', { name: fullName(person) })"
                     :disabled="
                       !selectedTournament.participantIds.includes(person.id) || !selectedTournament.categoryIds.length
                     "
@@ -1867,7 +1988,7 @@ async function recordMatchScore(match, side, value) {
                     @change="setParticipantCategory(selectedTournament, person, $event)"
                   >
                     <option value="">
-                      {{ selectedTournament.categoryIds.length ? 'Choose category' : 'No categories' }}
+                      {{ selectedTournament.categoryIds.length ? t('Choose category') : t('No categories') }}
                     </option>
                     <option v-for="categoryId in selectedTournament.categoryIds" :key="categoryId" :value="categoryId">
                       {{ categoryFor(categoryId)?.name }}
@@ -1880,15 +2001,15 @@ async function recordMatchScore(match, side, value) {
               </div>
               <div v-else class="empty-state">
                 <strong>{{
-                  data.participants.length ? 'No archers match these filters' : 'No archers in your directory'
+                  data.participants.length ? t('No archers match these filters') : t('No archers in your directory')
                 }}</strong>
                 <p>
                   {{
                     data.participants.length
-                      ? 'Choose another club or clear the search.'
+                      ? t('Choose another club or clear the search.')
                       : canManage
-                        ? 'Add an archer to create the first record.'
-                        : 'Archer records will appear here when available.'
+                        ? t('Add an archer to create the first record.')
+                        : t('Archer records will appear here when available.')
                   }}
                 </p>
                 <button
@@ -1896,24 +2017,24 @@ async function recordMatchScore(match, side, value) {
                   class="button button-primary"
                   @click="addParticipantToTournament"
                 >
-                  Add archer
+                  {{ t('Add archer') }}
                 </button>
               </div>
             </section>
             <section v-else-if="selectedTournamentTab === 'categories'" class="panel roster-panel">
               <div class="panel-heading">
                 <div>
-                  <h2>Tournament categories</h2>
+                  <h2>{{ t('Tournament categories') }}</h2>
                   <p>
                     {{
                       canManage
-                        ? 'Choose the divisions available for this event. Assign each archer in Archers.'
-                        : 'Divisions available for this event.'
+                        ? t('Choose the divisions available for this event. Assign each archer in Archers.')
+                        : t('Divisions available for this event.')
                     }}
                   </p>
                 </div>
                 <button v-if="canManage" class="text-link" @click="activePage = 'categories'">
-                  Manage category catalogue →
+                  {{ t('Manage category catalogue →') }}
                 </button>
               </div>
               <div v-if="data.categories.length" class="roster-list">
@@ -1930,56 +2051,57 @@ async function recordMatchScore(match, side, value) {
                     data.tournaments.filter(
                       (event) => event.id === selectedTournament.id && event.categoryIds.includes(category.id),
                     ).length
-                      ? 'Available'
-                      : 'Not added'
+                      ? t('Available')
+                      : t('Not added')
                   }}</span></label
                 >
               </div>
               <div v-else class="empty-state">
-                <strong>No categories in the catalogue</strong>
+                <strong>{{ t('No categories in the catalogue') }}</strong>
                 <p>
                   {{
                     canManage
-                      ? 'Create categories by age, bow type, or both.'
-                      : 'Categories will appear here when available.'
+                      ? t('Create categories by age, bow type, or both.')
+                      : t('Categories will appear here when available.')
                   }}
                 </p>
                 <button v-if="canManage" class="button button-primary" @click="activePage = 'categories'">
-                  Open category catalogue
+                  {{ t('Open category catalogue') }}
                 </button>
               </div>
             </section>
             <section v-else-if="selectedTournamentTab === 'scores'" class="panel score-workspace">
               <div class="score-toolbar">
                 <label class="select-field"
-                  ><span>TOURNAMENT ROUND</span
+                  ><span>{{ t('TOURNAMENT ROUND') }}</span
                   ><select v-model="selectedRound">
                     <option v-for="round in selectedTournament.rounds" :key="round">{{ round }}</option>
                   </select></label
                 >
                 <form v-if="canManage" class="add-round-form" @submit.prevent="addRound">
-                  <input v-model="newRoundName" placeholder="Add a round..." aria-label="New round name" /><button
-                    class="button button-small button-outline"
-                    type="submit"
-                  >
-                    ＋ Add round
+                  <input
+                    v-model="newRoundName"
+                    :placeholder="t('Add a round...')"
+                    :aria-label="t('New round name')"
+                  /><button class="button button-small button-outline" type="submit">
+                    {{ t('＋ Add round') }}
                   </button>
                 </form>
                 <div class="score-completion">
                   <strong
                     >{{ scoredCount }}<small> / {{ tournamentParticipants.length }}</small></strong
-                  ><span>scores entered</span>
+                  ><span>{{ t('scores entered') }}</span>
                 </div>
               </div>
               <div v-if="scoreRows.length" class="table-wrap">
                 <table class="score-table">
                   <thead>
                     <tr>
-                      <th>ARCHER</th>
-                      <th>CATEGORY</th>
-                      <th>WORLD ARCHERY ID</th>
-                      <th>ROUND SCORE</th>
-                      <th>STATUS</th>
+                      <th>{{ t('ARCHER') }}</th>
+                      <th>{{ t('CATEGORY') }}</th>
+                      <th>{{ t('WORLD ARCHERY ID') }}</th>
+                      <th>{{ t('ROUND SCORE') }}</th>
+                      <th>{{ t('STATUS') }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1991,7 +2113,7 @@ async function recordMatchScore(match, side, value) {
                           ><strong>{{ row.participant.lastName }}, {{ row.participant.firstName }}</strong>
                         </div>
                       </td>
-                      <td>{{ categoryFor(row.categoryId)?.name || 'Unassigned' }}</td>
+                      <td>{{ categoryFor(row.categoryId)?.name || t('Unassigned') }}</td>
                       <td>{{ row.participant.waId || '—' }}</td>
                       <td>
                         <input
@@ -1999,7 +2121,7 @@ async function recordMatchScore(match, side, value) {
                           type="number"
                           min="0"
                           :value="row.score"
-                          placeholder="Enter score"
+                          :placeholder="t('Enter score')"
                           :disabled="!canManage"
                           @change="saveScore(row.participant.id, $event.target.value)"
                         />
@@ -2015,46 +2137,47 @@ async function recordMatchScore(match, side, value) {
               </div>
               <div v-else class="empty-state">
                 <div class="empty-icon">♙</div>
-                <strong>No archers added</strong>
-                <p>Add archers in the Archers section of this tournament before recording scores.</p>
+                <strong>{{ t('No archers added') }}</strong>
+                <p>{{ t('Add archers in the Archers section of this tournament before recording scores.') }}</p>
                 <button class="button button-outline" @click="selectedTournamentTab = 'participants'">
-                  View archers
+                  {{ t('View archers') }}
                 </button>
               </div>
               <div v-if="canManage && scoreRows.length" class="score-footnote">
-                Enter or update an archer’s score; changes save against this tournament and round.
+                {{ t('Enter or update an archer’s score; changes save against this tournament and round.') }}
               </div>
             </section>
             <section v-else>
               <div class="olympic-toolbar">
                 <label class="select-field"
-                  ><span>CATEGORY</span
+                  ><span>{{ t('CATEGORY') }}</span
                   ><select v-model="selectedCategoryId" :disabled="!canManage">
-                    <option value="">All archers</option>
+                    <option value="">{{ t('All archers') }}</option>
                     <option v-for="categoryId in selectedTournament.categoryIds" :key="categoryId" :value="categoryId">
                       {{ categoryFor(categoryId)?.name }}
                     </option>
                   </select></label
                 >
                 <div>
-                  <span class="contact-label">SEEDING SCORES FROM</span
-                  ><strong class="round-label">{{ selectedRound }}</strong>
+                  <span class="contact-label">{{ t('SEEDING SCORES FROM') }}</span><strong class="round-label">{{
+                    selectedRound
+                  }}</strong>
                 </div>
-                <span class="seed-note"><span>↕</span> 1st place vs. last place · 2nd vs. second-last</span>
+                <span class="seed-note"><span>↕</span> {{ t('1st place vs. last place · 2nd vs. second-last') }}</span>
                 <button v-if="canManage" class="button button-primary" @click="generateMatches">
-                  <span>✦</span> Seed from round scores
+                  <span>✦</span> {{ t('Seed from round scores') }}
                 </button>
               </div>
               <div v-if="olympicMatches.length" class="matches-grid">
                 <section v-for="(match, index) in olympicMatches" :key="match.id" class="match-card">
                   <div class="match-head">
                     <span>{{ match.round }}</span><span class="match-number"
-                      >MATCH {{ String(index + 1).padStart(2, '0') }}</span
+                      >{{ t('MATCH') }} {{ String(index + 1).padStart(2, '0') }}</span
                     >
                   </div>
                   <div class="match-archer">
                     <span class="seed-badge">{{ match.seed1 }}</span><strong>{{
-                      fullName(participantById(match.seed1Id) || { firstName: 'Unknown', lastName: '' })
+                      fullName(participantById(match.seed1Id) || { firstName: t('Unknown'), lastName: '' })
                     }}</strong
                     ><input
                       class="sl-score"
@@ -2066,10 +2189,12 @@ async function recordMatchScore(match, side, value) {
                       @change="recordMatchScore(match, 'score1', $event.target.value)"
                     />
                   </div>
-                  <div class="match-divider"><span>VS</span></div>
+                  <div class="match-divider">
+                    <span>{{ t('VS') }}</span>
+                  </div>
                   <div class="match-archer">
                     <span class="seed-badge">{{ match.seed2 }}</span><strong>{{
-                      fullName(participantById(match.seed2Id) || { firstName: 'Unknown', lastName: '' })
+                      fullName(participantById(match.seed2Id) || { firstName: t('Unknown'), lastName: '' })
                     }}</strong
                     ><input
                       class="sl-score"
@@ -2090,20 +2215,28 @@ async function recordMatchScore(match, side, value) {
               </div>
               <section v-else class="panel empty-state bracket-empty">
                 <div class="empty-icon">⌁</div>
-                <strong>No matches seeded yet</strong>
-                <p>Record at least two scores for this tournament round. Highest seed faces lowest seed.</p>
+                <strong>{{ t('No matches seeded yet') }}</strong>
+                <p>{{ t('Record at least two scores for this tournament round. Highest seed faces lowest seed.') }}</p>
                 <button class="button button-outline" @click="selectedTournamentTab = 'scores'">
-                  Enter round scores
+                  {{ t('Enter round scores') }}
                 </button>
               </section>
               <p class="bracket-note">
-                First-round pairings belong to this tournament. Re-seeding replaces its current first-round matches.
+                {{
+                  t(
+                    'First-round pairings belong to this tournament. Re-seeding replaces its current first-round matches.',
+                  )
+                }}
               </p>
             </section>
           </template>
           <section v-else class="panel empty-state">
-            <strong>Tournament not found</strong
-            ><button class="button button-outline" @click="activePage = 'tournaments'">Back to tournaments</button>
+            <strong>{{ t('Tournament not found') }}</strong><button
+              class="button button-outline"
+              @click="activePage = 'tournaments'"
+            >
+              {{ t('Back to tournaments') }}
+            </button>
           </section>
         </section>
       </div>
@@ -2135,116 +2268,123 @@ async function recordMatchScore(match, side, value) {
             <p class="eyebrow">
               {{
                 modalType === 'club'
-                  ? 'CLUB DIRECTORY'
+                  ? t('CLUB DIRECTORY')
                   : modalType === 'tournament' || modalType === 'tournamentType'
-                    ? 'EVENT MANAGEMENT'
+                    ? t('EVENT MANAGEMENT')
                     : modalType === 'category'
-                      ? 'CATEGORY DIRECTORY'
+                      ? t('CATEGORY DIRECTORY')
                       : modalType === 'userRole'
-                        ? 'SYSTEM SETTINGS'
+                        ? t('SYSTEM SETTINGS')
                         : modalType === 'passwordReset'
-                          ? 'ACCOUNT MANAGEMENT'
+                          ? t('ACCOUNT MANAGEMENT')
                           : modalType === 'profile'
-                            ? 'ACCOUNT PROFILE'
-                            : 'ARCHER DIRECTORY'
+                            ? t('ACCOUNT PROFILE')
+                            : t('ARCHER DIRECTORY')
               }}
             </p>
             <h2>
               {{
                 modalType === 'club'
                   ? editingClubId
-                    ? 'Edit club'
-                    : 'Add a club'
+                    ? t('Edit club')
+                    : t('Add a club')
                   : modalType === 'tournament'
-                    ? 'Create tournament'
+                    ? t('Create tournament')
                     : modalType === 'tournamentType'
                       ? editingTournamentTypeId
-                        ? 'Edit tournament type'
-                        : 'Create tournament type'
+                        ? t('Edit tournament type')
+                        : t('Create tournament type')
                       : modalType === 'category'
                         ? editingCategoryId
-                          ? 'Edit category'
-                          : 'Create category'
+                          ? t('Edit category')
+                          : t('Create category')
                         : modalType === 'userRole'
-                          ? 'Assign user role'
+                          ? t('Add manager')
                           : modalType === 'passwordReset'
-                            ? 'Send password reset'
+                            ? t('Send password reset')
                             : modalType === 'profile'
-                              ? 'Edit profile'
-                              : 'Add archer'
+                              ? t('Edit profile')
+                              : editingParticipantId
+                                ? t('Edit archer')
+                                : t('Add archer')
               }}
             </h2>
           </div>
-          <button type="button" class="modal-close" aria-label="Close dialog" @click="closeModal">×</button>
+          <button type="button" class="modal-close" :aria-label="t('Close dialog')" @click="closeModal">×</button>
         </div>
         <p v-if="modalError" class="database-error modal-error" role="alert">{{ modalError }}</p>
         <template v-if="modalType === 'club'">
           <div class="form-grid">
             <label class="form-field full"
-              ><span>CLUB NAME <b>*</b></span
-              ><input v-model="form.name" required placeholder="e.g. Northside Archery Club"
+              ><span>{{ t('CLUB NAME') }} <b>*</b></span
+              ><input v-model="form.name" required :placeholder="t('e.g. Northside Archery Club')"
             /></label>
             <label class="form-field"
-              ><span>REPRESENTATIVE NAME <b>*</b></span
-              ><input v-model="form.representative" required placeholder="Full name"
+              ><span>{{ t('REPRESENTATIVE NAME') }} <b>*</b></span
+              ><input v-model="form.representative" required :placeholder="t('Full name')"
             /></label>
             <label class="form-field"
-              ><span>PHONE NUMBER <b>*</b></span
+              ><span>{{ t('PHONE NUMBER') }} <b>*</b></span
               ><input v-model="form.phone" required type="tel" placeholder="(555) 123-4567"
             /></label>
             <label class="form-field"
-              ><span>EMAIL <small>OPTIONAL</small></span
+              ><span
+                >{{ t('EMAIL') }} <small>{{ t('OPTIONAL') }}</small></span
               ><input v-model="form.email" type="email" placeholder="contact@club.org"
             /></label>
             <label class="form-field"
-              ><span>WEBSITE <small>OPTIONAL</small></span
+              ><span
+                >{{ t('WEBSITE') }} <small>{{ t('OPTIONAL') }}</small></span
               ><input v-model="form.website" type="url" placeholder="https://"
             /></label>
             <label class="form-field full"
-              ><span>LOCATION ADDRESS <b>*</b></span
-              ><input v-model="form.address" required placeholder="Street, city, state, ZIP"
+              ><span>{{ t('LOCATION ADDRESS') }} <b>*</b></span
+              ><input v-model="form.address" required :placeholder="t('Street, city, state, ZIP')"
             /></label>
             <label class="form-field full"
-              ><span>MAP LOCATION URL <small>OPTIONAL</small></span
+              ><span
+                >{{ t('MAP LOCATION URL') }} <small>{{ t('OPTIONAL') }}</small></span
               ><input v-model="form.mapUrl" type="url" placeholder="https://maps.google.com/..."
             /></label>
             <label class="form-field full">
-              <span>CLUB LOGO <small>JPG, PNG, OR WEBP · MAX 2 MB</small></span>
+              <span
+                >{{ t('CLUB LOGO') }} <small>{{ t('JPG, PNG, OR WEBP · MAX 2 MB') }}</small></span
+              >
               <input type="file" accept="image/jpeg,image/png,image/webp" @change="handleClubLogoSelection" />
             </label>
             <img
               v-if="form.logoPreview"
               class="club-logo-preview"
               :src="form.logoPreview"
-              :alt="`${form.name || 'Club'} logo preview`"
+              :alt="t('{name} logo preview', { name: form.name || t('Club') })"
             />
           </div>
         </template>
         <template v-else-if="modalType === 'tournament'">
           <div class="form-grid">
             <label class="form-field full"
-              ><span>TOURNAMENT NAME <b>*</b></span
-              ><input v-model="form.name" required placeholder="e.g. Spring Championship"
+              ><span>{{ t('TOURNAMENT NAME') }} <b>*</b></span
+              ><input v-model="form.name" required :placeholder="t('e.g. Spring Championship')"
             /></label>
             <label class="form-field"
-              ><span>DATE <b>*</b></span
+              ><span>{{ t('DATE') }} <b>*</b></span
               ><input v-model="form.date" required type="date"
             /></label>
             <label class="form-field"
-              ><span>DISCIPLINE</span
+              ><span>{{ t('DISCIPLINE') }}</span
               ><select v-model="form.discipline">
-                <option>Outdoor target</option>
-                <option>Indoor target</option>
-                <option>Field</option>
+                <option value="Outdoor target">{{ t('Outdoor target') }}</option>
+                <option value="Indoor target">{{ t('Indoor target') }}</option>
+                <option value="Field">{{ t('Field') }}</option>
                 <option>3D</option>
-                <option>Other</option>
+                <option value="Other">{{ t('Other') }}</option>
               </select></label
             >
             <div class="form-field full">
-              <span>TOURNAMENT TYPE <b>*</b></span>
+              <span>{{ t('TOURNAMENT TYPE') }} <b>*</b></span>
               <div class="field-with-button">
-                <select v-model="form.tournamentTypeId" required aria-label="Tournament type">
-                  <option value="" disabled>Select a tournament type</option>
+                <select v-model="form.tournamentTypeId" required :aria-label="t('Tournament type')">
+                  <option value="" disabled>{{ t('Select a tournament type') }}</option>
                   <option v-for="type in data.tournamentTypes" :key="type.id" :value="type.id">
                     {{ type.name }} — {{ type.distance }} {{ type.distanceUnit }}, {{ type.targetType }}
                   </option>
@@ -2253,8 +2393,8 @@ async function recordMatchScore(match, side, value) {
                   v-if="canManage"
                   type="button"
                   class="icon-button target-type-add"
-                  aria-label="Add tournament type"
-                  title="Add tournament type"
+                  :aria-label="t('Add tournament type')"
+                  :title="t('Add tournament type')"
                   @click="openTournamentChildModal('tournamentType')"
                 >
                   ＋
@@ -2262,18 +2402,18 @@ async function recordMatchScore(match, side, value) {
               </div>
             </div>
             <div class="form-field full">
-              <span>HOST CLUB</span>
+              <span>{{ t('HOST CLUB') }}</span>
               <div class="field-with-button">
-                <select v-model="form.clubId" aria-label="Host club">
-                  <option value="">No club / independent event</option>
+                <select v-model="form.clubId" :aria-label="t('Host club')">
+                  <option value="">{{ t('No club / independent event') }}</option>
                   <option v-for="club in data.clubs" :key="club.id" :value="club.id">{{ club.name }}</option>
                 </select>
                 <button
                   v-if="canManage"
                   type="button"
                   class="icon-button target-type-add"
-                  aria-label="Add new club"
-                  title="Add new club"
+                  :aria-label="t('Add new club')"
+                  :title="t('Add new club')"
                   @click="openTournamentChildModal('club')"
                 >
                   ＋
@@ -2281,51 +2421,51 @@ async function recordMatchScore(match, side, value) {
               </div>
             </div>
             <div class="form-field full">
-              <span>TOURNAMENT LOCATION</span>
+              <span>{{ t('TOURNAMENT LOCATION') }}</span>
               <div class="radio-row">
-                <label><input v-model="form.venueMode" type="radio" value="club" /> Use club address</label
-                ><label><input v-model="form.venueMode" type="radio" value="custom" /> Custom address</label>
+                <label><input v-model="form.venueMode" type="radio" value="club" /> {{ t('Use club address') }}</label
+                ><label><input v-model="form.venueMode" type="radio" value="custom" /> {{ t('Custom address') }}</label>
               </div>
             </div>
             <label v-if="form.venueMode === 'custom'" class="form-field full"
-              ><span>CUSTOM ADDRESS <b>*</b></span
-              ><input v-model="form.customAddress" required placeholder="Street, city, state, ZIP"
+              ><span>{{ t('CUSTOM ADDRESS') }} <b>*</b></span
+              ><input v-model="form.customAddress" required :placeholder="t('Street, city, state, ZIP')"
             /></label>
             <p v-else-if="form.clubId" class="address-preview full">
-              ⌖ {{ clubFor(form.clubId)?.address || 'This club has no address yet.' }}
+              ⌖ {{ clubFor(form.clubId)?.address || t('This club has no address yet.') }}
             </p>
           </div>
         </template>
         <template v-else-if="modalType === 'tournamentType'">
           <div class="form-grid">
             <label class="form-field full"
-              ><span>TYPE NAME <b>*</b></span
-              ><input v-model="form.name" required placeholder="e.g. Outdoor 70m Recurve"
+              ><span>{{ t('TYPE NAME') }} <b>*</b></span
+              ><input v-model="form.name" required :placeholder="t('e.g. Outdoor 70m Recurve')"
             /></label>
             <label class="form-field"
-              ><span>DISTANCE <b>*</b></span
+              ><span>{{ t('DISTANCE') }} <b>*</b></span
               ><input v-model.number="form.distance" required type="number" min="0.1" step="any" placeholder="70"
             /></label>
             <label class="form-field"
-              ><span>DISTANCE UNIT <b>*</b></span
+              ><span>{{ t('DISTANCE UNIT') }} <b>*</b></span
               ><select v-model="form.distanceUnit" required>
-                <option value="m">Meters</option>
-                <option value="yd">Yards</option>
+                <option value="m">{{ t('Meters') }}</option>
+                <option value="yd">{{ t('Yards') }}</option>
               </select></label
             >
             <div class="form-field full">
-              <span>TARGET TYPE <b>*</b></span>
+              <span>{{ t('TARGET TYPE') }} <b>*</b></span>
               <div class="field-with-button">
-                <select v-model="form.targetType" required aria-label="Target type">
-                  <option value="" disabled>Select or add a custom target type</option>
+                <select v-model="form.targetType" required :aria-label="t('Target type')">
+                  <option value="" disabled>{{ t('Select or add a custom target type') }}</option>
                   <option v-for="targetType in targetTypeOptions" :key="targetType">{{ targetType }}</option>
                 </select>
                 <button
                   v-if="canManage"
                   type="button"
                   class="icon-button target-type-add"
-                  aria-label="Add custom target type"
-                  title="Add custom target type"
+                  :aria-label="t('Add custom target type')"
+                  :title="t('Add custom target type')"
                   @click="openTargetTypeModal"
                 >
                   ＋
@@ -2333,161 +2473,158 @@ async function recordMatchScore(match, side, value) {
               </div>
             </div>
             <label class="form-field"
-              ><span>ENDS (SERIES) <b>*</b></span
+              ><span>{{ t('ENDS (SERIES)') }} <b>*</b></span
               ><input v-model.number="form.ends" required type="number" min="1" step="1" placeholder="12"
             /></label>
             <label class="form-field"
-              ><span>ARROWS PER END <b>*</b></span
+              ><span>{{ t('ARROWS PER END') }} <b>*</b></span
               ><input v-model.number="form.arrowsPerEnd" required type="number" min="1" step="1" placeholder="6"
             /></label>
             <p class="address-preview full">
-              This format can be selected when creating a tournament and reused for future events.
+              {{ t('This format can be selected when creating a tournament and reused for future events.') }}
             </p>
           </div>
         </template>
         <template v-else-if="modalType === 'category'">
           <div class="form-grid">
             <label class="form-field full"
-              ><span>CATEGORY NAME <b>*</b></span
-              ><input v-model="form.name" required placeholder="e.g. Junior Recurve"
+              ><span>{{ t('CATEGORY NAME') }} <b>*</b></span
+              ><input v-model="form.name" required :placeholder="t('e.g. Junior Recurve')"
             /></label>
             <label class="form-field"
-              ><span>MINIMUM AGE <small>OPTIONAL</small></span
-              ><input v-model.number="form.minAge" type="number" min="0" step="1" placeholder="No minimum"
+              ><span
+                >{{ t('MINIMUM AGE') }} <small>{{ t('OPTIONAL') }}</small></span
+              ><input v-model.number="form.minAge" type="number" min="0" step="1" :placeholder="t('No minimum')"
             /></label>
             <label class="form-field"
-              ><span>MAXIMUM AGE <small>OPTIONAL</small></span
-              ><input v-model.number="form.maxAge" type="number" min="0" step="1" placeholder="No maximum"
+              ><span
+                >{{ t('MAXIMUM AGE') }} <small>{{ t('OPTIONAL') }}</small></span
+              ><input v-model.number="form.maxAge" type="number" min="0" step="1" :placeholder="t('No maximum')"
             /></label>
             <label class="form-field full"
-              ><span>BOW TYPE <small>OPTIONAL</small></span
+              ><span
+                >{{ t('BOW TYPE') }} <small>{{ t('OPTIONAL') }}</small></span
               ><select v-model="form.bowType">
-                <option value="">Any bow type</option>
-                <option>Recurve</option>
-                <option>Compound</option>
-                <option>Barebow</option>
-                <option>Longbow</option>
-                <option>Traditional</option>
+                <option value="">{{ t('Any bow type') }}</option>
+                <option value="Recurve">{{ t('Recurve') }}</option>
+                <option value="Compound">{{ t('Compound') }}</option>
+                <option value="Barebow">{{ t('Barebow') }}</option>
+                <option value="Longbow">{{ t('Longbow') }}</option>
+                <option value="Traditional">{{ t('Traditional') }}</option>
               </select></label
             >
             <p class="address-preview full">
-              Age limits are checked against the archer's age on the tournament date. Leave a field blank when it does
-              not apply.
+              {{
+                t(
+                  "Age limits are checked against the archer's age on the tournament date. Leave a field blank when it does not apply.",
+                )
+              }}
             </p>
           </div>
         </template>
         <template v-else-if="modalType === 'userRole'">
           <div class="form-grid">
             <label class="form-field full">
-              <span>ACCOUNT EMAIL <b>*</b></span>
-              <input v-model="form.email" required type="email" placeholder="archer@example.com" />
+              <span>{{ t('ACCOUNT EMAIL') }} <b>*</b></span>
+              <input v-model="form.email" required type="email" placeholder="manager@example.com" />
             </label>
             <label class="form-field full">
-              <span>ROLE <b>*</b></span>
-              <select v-model="form.role" required>
-                <option value="admin">System admin</option>
-                <option value="manager">Manager</option>
-                <option value="club">Club</option>
-                <option value="archer">Archer</option>
-              </select>
-            </label>
-            <label v-if="form.role === 'club'" class="form-field full">
-              <span>CLUB <b>*</b></span>
-              <select v-model="form.clubId" required>
-                <option value="" disabled>Select a club</option>
-                <option v-for="club in data.clubs" :key="club.id" :value="club.id">{{ club.name }}</option>
-              </select>
-            </label>
-            <label v-if="form.role === 'archer'" class="form-field full">
-              <span>ARCHER <b>*</b></span>
-              <select v-model="form.participantId" required>
-                <option value="" disabled>Select an archer</option>
-                <option v-for="person in data.participants" :key="person.id" :value="person.id">
-                  {{ person.lastName }}, {{ person.firstName }} — {{ person.waId || person.aetayId || 'No ID' }}
-                </option>
-              </select>
-            </label>
-            <label class="form-field full">
-              <span>DISPLAY NAME <small>OPTIONAL</small></span>
-              <input v-model="form.displayName" placeholder="Name shown in the app" />
+              <span
+                >{{ t('DISPLAY NAME') }} <small>{{ t('OPTIONAL') }}</small></span
+              >
+              <input v-model="form.displayName" :placeholder="t('Name shown in the app')" />
             </label>
             <p class="address-preview full">
-              The account must already exist in Supabase Auth before a role can be assigned.
+              {{ t('The account must already exist in Supabase Auth before a manager role can be assigned.') }}
             </p>
           </div>
         </template>
         <template v-else-if="modalType === 'profile'">
           <label class="form-field">
-            <span>DISPLAY NAME <b>*</b></span>
+            <span>{{ t('DISPLAY NAME') }} <b>*</b></span>
             <input v-model="form.displayName" required autocomplete="name" />
           </label>
         </template>
         <template v-else-if="modalType === 'passwordReset'">
           <label class="form-field full">
-            <span>ACCOUNT EMAIL <b>*</b></span>
+            <span>{{ t('ACCOUNT EMAIL') }} <b>*</b></span>
             <input v-model="form.email" required type="email" autocomplete="email" placeholder="user@example.com" />
           </label>
           <p class="address-preview full">
-            A one-time recovery email will be requested. Users cannot request password resets from the main menu.
+            {{
+              t('A one-time recovery email will be requested. Users cannot request password resets from the main menu.')
+            }}
           </p>
         </template>
         <template v-else>
           <div class="form-grid">
             <label class="form-field"
-              ><span>LAST NAME <b>*</b></span
-              ><input v-model="form.lastName" required autocomplete="family-name" placeholder="Last name"
+              ><span>{{ t('LAST NAME') }} <b>*</b></span
+              ><input v-model="form.lastName" required autocomplete="family-name" :placeholder="t('Last name')"
             /></label>
             <label class="form-field"
-              ><span>FIRST NAME <b>*</b></span
-              ><input v-model="form.firstName" required autocomplete="given-name" placeholder="First name"
+              ><span>{{ t('FIRST NAME') }} <b>*</b></span
+              ><input v-model="form.firstName" required autocomplete="given-name" :placeholder="t('First name')"
             /></label>
             <label class="form-field full"
-              ><span>BIRTH DATE <b>*</b></span
+              ><span>{{ t('BIRTH DATE') }} <b>*</b></span
               ><input v-model="form.birthDate" required type="date"
             /></label>
-            <label class="form-field full"
-              ><span>CLUB <small>OPTIONAL</small></span
-              ><select v-model="form.clubId">
-                <option value="">No club / independent archer</option>
-                <option v-for="club in data.clubs" :key="club.id" :value="club.id">{{ club.name }}</option>
-              </select></label
-            >
+            <label class="form-field full">
+              <span
+                >{{ t('CLUB') }} <small v-if="canManage">{{ t('OPTIONAL') }}</small><b v-else>*</b></span
+              >
+              <select v-model="form.clubId" :disabled="!canManage">
+                <option v-if="canManage" value="">{{ t('No club / independent archer') }}</option>
+                <option
+                  v-for="club in canManage ? data.clubs : data.clubs.filter((item) => item.id === userScope.clubId)"
+                  :key="club.id"
+                  :value="club.id"
+                >
+                  {{ club.name }}
+                </option>
+              </select>
+            </label>
             <label class="form-field"
-              ><span>WORLD ARCHERY ID <small>OPTIONAL</small></span
-              ><input v-model="form.waId" placeholder="Affiliation number"
+              ><span
+                >{{ t('WORLD ARCHERY ID') }} <small>{{ t('OPTIONAL') }}</small></span
+              ><input v-model="form.waId" :placeholder="t('Affiliation number')"
             /></label>
             <label class="form-field"
-              ><span>AETAY ID <small>OPTIONAL</small></span
-              ><input v-model="form.aetayId" placeholder="Affiliation number"
+              ><span
+                >{{ t('AETAY ID') }} <small>{{ t('OPTIONAL') }}</small></span
+              ><input v-model="form.aetayId" :placeholder="t('Affiliation number')"
             /></label>
-            <p class="privacy-note full">Archer details are stored in the shared manager database.</p>
+            <p class="privacy-note full">{{ t('Archer details are stored in the shared manager database.') }}</p>
           </div>
         </template>
         <div class="modal-actions">
           <button type="button" class="button button-outline" @click="closeModal">
-            {{ modalFlow ? 'Back' : 'Cancel' }}</button><button type="submit" class="button button-primary">
+            {{ modalFlow ? t('Back') : t('Cancel') }}</button><button type="submit" class="button button-primary">
             {{
               modalType === 'club'
                 ? editingClubId
-                  ? 'Save changes'
-                  : 'Save club'
+                  ? t('Save changes')
+                  : t('Save club')
                 : modalType === 'tournament'
-                  ? 'Create tournament'
+                  ? t('Create tournament')
                   : modalType === 'tournamentType'
                     ? editingTournamentTypeId
-                      ? 'Save type'
-                      : 'Create type'
+                      ? t('Save type')
+                      : t('Create type')
                     : modalType === 'category'
                       ? editingCategoryId
-                        ? 'Save category'
-                        : 'Create category'
+                        ? t('Save category')
+                        : t('Create category')
                       : modalType === 'userRole'
-                        ? 'Assign role'
+                        ? t('Add manager')
                         : modalType === 'passwordReset'
-                          ? 'Send reset email'
+                          ? t('Send reset email')
                           : modalType === 'profile'
-                            ? 'Save profile'
-                            : 'Save archer'
+                            ? t('Save profile')
+                            : editingParticipantId
+                              ? t('Save changes')
+                              : t('Save archer')
             }}
           </button>
         </div>
@@ -2501,19 +2638,21 @@ async function recordMatchScore(match, side, value) {
         >
           <div class="modal-heading">
             <div>
-              <p class="eyebrow">CUSTOM TARGET TYPES</p>
-              <h2 id="target-type-modal-title">Add a target type</h2>
+              <p class="eyebrow">{{ t('CUSTOM TARGET TYPES') }}</p>
+              <h2 id="target-type-modal-title">{{ t('Add a target type') }}</h2>
             </div>
-            <button type="button" class="modal-close" aria-label="Close dialog" @click="closeTargetTypeModal">×</button>
+            <button type="button" class="modal-close" :aria-label="t('Close dialog')" @click="closeTargetTypeModal">
+              ×
+            </button>
           </div>
           <label class="form-field">
-            <span>TARGET TYPE NAME <b>*</b></span>
+            <span>{{ t('TARGET TYPE NAME') }} <b>*</b></span>
             <input
               v-model="targetTypeName"
               required
               autofocus
-              aria-label="Custom target type name"
-              placeholder="e.g. 40 cm triple-spot"
+              :aria-label="t('Custom target type name')"
+              :placeholder="t('e.g. 40 cm triple-spot')"
               @keydown.enter.prevent="saveTargetType"
             />
           </label>
@@ -2521,14 +2660,14 @@ async function recordMatchScore(match, side, value) {
             {{ targetTypeError }}
           </p>
           <div class="modal-actions">
-            <button type="button" class="button button-outline" @click="closeTargetTypeModal">Cancel</button>
+            <button type="button" class="button button-outline" @click="closeTargetTypeModal">{{ t('Cancel') }}</button>
             <button
               type="button"
               class="button button-primary"
-              aria-label="Save custom target type"
+              :aria-label="t('Save custom target type')"
               @click="saveTargetType"
             >
-              Save target type
+              {{ t('Save target type') }}
             </button>
           </div>
         </section>

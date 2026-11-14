@@ -1,5 +1,6 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setLanguage } from '@shooting-line/i18n'
 import App from './App.vue'
 
 function createWorkspace() {
@@ -75,6 +76,9 @@ function createWorkspace() {
 
 function createRepository(overrides = {}) {
   return {
+    saveClub: vi.fn().mockResolvedValue(undefined),
+    setClubEnabled: vi.fn().mockResolvedValue(undefined),
+    assignUserRole: vi.fn().mockResolvedValue('user-manager'),
     saveParticipant: vi.fn().mockResolvedValue(undefined),
     saveTargetType: vi.fn().mockResolvedValue(undefined),
     setParticipantClub: vi.fn().mockResolvedValue(undefined),
@@ -102,7 +106,38 @@ describe('participant and club workflows', () => {
   })
 
   afterEach(() => {
+    setLanguage('en')
     vi.unstubAllGlobals()
+  })
+
+  it('switches language without changing saved category values or user-entered names', async () => {
+    const repository = createRepository({ saveCategory: vi.fn().mockResolvedValue(undefined) })
+    const wrapper = mountApp(repository)
+    await wrapper.get('.language-switcher select').setValue('es-419')
+    expect(wrapper.get('button[aria-label="Categorías"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('North Archery Club')
+    await wrapper.get('button[aria-label="Categorías"]').trigger('click')
+    await wrapper.get('.page-heading .button-primary').trigger('click')
+    await wrapper.get('input[required]').setValue('My custom name')
+    const bowSelect = wrapper.get('form.modal select')
+    expect(bowSelect.get('option[value="Recurve"]').text()).toBe('Recurvo')
+    await bowSelect.setValue('Recurve')
+    await wrapper.get('form.modal').trigger('submit')
+    await flushPromises()
+    expect(repository.saveCategory).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'My custom name', bowType: 'Recurve' }),
+    )
+    expect(wrapper.text()).toContain('My custom name')
+  })
+
+  it('updates event month tiles when switching languages', async () => {
+    const wrapper = mountApp()
+    const month = wrapper.get('.date-tile span')
+    expect(month.text()).toBe('Jan')
+    await wrapper.get('.language-switcher select').setValue('es-419')
+    expect(month.text()).toBe(
+      new Intl.DateTimeFormat('es-419', { month: 'short', timeZone: 'UTC' }).format(new Date('2099-01-01T00:00:00Z')),
+    )
   })
 
   it('preselects the club when adding a participant from a club card', async () => {
@@ -116,12 +151,27 @@ describe('participant and club workflows', () => {
   it('filters tournament directory participants by club', async () => {
     const wrapper = mountApp()
     await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
-    await wrapper.get('.tournament-card .button').trigger('click')
+    await wrapper.get('.tournament-card').trigger('click')
     await wrapper.get('select[aria-label="Filter archers by club"]').setValue('club-north')
 
     const roster = wrapper.get('.roster-list').text()
     expect(roster).toContain('Archer, Alex')
     expect(roster).not.toContain('Shooter, Sam')
+  })
+
+  it('opens a tournament by clicking its card unless text is selected', async () => {
+    const wrapper = mountApp()
+    await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
+    expect(wrapper.find('.tournament-card .button').exists()).toBe(false)
+
+    const selection = vi.spyOn(window, 'getSelection').mockReturnValue({ toString: () => 'copied text' })
+    await wrapper.get('.tournament-card').trigger('click')
+    expect(wrapper.find('.tournament-card').exists()).toBe(true)
+
+    selection.mockReturnValue({ toString: () => '' })
+    await wrapper.get('.tournament-card').trigger('click')
+    expect(wrapper.find('.tournament-card').exists()).toBe(false)
+    expect(wrapper.find('.roster-list').exists()).toBe(true)
   })
 
   it('assigns an existing participant to a club', async () => {
@@ -190,38 +240,116 @@ describe('participant and club workflows', () => {
       userRoles: [userRole],
     })
     await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
-    await wrapper.get('.tournament-card .button').trigger('click')
+    await wrapper.get('.tournament-card').trigger('click')
     await wrapper.get('.tournament-tabs button:nth-child(2)').trigger('click')
 
     expect(wrapper.get('.category-roster-row input').element.disabled).toBe(true)
     expect(wrapper.get('.category-roster-row input').element.checked).toBe(true)
   })
 
-  it('lets managers request password resets but not assign roles', async () => {
-    const repository = createRepository()
-    const wrapper = mountApp(repository, { userRole: 'manager', userRoles: ['manager'] })
-    await wrapper.get('button[aria-label="User access"]').trigger('click')
+  it('restricts User access to admins for managing manager roles', async () => {
+    const managerWrapper = mountApp(createRepository(), { userRole: 'manager', userRoles: ['manager'] })
+    expect(managerWrapper.find('button[aria-label="User access"]').exists()).toBe(false)
 
-    expect(wrapper.get('.heading-actions').text()).toContain('Send password reset')
-    expect(wrapper.get('.heading-actions').text()).not.toContain('Assign role')
-    await wrapper.get('.heading-actions button').trigger('click')
-    await wrapper.get('input[autocomplete="email"]').setValue('archer@example.test')
+    const repository = createRepository()
+    const adminWrapper = mountApp(repository, { userRole: 'admin', userRoles: ['admin'] })
+    await adminWrapper.get('button[aria-label="User access"]').trigger('click')
+    await adminWrapper.get('.heading-actions .button-primary').trigger('click')
+
+    expect(adminWrapper.find('form.modal select').exists()).toBe(false)
+    await adminWrapper.get('form.modal input[type="email"]').setValue('manager@example.test')
+    await adminWrapper.get('form.modal').trigger('submit')
+    await flushPromises()
+
+    expect(repository.assignUserRole).toHaveBeenCalledWith({
+      email: 'manager@example.test',
+      role: 'manager',
+      displayName: '',
+    })
+  })
+
+  it('lets managers enable and disable a club user directly on the Clubs screen', async () => {
+    const initialData = createWorkspace()
+    initialData.clubs[0].email = 'club@example.test'
+    const repository = createRepository()
+    const wrapper = mountApp(repository, { initialData, userRole: 'manager', userRoles: ['manager'] })
+
+    await wrapper.get('button[aria-label="Clubs"]').trigger('click')
+    expect(wrapper.get('.club-user-row').text()).toContain('club@example.test')
+    expect(wrapper.get('.club-user-row').text()).toContain('Disabled')
+
+    await wrapper.get('.club-user-controls button').trigger('click')
+    await flushPromises()
+
+    expect(repository.setClubEnabled).toHaveBeenCalledWith('club-north', true)
+    expect(wrapper.get('.club-user-row').text()).toContain('Enabled')
+  })
+
+  it('lets club users create and edit archers for their own club only without creating tournaments or clubs', async () => {
+    const initialData = createWorkspace()
+    initialData.clubs.push({
+      id: 'club-south',
+      name: 'South Archery Club',
+      representative: '',
+      phone: '',
+      email: '',
+      website: '',
+      address: '',
+      mapUrl: '',
+      userEmail: '',
+      userEnabled: false,
+    })
+    initialData.participants.push({
+      id: 'participant-south',
+      firstName: 'Pat',
+      lastName: 'South',
+      birthDate: '1999-05-05',
+      waId: '',
+      aetayId: '',
+      clubId: 'club-south',
+    })
+
+    const repository = createRepository()
+    const wrapper = mountApp(repository, {
+      initialData,
+      userRole: 'club',
+      userRoles: ['club'],
+      userScope: { clubId: 'club-north' },
+    })
+
+    expect(wrapper.find('button[aria-label="User access"]').exists()).toBe(false)
+    await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
+    expect(wrapper.find('.page-heading .button-primary').exists()).toBe(false)
+    await wrapper.get('button[aria-label="Tournament types"]').trigger('click')
+    expect(wrapper.find('.page-heading .button-primary').exists()).toBe(false)
+    await wrapper.get('button[aria-label="Categories"]').trigger('click')
+    expect(wrapper.find('.page-heading .button-primary').exists()).toBe(false)
+    await wrapper.get('button[aria-label="Clubs"]').trigger('click')
+    expect(wrapper.find('.page-heading .button-primary').exists()).toBe(false)
+
+    await wrapper.get('button[aria-label="Archers"]').trigger('click')
+    expect(wrapper.find('button[aria-label="Edit Alex Archer"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Edit Pat South"]').exists()).toBe(false)
+
+    await wrapper.get('button[aria-label="Edit Alex Archer"]').trigger('click')
+    await wrapper.get('input[autocomplete="given-name"]').setValue('Alexis')
     await wrapper.get('form.modal').trigger('submit')
     await flushPromises()
 
-    expect(repository.sendAdminPasswordReset).toHaveBeenCalledWith('archer@example.test')
-  })
+    expect(repository.saveParticipant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'participant-club',
+        firstName: 'Alexis',
+        clubId: 'club-north',
+      }),
+      '',
+      true,
+    )
 
-  it('prefills the related club user assignment from a club card', async () => {
-    const initialData = createWorkspace()
-    initialData.clubs[0].userEmail = 'gquittnerl+omarlions@gmail.com'
-    const wrapper = mountApp(createRepository(), { initialData, userRole: 'admin', userRoles: ['admin'] })
-
-    await wrapper.get('button[aria-label="Clubs"]').trigger('click')
-    await wrapper.get('.club-card-actions button').trigger('click')
-
-    expect(wrapper.get('input[type="email"]').element.value).toBe('gquittnerl+omarlions@gmail.com')
-    expect(wrapper.findAll('select')[1].element.value).toBe('club-north')
+    await wrapper.get('.page-heading .button-primary').trigger('click')
+    const clubSelect = wrapper.get('form.modal select')
+    expect(clubSelect.element.disabled).toBe(true)
+    expect(clubSelect.element.value).toBe('club-north')
   })
 
   it('does not expose reset or profile editing to archers', () => {
