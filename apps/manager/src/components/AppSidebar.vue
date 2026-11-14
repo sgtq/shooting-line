@@ -7,9 +7,12 @@ defineProps({
   navItems: { type: Array, required: true },
   tournamentCount: { type: Number, required: true },
   userEmail: { type: String, default: '' },
+  userName: { type: String, default: '' },
+  roleSummary: { type: String, default: '' },
+  canEditProfile: { type: Boolean, default: true },
 })
 
-const emit = defineEmits(['navigate'])
+const emit = defineEmits(['navigate', 'edit-profile'])
 const iconUrl = `${import.meta.env.BASE_URL}shooting-line-icon.svg`
 const darkIconUrl = `${import.meta.env.BASE_URL}shooting-line-icon-dark.svg`
 </script>
@@ -22,7 +25,7 @@ const darkIconUrl = `${import.meta.env.BASE_URL}shooting-line-icon-dark.svg`
       <img class="brand-icon brand-icon-light" :src="iconUrl" alt="" />
       <img class="brand-icon brand-icon-dark" :src="darkIconUrl" alt="" />
     </a>
-    <div class="workspace-label">WORKSPACE</div>
+    <div class="workspace-label">MAIN MENU</div>
     <nav class="main-nav" aria-label="Main navigation">
       <button
         v-for="item in navItems"
@@ -44,9 +47,12 @@ const darkIconUrl = `${import.meta.env.BASE_URL}shooting-line-icon-dark.svg`
         <strong>Made for the range</strong>
         <p>Keep your club and tournament details in one place.</p>
       </div>
-      <button class="profile-button">
-        <span class="avatar">A</span>
-        <span class="profile-copy"><strong>Workspace member</strong><small>{{ userEmail || 'Signed in' }}</small></span>
+      <button class="profile-button" :disabled="!canEditProfile" @click="emit('edit-profile')">
+        <span class="avatar">{{ userName.charAt(0).toUpperCase() || 'U' }}</span>
+        <span class="profile-copy"
+          ><strong>{{ userName || 'Your profile' }}</strong
+          ><small>{{ roleSummary || userEmail || 'Signed in' }}</small></span
+        >
         <span class="profile-menu">···</span>
       </button>
     </div>

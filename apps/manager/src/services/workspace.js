@@ -12,6 +12,7 @@ function mapClub(row) {
     website: row.website,
     address: row.address,
     mapUrl: row.map_url,
+    logoUrl: row.logo_url || '',
     userEmail: row.user_email,
     userEnabled: row.user_enabled,
   }
@@ -25,6 +26,7 @@ function mapParticipant(row) {
     birthDate: row.birth_date || '',
     waId: row.wa_id,
     aetayId: row.aetay_id,
+    clubId: row.club_id || '',
   }
 }
 
@@ -40,6 +42,23 @@ function mapTournamentType(row) {
   }
 }
 
+function mapTargetType(row) {
+  return {
+    id: row.id,
+    name: row.name,
+  }
+}
+
+function mapUserRole(row) {
+  return {
+    userId: row.user_id,
+    email: row.email,
+    role: row.role,
+    clubId: row.club_id || '',
+    participantId: row.participant_id || '',
+  }
+}
+
 function mapCategory(row) {
   return {
     id: row.id,
@@ -51,15 +70,15 @@ function mapCategory(row) {
 }
 
 export function readLegacyWorkspace() {
-  const saved = localStorage.getItem('shooting-line-workspace-v1')
-    ?? localStorage.getItem('archery-manager-workspace-v1')
+  const saved =
+    localStorage.getItem('shooting-line-workspace-v1') ?? localStorage.getItem('archery-manager-workspace-v1')
   if (!saved) return null
 
   let workspace
   try {
     workspace = JSON.parse(saved)
   } catch (error) {
-    throw new Error(`Saved browser data could not be parsed: ${error.message}`)
+    throw new Error(`Saved browser data could not be parsed: ${error.message}`, { cause: error })
   }
   if (!workspace || typeof workspace !== 'object') {
     throw new Error('Saved browser data has an invalid workspace format.')
@@ -67,17 +86,19 @@ export function readLegacyWorkspace() {
 
   return {
     clubs: Array.isArray(workspace.clubs) ? workspace.clubs : [],
-    participants: Array.isArray(workspace.participants) ? workspace.participants : [],
+    participants: Array.isArray(workspace.participants)
+      ? workspace.participants.map((participant) => ({ ...participant, clubId: participant.clubId || '' }))
+      : [],
     tournamentTypes: Array.isArray(workspace.tournamentTypes) ? workspace.tournamentTypes : [],
     categories: Array.isArray(workspace.categories) ? workspace.categories : [],
     tournaments: Array.isArray(workspace.tournaments)
       ? workspace.tournaments.map((tournament) => ({
-        ...tournament,
-        rounds: Array.isArray(tournament.rounds) ? tournament.rounds : ['Qualification'],
-        participantIds: Array.isArray(tournament.participantIds) ? tournament.participantIds : [],
-        categoryIds: Array.isArray(tournament.categoryIds) ? tournament.categoryIds : [],
-        categoryAssignments: tournament.categoryAssignments || {},
-      }))
+          ...tournament,
+          rounds: Array.isArray(tournament.rounds) ? tournament.rounds : ['Qualification'],
+          participantIds: Array.isArray(tournament.participantIds) ? tournament.participantIds : [],
+          categoryIds: Array.isArray(tournament.categoryIds) ? tournament.categoryIds : [],
+          categoryAssignments: tournament.categoryAssignments || {},
+        }))
       : [],
     scores: Array.isArray(workspace.scores) ? workspace.scores : [],
     matches: Array.isArray(workspace.matches) ? workspace.matches : [],
@@ -91,11 +112,12 @@ export function createManagerRepository(client) {
     return `${tournamentId}:${roundName}`
   }
 
-  async function load() {
+  async function load({ includeUserRoles = false } = {}) {
     const tableNames = [
       'clubs',
       'participants',
       'tournament_types',
+      'target_types',
       'categories',
       'tournaments',
       'tournament_rounds',
@@ -104,12 +126,14 @@ export function createManagerRepository(client) {
       'round_scores',
       'matches',
     ]
+    if (includeUserRoles) tableNames.push('user_roles')
     const results = await Promise.all(tableNames.map((table) => client.from(table).select('*')))
     results.forEach(throwOnError)
     const [
       clubsResult,
       participantsResult,
       typesResult,
+      targetTypesResult,
       categoriesResult,
       tournamentsResult,
       roundsResult,
@@ -117,6 +141,7 @@ export function createManagerRepository(client) {
       tournamentParticipantsResult,
       scoresResult,
       matchesResult,
+      userRolesResult,
     ] = results
 
     roundIds.clear()
@@ -153,6 +178,7 @@ export function createManagerRepository(client) {
       clubs: clubsResult.data.map(mapClub),
       participants: participantsResult.data.map(mapParticipant),
       tournamentTypes: typesResult.data.map(mapTournamentType),
+      targetTypes: targetTypesResult.data.map(mapTargetType),
       categories: categoriesResult.data.map(mapCategory),
       tournaments: tournamentsResult.data.map((row) => ({
         id: row.id,
@@ -190,16 +216,18 @@ export function createManagerRepository(client) {
         score1: row.score1 === null ? '' : Number(row.score1),
         score2: row.score2 === null ? '' : Number(row.score2),
       })),
+      userRoles: userRolesResult ? userRolesResult.data.map(mapUserRole) : [],
     }
   }
 
   async function importLegacyWorkspace(workspace) {
-    const remapIds = (rows) => new Map(rows.map((row) => [
-      row.id,
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.id)
-        ? row.id
-        : makeId(),
-    ]))
+    const remapIds = (rows) =>
+      new Map(
+        rows.map((row) => [
+          row.id,
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.id) ? row.id : makeId(),
+        ]),
+      )
     const clubIds = remapIds(workspace.clubs)
     const participantIds = remapIds(workspace.participants)
     const typeIds = remapIds(workspace.tournamentTypes)
@@ -232,6 +260,7 @@ export function createManagerRepository(client) {
         birth_date: participant.birthDate || null,
         wa_id: participant.waId || '',
         aetay_id: participant.aetayId || '',
+        club_id: clubIds.get(participant.clubId) || null,
       })),
       tournament_types: workspace.tournamentTypes.map((type) => ({
         id: typeIds.get(type.id),
@@ -283,7 +312,11 @@ export function createManagerRepository(client) {
       round_scores: workspace.scores.map((score) => {
         const tournamentId = tournamentIds.get(score.tournamentId)
         const roundId = getRoundId(score.tournamentId, score.round)
-        if (!workspace.tournaments.find((tournament) => tournament.id === score.tournamentId)?.rounds.includes(score.round)) {
+        if (
+          !workspace.tournaments
+            .find((tournament) => tournament.id === score.tournamentId)
+            ?.rounds.includes(score.round)
+        ) {
           throw new Error(`Cannot import a score for missing round "${score.round}".`)
         }
         return {
@@ -332,10 +365,64 @@ export function createManagerRepository(client) {
       website: club.website,
       address: club.address,
       map_url: club.mapUrl,
+      logo_url: club.logoUrl || '',
       user_email: club.userEmail,
       user_enabled: club.userEnabled,
     })
     if (error) throw error
+  }
+
+  async function uploadClubLogo(clubId, file) {
+    const { error } = await client.storage.from('club-logos').upload(`${clubId}/logo`, file, {
+      cacheControl: '3600',
+      contentType: file.type,
+      upsert: true,
+    })
+    if (error) throw error
+
+    return client.storage.from('club-logos').getPublicUrl(`${clubId}/logo`).data.publicUrl
+  }
+
+  async function assignUserRole(role) {
+    const { data, error } = await client.rpc('assign_user_role', {
+      p_email: role.email,
+      p_role: role.role,
+      p_club_id: role.clubId || null,
+      p_participant_id: role.participantId || null,
+      p_display_name: role.displayName || null,
+    })
+    if (error) throw error
+    return data
+  }
+
+  async function removeUserRole(userId, role) {
+    const { error } = await client.rpc('remove_user_role', {
+      p_user_id: userId,
+      p_role: role,
+    })
+    if (error) throw error
+  }
+
+  async function saveUserProfile(userId, displayName) {
+    const { error } = await client.from('user_profiles').upsert({
+      user_id: userId,
+      display_name: displayName,
+      updated_at: new Date().toISOString(),
+    })
+    if (error) throw error
+  }
+
+  async function sendAdminPasswordReset(email) {
+    const { error } = await client.functions.invoke('admin-password-reset', {
+      body: { email },
+    })
+    if (!error) return
+
+    if (error.context instanceof Response) {
+      const payload = await error.context.json()
+      if (payload.error) throw new Error(payload.error)
+    }
+    throw error
   }
 
   async function saveTournamentType(type) {
@@ -347,6 +434,14 @@ export function createManagerRepository(client) {
       target_type: type.targetType,
       ends: type.ends,
       arrows_per_end: type.arrowsPerEnd,
+    })
+    if (error) throw error
+  }
+
+  async function saveTargetType(type) {
+    const { error } = await client.from('target_types').insert({
+      id: type.id,
+      name: type.name,
     })
     if (error) throw error
   }
@@ -400,6 +495,7 @@ export function createManagerRepository(client) {
       birth_date: participant.birthDate || null,
       wa_id: participant.waId,
       aetay_id: participant.aetayId,
+      club_id: participant.clubId || null,
     })
     if (error) throw error
 
@@ -418,6 +514,14 @@ export function createManagerRepository(client) {
     }
   }
 
+  async function setParticipantClub(participantId, clubId) {
+    const { error } = await client
+      .from('participants')
+      .update({ club_id: clubId || null })
+      .eq('id', participantId)
+    if (error) throw error
+  }
+
   async function setClubEnabled(clubId, enabled) {
     const { error } = await client.from('clubs').update({ user_enabled: enabled }).eq('id', clubId)
     if (error) throw error
@@ -433,7 +537,8 @@ export function createManagerRepository(client) {
   }
 
   async function setParticipantCategory(tournamentId, participantId, categoryId) {
-    const { error } = await client.from('tournament_participants')
+    const { error } = await client
+      .from('tournament_participants')
       .update({ category_id: categoryId || null })
       .eq('tournament_id', tournamentId)
       .eq('participant_id', participantId)
@@ -462,7 +567,8 @@ export function createManagerRepository(client) {
       return
     }
 
-    const { error } = await client.from('tournament_participants')
+    const { error } = await client
+      .from('tournament_participants')
       .delete()
       .eq('tournament_id', tournamentId)
       .eq('participant_id', participantId)
@@ -474,7 +580,8 @@ export function createManagerRepository(client) {
     if (!roundId) throw new Error(`Could not find round "${score.round}" in the database.`)
 
     if (score.score === null) {
-      const { error } = await client.from('round_scores')
+      const { error } = await client
+        .from('round_scores')
         .delete()
         .eq('round_id', roundId)
         .eq('participant_id', score.participantId)
@@ -515,7 +622,10 @@ export function createManagerRepository(client) {
   async function setMatchScore(matchId, side, value) {
     if (side !== 'score1' && side !== 'score2') throw new Error('Invalid match score side.')
     const score = value === '' ? null : Number(value)
-    const { error } = await client.from('matches').update({ [side]: score }).eq('id', matchId)
+    const { error } = await client
+      .from('matches')
+      .update({ [side]: score })
+      .eq('id', matchId)
     if (error) throw error
   }
 
@@ -523,10 +633,17 @@ export function createManagerRepository(client) {
     load,
     importLegacyWorkspace,
     saveClub,
+    uploadClubLogo,
+    assignUserRole,
+    removeUserRole,
+    saveUserProfile,
+    sendAdminPasswordReset,
     saveTournamentType,
+    saveTargetType,
     saveCategory,
     saveTournament,
     saveParticipant,
+    setParticipantClub,
     setClubEnabled,
     setTournamentCategory,
     setParticipantCategory,
