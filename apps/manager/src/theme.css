@@ -37,7 +37,7 @@
   --shadow: var(--shadow-card);
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
   color-scheme: dark;
   --bg-app: var(--sl-slate-900);
   --bg-surface: var(--sl-slate-800);
@@ -61,7 +61,9 @@
 body {
   color: var(--text-primary);
   background: var(--bg-app);
-  transition: color .18s ease, background-color .18s ease;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease;
 }
 
 h1,
@@ -123,7 +125,7 @@ h3 {
   align-items: center;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: .875rem;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -147,210 +149,210 @@ h3 {
   background: var(--bg-surface-alt);
 }
 
-[data-theme="dark"] body,
-[data-theme="dark"] .sidebar,
-[data-theme="dark"] .topbar,
-[data-theme="dark"] .stat-card,
-[data-theme="dark"] .panel,
-[data-theme="dark"] .club-card,
-[data-theme="dark"] .category-card,
-[data-theme="dark"] .tournament-card,
-[data-theme="dark"] .tournament-summary,
-[data-theme="dark"] .format-card,
-[data-theme="dark"] .match-card,
-[data-theme="dark"] .modal,
-[data-theme="dark"] .toast-message,
-[data-theme="dark"] .search-box,
-[data-theme="dark"] .participants-details[open] .participant-picker,
-[data-theme="dark"] .icon-button,
-[data-theme="dark"] .theme-toggle,
-[data-theme="dark"] .reset-demo {
+[data-theme='dark'] body,
+[data-theme='dark'] .sidebar,
+[data-theme='dark'] .topbar,
+[data-theme='dark'] .stat-card,
+[data-theme='dark'] .panel,
+[data-theme='dark'] .club-card,
+[data-theme='dark'] .category-card,
+[data-theme='dark'] .tournament-card,
+[data-theme='dark'] .tournament-summary,
+[data-theme='dark'] .format-card,
+[data-theme='dark'] .match-card,
+[data-theme='dark'] .modal,
+[data-theme='dark'] .toast-message,
+[data-theme='dark'] .search-box,
+[data-theme='dark'] .participants-details[open] .participant-picker,
+[data-theme='dark'] .icon-button,
+[data-theme='dark'] .theme-toggle,
+[data-theme='dark'] .reset-demo {
   color: var(--text-primary);
   background-color: var(--bg-surface);
   border-color: var(--border-subtle);
 }
 
-[data-theme="dark"] .sidebar,
-[data-theme="dark"] .topbar {
+[data-theme='dark'] .sidebar,
+[data-theme='dark'] .topbar {
   background-color: var(--bg-app);
 }
 
-[data-theme="dark"] .brand {
+[data-theme='dark'] .brand {
   background-color: var(--sl-slate-800);
 }
 
-[data-theme="dark"] .nav-link {
+[data-theme='dark'] .nav-link {
   color: var(--text-secondary);
 }
 
-[data-theme="dark"] .nav-link:hover,
-[data-theme="dark"] .nav-link.active {
+[data-theme='dark'] .nav-link:hover,
+[data-theme='dark'] .nav-link.active {
   color: var(--text-primary);
   background-color: var(--bg-surface-alt);
 }
 
-[data-theme="dark"] .nav-count,
-[data-theme="dark"] .help-card,
-[data-theme="dark"] .date-tile,
-[data-theme="dark"] .tournament-date,
-[data-theme="dark"] .match-head,
-[data-theme="dark"] th,
-[data-theme="dark"] .seed-badge {
+[data-theme='dark'] .nav-count,
+[data-theme='dark'] .help-card,
+[data-theme='dark'] .date-tile,
+[data-theme='dark'] .tournament-date,
+[data-theme='dark'] .match-head,
+[data-theme='dark'] th,
+[data-theme='dark'] .seed-badge {
   color: var(--text-secondary);
   background-color: var(--bg-surface-alt);
   border-color: var(--border-subtle);
 }
 
-[data-theme="dark"] h1,
-[data-theme="dark"] h2,
-[data-theme="dark"] h3,
-[data-theme="dark"] .breadcrumbs strong,
-[data-theme="dark"] .stat-value,
-[data-theme="dark"] .next-event,
-[data-theme="dark"] .event-info strong,
-[data-theme="dark"] .quick-action strong,
-[data-theme="dark"] .club-preview-name strong,
-[data-theme="dark"] .club-card h3,
-[data-theme="dark"] .club-contact strong,
-[data-theme="dark"] .club-contact a,
-[data-theme="dark"] .club-user-row strong,
-[data-theme="dark"] .person-cell strong,
-[data-theme="dark"] .tournament-date strong,
-[data-theme="dark"] .tournament-details h3,
-[data-theme="dark"] .tournament-summary > div > strong,
-[data-theme="dark"] .roster-name strong,
-[data-theme="dark"] .category-roster-copy strong,
-[data-theme="dark"] .format-details strong,
-[data-theme="dark"] .format-total strong,
-[data-theme="dark"] .match-archer strong,
-[data-theme="dark"] .empty-state strong,
-[data-theme="dark"] .modal-heading h2 {
+[data-theme='dark'] h1,
+[data-theme='dark'] h2,
+[data-theme='dark'] h3,
+[data-theme='dark'] .breadcrumbs strong,
+[data-theme='dark'] .stat-value,
+[data-theme='dark'] .next-event,
+[data-theme='dark'] .event-info strong,
+[data-theme='dark'] .quick-action strong,
+[data-theme='dark'] .club-preview-name strong,
+[data-theme='dark'] .club-card h3,
+[data-theme='dark'] .club-contact strong,
+[data-theme='dark'] .club-contact a,
+[data-theme='dark'] .club-user-row strong,
+[data-theme='dark'] .person-cell strong,
+[data-theme='dark'] .tournament-date strong,
+[data-theme='dark'] .tournament-details h3,
+[data-theme='dark'] .tournament-summary > div > strong,
+[data-theme='dark'] .roster-name strong,
+[data-theme='dark'] .category-roster-copy strong,
+[data-theme='dark'] .format-details strong,
+[data-theme='dark'] .format-total strong,
+[data-theme='dark'] .match-archer strong,
+[data-theme='dark'] .empty-state strong,
+[data-theme='dark'] .modal-heading h2 {
   color: var(--text-primary);
 }
 
-[data-theme="dark"] .workspace-label,
-[data-theme="dark"] .breadcrumbs,
-[data-theme="dark"] .eyebrow,
-[data-theme="dark"] .page-subtitle,
-[data-theme="dark"] .demo-chip,
-[data-theme="dark"] .stat-label,
-[data-theme="dark"] .stat-foot,
-[data-theme="dark"] .panel-heading p,
-[data-theme="dark"] .event-info span,
-[data-theme="dark"] .event-attendees,
-[data-theme="dark"] .quick-action small,
-[data-theme="dark"] .club-preview-name small,
-[data-theme="dark"] .club-location,
-[data-theme="dark"] .contact-label,
-[data-theme="dark"] .toolbar-count,
-[data-theme="dark"] .tournament-meta,
-[data-theme="dark"] .tournament-summary > div > span,
-[data-theme="dark"] .roster-name small,
-[data-theme="dark"] .score-footnote,
-[data-theme="dark"] .format-usage,
-[data-theme="dark"] .category-card > p,
-[data-theme="dark"] .category-roster-copy small,
-[data-theme="dark"] .score-completion span,
-[data-theme="dark"] .empty-state p,
-[data-theme="dark"] .bracket-note {
+[data-theme='dark'] .workspace-label,
+[data-theme='dark'] .breadcrumbs,
+[data-theme='dark'] .eyebrow,
+[data-theme='dark'] .page-subtitle,
+[data-theme='dark'] .demo-chip,
+[data-theme='dark'] .stat-label,
+[data-theme='dark'] .stat-foot,
+[data-theme='dark'] .panel-heading p,
+[data-theme='dark'] .event-info span,
+[data-theme='dark'] .event-attendees,
+[data-theme='dark'] .quick-action small,
+[data-theme='dark'] .club-preview-name small,
+[data-theme='dark'] .club-location,
+[data-theme='dark'] .contact-label,
+[data-theme='dark'] .toolbar-count,
+[data-theme='dark'] .tournament-meta,
+[data-theme='dark'] .tournament-summary > div > span,
+[data-theme='dark'] .roster-name small,
+[data-theme='dark'] .score-footnote,
+[data-theme='dark'] .format-usage,
+[data-theme='dark'] .category-card > p,
+[data-theme='dark'] .category-roster-copy small,
+[data-theme='dark'] .score-completion span,
+[data-theme='dark'] .empty-state p,
+[data-theme='dark'] .bracket-note {
   color: var(--text-secondary);
 }
 
-[data-theme="dark"] .profile-button,
-[data-theme="dark"] .stat-foot,
-[data-theme="dark"] .event-list,
-[data-theme="dark"] .event-row,
-[data-theme="dark"] .quick-action,
-[data-theme="dark"] .club-preview-item,
-[data-theme="dark"] .club-contact,
-[data-theme="dark"] .club-user-row,
-[data-theme="dark"] .club-card-actions,
-[data-theme="dark"] .table-wrap th,
-[data-theme="dark"] td,
-[data-theme="dark"] .format-details,
-[data-theme="dark"] .tournament-tabs,
-[data-theme="dark"] .roster-list,
-[data-theme="dark"] .roster-row,
-[data-theme="dark"] .score-toolbar,
-[data-theme="dark"] .score-footnote,
-[data-theme="dark"] .modal-actions,
-[data-theme="dark"] .match-head,
-[data-theme="dark"] .match-foot {
+[data-theme='dark'] .profile-button,
+[data-theme='dark'] .stat-foot,
+[data-theme='dark'] .event-list,
+[data-theme='dark'] .event-row,
+[data-theme='dark'] .quick-action,
+[data-theme='dark'] .club-preview-item,
+[data-theme='dark'] .club-contact,
+[data-theme='dark'] .club-user-row,
+[data-theme='dark'] .club-card-actions,
+[data-theme='dark'] .table-wrap th,
+[data-theme='dark'] td,
+[data-theme='dark'] .format-details,
+[data-theme='dark'] .tournament-tabs,
+[data-theme='dark'] .roster-list,
+[data-theme='dark'] .roster-row,
+[data-theme='dark'] .score-toolbar,
+[data-theme='dark'] .score-footnote,
+[data-theme='dark'] .modal-actions,
+[data-theme='dark'] .match-head,
+[data-theme='dark'] .match-foot {
   border-color: var(--border-subtle);
 }
 
-[data-theme="dark"] .button-primary {
+[data-theme='dark'] .button-primary {
   color: var(--sl-slate-900);
   background: var(--sl-gold-500);
 }
 
-[data-theme="dark"] .button-primary:hover:not(:disabled) {
+[data-theme='dark'] .button-primary:hover:not(:disabled) {
   background: var(--sl-gold-600);
 }
 
-[data-theme="dark"] .button-outline,
-[data-theme="dark"] .form-field input,
-[data-theme="dark"] .form-field select,
-[data-theme="dark"] .add-round-form input,
-[data-theme="dark"] .score-input,
-[data-theme="dark"] .match-archer input,
-[data-theme="dark"] .select-field select,
-[data-theme="dark"] .category-select,
-[data-theme="dark"] .modal-close {
+[data-theme='dark'] .button-outline,
+[data-theme='dark'] .form-field input,
+[data-theme='dark'] .form-field select,
+[data-theme='dark'] .add-round-form input,
+[data-theme='dark'] .score-input,
+[data-theme='dark'] .match-archer input,
+[data-theme='dark'] .select-field select,
+[data-theme='dark'] .category-select,
+[data-theme='dark'] .modal-close {
   color: var(--text-primary);
   background-color: var(--bg-surface-alt);
   border-color: var(--border-subtle);
 }
 
-[data-theme="dark"] .button-outline:hover,
-[data-theme="dark"] .quick-action:hover,
-[data-theme="dark"] .text-link:hover {
+[data-theme='dark'] .button-outline:hover,
+[data-theme='dark'] .quick-action:hover,
+[data-theme='dark'] .text-link:hover {
   color: var(--sl-gold-500);
 }
 
-[data-theme="dark"] .button-soft-success,
-[data-theme="dark"] .status-active,
-[data-theme="dark"] .tip-box {
+[data-theme='dark'] .button-soft-success,
+[data-theme='dark'] .status-active,
+[data-theme='dark'] .tip-box {
   color: #a7f3d0;
   background-color: rgb(5 150 105 / 16%);
   border-color: rgb(5 150 105 / 30%);
 }
 
-[data-theme="dark"] .button-soft-danger,
-[data-theme="dark"] .status-disabled {
+[data-theme='dark'] .button-soft-danger,
+[data-theme='dark'] .status-disabled {
   color: #fecaca;
   background-color: rgb(220 38 38 / 14%);
   border-color: rgb(220 38 38 / 28%);
 }
 
-[data-theme="dark"] .status-pending {
+[data-theme='dark'] .status-pending {
   color: #fde68a;
   background-color: rgb(245 158 11 / 14%);
 }
 
-[data-theme="dark"] .tournament-tabs button.active,
-[data-theme="dark"] .format-distance,
-[data-theme="dark"] .score-completion strong,
-[data-theme="dark"] .text-link,
-[data-theme="dark"] .seed-note,
-[data-theme="dark"] .roster-state {
+[data-theme='dark'] .tournament-tabs button.active,
+[data-theme='dark'] .format-distance,
+[data-theme='dark'] .score-completion strong,
+[data-theme='dark'] .text-link,
+[data-theme='dark'] .seed-note,
+[data-theme='dark'] .roster-state {
   color: var(--sl-gold-500);
 }
 
-[data-theme="dark"] .tournament-tabs button.active::after {
+[data-theme='dark'] .tournament-tabs button.active::after {
   background: var(--sl-gold-500);
 }
 
-[data-theme="dark"] .modal-backdrop {
+[data-theme='dark'] .modal-backdrop {
   background: rgb(2 6 23 / 76%);
 }
 
 @media (min-width: 851px) {
-  [data-theme="dark"] .brand-logo-light {
+  [data-theme='dark'] .brand-logo-light {
     display: none;
   }
 
-  [data-theme="dark"] .brand-logo-dark {
+  [data-theme='dark'] .brand-logo-dark {
     display: block;
   }
 }
@@ -365,11 +367,11 @@ h3 {
     display: block;
   }
 
-  [data-theme="dark"] .brand-icon-light {
+  [data-theme='dark'] .brand-icon-light {
     display: none;
   }
 
-  [data-theme="dark"] .brand-icon-dark {
+  [data-theme='dark'] .brand-icon-dark {
     display: block;
   }
 }

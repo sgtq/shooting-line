@@ -15,6 +15,10 @@
     "build:portal": "npm run build --workspace @shooting-line/portal",
     "build:manager": "npm run build --workspace @shooting-line/manager",
     "preview": "npm run preview --workspace @shooting-line/portal",
+    "cs-fix": "eslint . --fix && prettier --write .",
+    "cs-check": "eslint . && prettier --check .",
+    "type-check": "vue-tsc --noEmit",
+    "ci": "npm run cs-check && npm run type-check",
     "test": "npm run test:unit",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
@@ -22,15 +26,23 @@
     "test:all": "npm run test:unit && npm run test:e2e"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.65.1",
     "@vitejs/plugin-vue": "^6.0.10",
     "@vue/test-utils": "^2.5.1",
     "autoprefixer": "^10.6.2",
     "concurrently": "^9.2.5",
+    "eslint": "^10.15.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.12.1",
+    "globals": "^17.14.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.32",
+    "prettier": "^3.10.1",
     "tailwindcss": "^3.4.19",
+    "typescript": "^6.0.3",
     "vite": "^8.3.6",
-    "vitest": "^4.1.12"
+    "vitest": "^4.1.12",
+    "vue-tsc": "^3.3.14"
   }
 }

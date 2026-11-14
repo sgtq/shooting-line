@@ -4,18 +4,20 @@ import App from './App.vue'
 
 function createWorkspace() {
   return {
-    clubs: [{
-      id: 'club-north',
-      name: 'North Archery Club',
-      representative: 'Club Representative',
-      phone: '',
-      email: '',
-      website: '',
-      address: '',
-      mapUrl: '',
-      userEmail: '',
-      userEnabled: false,
-    }],
+    clubs: [
+      {
+        id: 'club-north',
+        name: 'North Archery Club',
+        representative: 'Club Representative',
+        phone: '',
+        email: '',
+        website: '',
+        address: '',
+        mapUrl: '',
+        userEmail: '',
+        userEnabled: false,
+      },
+    ],
     participants: [
       {
         id: 'participant-club',
@@ -36,31 +38,35 @@ function createWorkspace() {
         clubId: '',
       },
     ],
-    tournamentTypes: [{
-      id: 'type-outdoor',
-      name: 'Outdoor round',
-      distance: 70,
-      distanceUnit: 'm',
-      targetType: '122 cm face',
-      ends: 12,
-      arrowsPerEnd: 6,
-    }],
+    tournamentTypes: [
+      {
+        id: 'type-outdoor',
+        name: 'Outdoor round',
+        distance: 70,
+        distanceUnit: 'm',
+        targetType: '122 cm face',
+        ends: 12,
+        arrowsPerEnd: 6,
+      },
+    ],
     targetTypes: [],
     categories: [],
-    tournaments: [{
-      id: 'tournament-open',
-      name: 'Open Tournament',
-      date: '2099-01-01',
-      discipline: 'Outdoor target',
-      tournamentTypeId: 'type-outdoor',
-      clubId: 'club-north',
-      venueMode: 'club',
-      customAddress: '',
-      rounds: ['Qualification'],
-      participantIds: [],
-      categoryIds: [],
-      categoryAssignments: {},
-    }],
+    tournaments: [
+      {
+        id: 'tournament-open',
+        name: 'Open Tournament',
+        date: '2099-01-01',
+        discipline: 'Outdoor target',
+        tournamentTypeId: 'type-outdoor',
+        clubId: 'club-north',
+        venueMode: 'club',
+        customAddress: '',
+        rounds: ['Qualification'],
+        participantIds: [],
+        categoryIds: [],
+        categoryAssignments: {},
+      },
+    ],
     scores: [],
     matches: [],
     userRoles: [],
@@ -125,10 +131,7 @@ describe('participant and club workflows', () => {
     await wrapper.get('select[aria-label="Sam Shooter club"]').setValue('club-north')
     await flushPromises()
 
-    expect(repository.setParticipantClub).toHaveBeenCalledWith(
-      'participant-independent',
-      'club-north',
-    )
+    expect(repository.setParticipantClub).toHaveBeenCalledWith('participant-independent', 'club-north')
   })
 
   it('shows participant save failures in the modal, not on the page', async () => {
@@ -170,13 +173,15 @@ describe('participant and club workflows', () => {
 
   it.each(['club', 'archer'])('%s users cannot change tournament categories', async (userRole) => {
     const initialData = createWorkspace()
-    initialData.categories = [{
-      id: 'category-open',
-      name: 'Open',
-      minAge: null,
-      maxAge: null,
-      bowType: '',
-    }]
+    initialData.categories = [
+      {
+        id: 'category-open',
+        name: 'Open',
+        minAge: null,
+        maxAge: null,
+        bowType: '',
+      },
+    ]
     initialData.tournaments[0].categoryIds = ['category-open']
 
     const wrapper = mountApp(createRepository(), {

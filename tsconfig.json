@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "jsx": "preserve",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": ["vite/client"]
+  },
+  "include": ["apps/**/*.js", "apps/**/*.vue", "packages/**/*.js", "scripts/**/*.js", "tests/**/*.js", "*.js"],
+  "exclude": ["coverage", "dist", "node_modules", "playwright-report", "test-results"]
+}

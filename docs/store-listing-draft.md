@@ -4,13 +4,13 @@
 
 ## Core listing fields
 
-| Field | Limit | Draft copy |
-| --- | --- | --- |
-| App name | 30 characters | ShootingLine |
-| Apple subtitle | 30 characters | Scorecards, Clubs & Live Sync |
+| Field                         | Limit         | Draft copy                                                                |
+| ----------------------------- | ------------- | ------------------------------------------------------------------------- |
+| App name                      | 30 characters | ShootingLine                                                              |
+| Apple subtitle                | 30 characters | Scorecards, Clubs & Live Sync                                             |
 | Google Play short description | 80 characters | Archery scorecard, club management, and live Ianseo tournament dashboard. |
-| Primary category | — | Sports |
-| Secondary category | — | Productivity or Utilities |
+| Primary category              | —             | Sports                                                                    |
+| Secondary category            | —             | Productivity or Utilities                                                 |
 
 ## Apple App Store keywords
 

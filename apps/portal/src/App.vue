@@ -172,7 +172,9 @@ onUnmounted(() => authSubscription?.unsubscribe())
       <p class="eyebrow">Setup required</p>
       <h1>Connect the access service</h1>
       <p>{{ configurationError }}</p>
-      <p>Copy <code>.env.example</code> to <code>.env</code>, configure the Supabase project values, and restart the app.</p>
+      <p>
+        Copy <code>.env.example</code> to <code>.env</code>, configure the Supabase project values, and restart the app.
+      </p>
     </section>
 
     <section v-else-if="isPasswordRecovery" class="portal-panel sign-in-panel">
@@ -250,9 +252,7 @@ onUnmounted(() => authSubscription?.unsubscribe())
           <p v-else-if="!app.hasAccess" class="card-status access-required-status">Access required</p>
           <h2>{{ app.name }}</h2>
           <p>{{ app.description }}</p>
-          <p v-if="app.ready && app.hasAccess" class="card-action">
-            Open app <span aria-hidden="true">→</span>
-          </p>
+          <p v-if="app.ready && app.hasAccess" class="card-action">Open app <span aria-hidden="true">→</span></p>
           <p v-else-if="app.ready" class="access-note">Contact ShootingLine administrators for access.</p>
           <p v-else class="access-note">This app is not available yet</p>
         </component>

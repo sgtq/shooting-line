@@ -16,16 +16,16 @@ ShootingLine provides digital archery scorecards, club roster management, and li
 
 ### 2. Accounts & Club Administrators
 
-* You are responsible for safeguarding your login credentials.
-* **Club & Association Admins:** If you manage a club or association on ShootingLine, you confirm that you have permission from your members to list their names, bow divisions, and club scores within the platform.
+- You are responsible for safeguarding your login credentials.
+- **Club & Association Admins:** If you manage a club or association on ShootingLine, you confirm that you have permission from your members to list their names, bow divisions, and club scores within the platform.
 
 ---
 
 ### 3. Tournament Data & Ianseo Disclaimer
 
-* Tournament schedules, target assignments, and live results displayed via Ianseo integration are provided for informational convenience.
-* **Official Results:** In the event of a discrepancy between ShootingLine and official tournament records, the physical signed scorecard and the tournament organizer's official Ianseo database always govern.
-* **Independence:** ShootingLine is an independent platform and is not affiliated with, sponsored by, or endorsed by Ianseo or World Archery.
+- Tournament schedules, target assignments, and live results displayed via Ianseo integration are provided for informational convenience.
+- **Official Results:** In the event of a discrepancy between ShootingLine and official tournament records, the physical signed scorecard and the tournament organizer's official Ianseo database always govern.
+- **Independence:** ShootingLine is an independent platform and is not affiliated with, sponsored by, or endorsed by Ianseo or World Archery.
 
 ---
 
