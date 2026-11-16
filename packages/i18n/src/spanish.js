@@ -302,6 +302,8 @@ export const spanish = {
   'open clubs': 'Abrir clubes',
   'open tournament': 'Abrir torneo',
   'open tournaments': 'Abrir torneos',
+  'open club details': 'Abrir detalles del club',
+  details: 'Detalles',
   'save custom target type': 'Guardar tipo de blanco personalizado',
   'search archers by last name or affiliation': 'Buscar arqueros por apellido o afiliación',
   'search clubs...': 'Buscar clubes...',

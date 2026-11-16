@@ -101,6 +101,13 @@ function mountApp(repository = createRepository(), overrides = {}) {
 
 describe('participant and club workflows', () => {
   beforeEach(() => {
+    const localStorageMock = {
+      getItem: vi.fn(),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    }
+    vi.stubGlobal('localStorage', localStorageMock)
     localStorage.clear()
     vi.stubGlobal('crypto', { randomUUID: () => 'new-participant' })
   })
@@ -172,6 +179,17 @@ describe('participant and club workflows', () => {
     await wrapper.get('.tournament-card').trigger('click')
     expect(wrapper.find('.tournament-card').exists()).toBe(false)
     expect(wrapper.find('.roster-list').exists()).toBe(true)
+  })
+
+  it.each([
+    ['.stat-card:nth-child(1)', '.tournament-card'],
+    ['.stat-card:nth-child(2)', '.clubs-grid'],
+    ['.stat-card:nth-child(3)', '.table-wrap'],
+    ['.event-row', '.roster-list'],
+  ])('opens the section when clicking the dashboard item %s', async (item, destination) => {
+    const wrapper = mountApp()
+    await wrapper.get(item).trigger('click')
+    expect(wrapper.find(destination).exists()).toBe(true)
   })
 
   it('assigns an existing participant to a club', async () => {
@@ -278,11 +296,30 @@ describe('participant and club workflows', () => {
     expect(wrapper.get('.club-user-row').text()).toContain('club@example.test')
     expect(wrapper.get('.club-user-row').text()).toContain('Disabled')
 
-    await wrapper.get('.club-user-controls button').trigger('click')
+    await wrapper.get('.club-user-controls button.button-outline').trigger('click')
     await flushPromises()
 
     expect(repository.setClubEnabled).toHaveBeenCalledWith('club-north', true)
     expect(wrapper.get('.club-user-row').text()).toContain('Enabled')
+  })
+
+  it('opens club details from the dashboard row and toggles access from its status button', async () => {
+    const initialData = createWorkspace()
+    initialData.clubs[0].email = 'club@example.test'
+    const repository = createRepository()
+    const wrapper = mountApp(repository, { initialData, userRole: 'manager', userRoles: ['manager'] })
+
+    await wrapper
+      .get(
+        '.club-preview-item .status-pill-button.status-active, .club-preview-item .status-pill-button.status-disabled',
+      )
+      .trigger('click')
+    await flushPromises()
+    expect(repository.setClubEnabled).toHaveBeenCalledWith('club-north', true)
+    expect(wrapper.find('form.modal').exists()).toBe(false)
+
+    await wrapper.get('.club-preview-item').trigger('click')
+    expect(wrapper.get('form.modal').exists()).toBe(true)
   })
 
   it('lets club users create and edit archers for their own club only without creating tournaments or clubs', async () => {
