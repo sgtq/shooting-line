@@ -1778,7 +1778,7 @@ async function recordMatchScore(match, side, value) {
           <div class="category-grid">
             <article v-for="category in data.categories" :key="category.id" class="category-card">
               <div class="format-card-head">
-<span class="quick-icon lavender"><NavIcon name="categories" /></span
+                <span class="quick-icon lavender"><NavIcon name="categories" /></span
                 ><button
                   v-if="canManage"
                   class="button button-icon"
