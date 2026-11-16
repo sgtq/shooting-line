@@ -31,3 +31,6 @@ test-results
 *.njsproj
 *.sln
 *.sw?
+
+# Personal Claude instructions
+CLAUDE.local.md
