@@ -11,7 +11,30 @@ The manager is the current archery club and tournament application. It is a Vue 
 - First-round Olympic-style match seeding and match score entry.
 - Light and dark themes.
 - English and Latin American Spanish interface with a shared browser language preference.
-- Dashboard count shortcuts and upcoming/past tournament filters.
+- Dashboard cards, upcoming tournaments, and club previews that open their sections (see [Dashboard](#dashboard)).
+
+## Dashboard
+
+The dashboard is the first screen after sign-in. Each item opens the related screen:
+
+- **Total tournaments** card: opens the Tournaments screen. The **Open tournaments** count button does the same.
+- **Clubs** card: opens the Clubs screen. The club count button opens the same screen.
+- **Archers** card: opens the Archers screen. The archer count button opens the same screen.
+- **Up next** card: opens the next upcoming tournament. The **View tournament** link does the same. When no tournament is scheduled, the card does nothing.
+- **Upcoming tournaments** rows: each row opens its tournament. Keyboard users can focus a row and press Enter.
+- **Your clubs** rows: each row opens club details (see [Club details](#club-details)). Keyboard users can focus a row and press Enter.
+
+Clicking a card or row does not open it when the user has selected text inside it, so text can be copied without navigating away.
+
+### Club details
+
+Club details depend on the signed-in role:
+
+- **Admin and manager:** the row opens the club edit form. The **Details** button on the row does the same.
+- **Club user:** the row opens the club edit form only for their own club. For other clubs, it opens the Clubs directory.
+- **Archer:** the row opens the Clubs directory.
+
+On the dashboard, the club row's status button shows whether the club user is enabled or disabled. Admins and managers can click it to enable or disable access. The status button is separate from **Details**, so clicking it does not open the club form. Club users see the status only, with no button.
 
 ## Data and access
 
