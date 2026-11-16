@@ -25,3 +25,6 @@ dist-ssr
 
 # Personal Claude instructions
 CLAUDE.local.md
+
+# Planning notes stay local
+docs/planning/
