@@ -1,5 +1,5 @@
 ---
-name: review-copilot
+name: resolve-pr-suggestions
 description: Check a pull request for open Copilot review suggestions. Verify each one against the code, fix the real ones, reply briefly to the ones that are wrong or not worth it, then resolve every handled thread. Use when the user asks to address, handle, or check Copilot suggestions or review comments on a PR.
 argument-hint: '[PR number]'
 ---
