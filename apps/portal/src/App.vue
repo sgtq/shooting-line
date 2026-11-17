@@ -2,7 +2,7 @@
 import { t } from '@shooting-line/i18n'
 import LanguageSwitcher from '@shooting-line/i18n/LanguageSwitcher.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { APP_IDS, createSupabaseClient, listAppAccess } from '@shooting-line/auth'
+import { APP_IDS, createSupabaseClient, listAppAccess, requestPasswordReset } from '@shooting-line/auth'
 
 const baseUrl = import.meta.env.BASE_URL
 const isDevelopmentPreview = import.meta.env.VITE_APP_ENV === 'development'
@@ -42,6 +42,9 @@ const session = ref(null)
 const accessibleApps = ref([])
 const isLoadingAccess = ref(false)
 const isPasswordRecovery = ref(false)
+const isForgotPassword = ref(false)
+const isSendingReset = ref(false)
+const resetRequested = ref(false)
 let authSubscription
 
 try {
@@ -102,6 +105,29 @@ async function signIn() {
   }
 
   isSubmitting.value = false
+}
+
+function openForgotPassword() {
+  errorMessage.value = ''
+  resetRequested.value = false
+  isForgotPassword.value = true
+}
+
+function closeForgotPassword() {
+  errorMessage.value = ''
+  isForgotPassword.value = false
+}
+
+/** @returns {Promise<void>} */
+async function sendResetEmail() {
+  isSendingReset.value = true
+  errorMessage.value = ''
+  resetRequested.value = false
+  const { error } = await requestPasswordReset(client.value, email.value)
+  if (error) errorMessage.value = error.message
+  // The same message is shown for every address so the form cannot be used to find registered accounts.
+  else resetRequested.value = true
+  isSendingReset.value = false
 }
 
 async function signOut() {
@@ -187,7 +213,7 @@ onUnmounted(() => authSubscription?.unsubscribe())
       <div class="panel-copy">
         <p class="eyebrow">{{ t('Account recovery') }}</p>
         <h1>{{ t('Choose a new password') }}</h1>
-        <p>{{ t('Your administrator requested this one-time recovery link.') }}</p>
+        <p>{{ t('Use this one-time recovery link to set a new password.') }}</p>
       </div>
       <form class="sign-in-form" @submit.prevent="updatePassword">
         <label>
@@ -201,6 +227,30 @@ onUnmounted(() => authSubscription?.unsubscribe())
         <p v-if="errorMessage" class="error-message" role="alert">{{ errorMessage }}</p>
         <button class="primary-button" type="submit" :disabled="isUpdatingPassword">
           {{ isUpdatingPassword ? t('Updating password…') : t('Update password') }}
+        </button>
+      </form>
+    </section>
+
+    <section v-else-if="!session && isForgotPassword" class="portal-panel sign-in-panel">
+      <div class="panel-copy">
+        <p class="eyebrow">{{ t('Account recovery') }}</p>
+        <h1>{{ t('Forgot your password?') }}</h1>
+        <p>{{ t('Enter your account email and we will send you a link to choose a new password.') }}</p>
+      </div>
+      <form class="sign-in-form" @submit.prevent="sendResetEmail">
+        <label>
+          {{ t('Email') }}
+          <input v-model="email" type="email" autocomplete="username" required />
+        </label>
+        <p v-if="errorMessage" class="error-message" role="alert">{{ errorMessage }}</p>
+        <p v-if="resetRequested" class="loading-message" role="status">
+          {{ t('If the account exists, a password reset email will be sent') }}
+        </p>
+        <button class="primary-button" type="submit" :disabled="isSendingReset">
+          {{ isSendingReset ? t('Sending…') : t('Send reset email') }}
+        </button>
+        <button class="secondary-button" type="button" @click="closeForgotPassword">
+          {{ t('Back to sign in') }}
         </button>
       </form>
     </section>
@@ -224,6 +274,9 @@ onUnmounted(() => authSubscription?.unsubscribe())
         <p v-if="errorMessage" class="error-message" role="alert">{{ errorMessage }}</p>
         <button class="primary-button" type="submit" :disabled="isSubmitting">
           {{ isSubmitting ? t('Signing in…') : t('Sign in') }}
+        </button>
+        <button class="secondary-button" type="button" @click="openForgotPassword">
+          {{ t('Forgot your password?') }}
         </button>
       </form>
     </section>

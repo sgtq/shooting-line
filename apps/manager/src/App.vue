@@ -84,7 +84,7 @@ function canEditParticipant(person) {
 }
 const visibleNavItems = computed(() =>
   allNavItems
-    .filter((item) => item.id !== 'user-access' || isAdmin.value)
+    .filter((item) => item.id !== 'user-access' || canManage.value)
     .map((item) => ({
       ...item,
       label: t(item.label),
@@ -463,11 +463,9 @@ function openModal(type, assignToCurrentTournament = false) {
             ? blankCategory()
             : type === 'userRole'
               ? blankUserRole()
-              : type === 'passwordReset'
-                ? { email: '' }
-                : type === 'profile'
-                  ? { displayName: userName.value }
-                  : blankParticipant()
+              : type === 'profile'
+                ? { displayName: userName.value }
+                : blankParticipant()
   showModal.value = true
 }
 
@@ -812,23 +810,30 @@ async function saveUserProfile() {
   notify('Profile updated')
 }
 
-async function sendAdminPasswordReset() {
-  const email = form.value.email.trim()
-  if (!email) {
-    modalError.value = t('Enter the account email address.')
-    return
-  }
-
+/** @returns {Promise<void>} */
+async function sendOwnPasswordReset() {
   if (
     !(await persistChange(
-      () => props.repository.sendAdminPasswordReset(email),
+      () => props.repository.sendOwnPasswordReset(props.userEmail),
       () => {},
       'modal',
     ))
   )
     return
 
-  closeModal()
+  notify('If the account exists, a password reset email will be sent')
+}
+
+/** @returns {Promise<void>} */
+async function sendRolePasswordReset(role) {
+  if (
+    !(await persistChange(
+      () => props.repository.sendAdminPasswordReset(role.email),
+      () => {},
+    ))
+  )
+    return
+
   notify('If the account exists, a password reset email will be sent')
 }
 
@@ -1803,17 +1808,14 @@ async function recordMatchScore(match, side, value) {
           </div>
         </section>
 
-        <section v-else-if="activePage === 'user-access' && isAdmin">
+        <section v-else-if="activePage === 'user-access' && canManage">
           <div class="page-heading heading-row">
             <div>
               <p class="eyebrow">{{ t('ACCOUNT MANAGEMENT') }}</p>
               <h1>{{ t('User access') }}</h1>
               <p class="page-subtitle">{{ t('Assign manager roles and send password reset emails.') }}</p>
             </div>
-            <div class="heading-actions">
-              <button class="button button-outline" @click="openModal('passwordReset')">
-                {{ t('Send password reset') }}
-              </button>
+            <div v-if="isAdmin" class="heading-actions">
               <button class="button button-primary" @click="openModal('userRole')">
                 <span>＋</span> {{ t('Add manager') }}
               </button>
@@ -1838,8 +1840,12 @@ async function recordMatchScore(match, side, value) {
                     <td>{{ role.email }}</td>
                     <td>{{ role.role === 'admin' ? t('System admin') : t('Manager') }}</td>
                     <td>{{ t('All records') }}</td>
-                    <td>
+                    <td class="row-actions">
+                      <button class="text-link" @click="sendRolePasswordReset(role)">
+                        {{ t('Send password reset') }}
+                      </button>
                       <button
+                        v-if="isAdmin"
                         class="text-link"
                         :disabled="
                           role.role === 'admin' &&
@@ -1862,7 +1868,11 @@ async function recordMatchScore(match, side, value) {
             </div>
           </section>
           <p class="privacy-note">
-            {{ t('A reset email can only be requested by an admin. The account must already exist in Supabase Auth.') }}
+            {{
+              t(
+                'A reset email can only be requested by an admin or manager. The account must already exist in Supabase Auth.',
+              )
+            }}
           </p>
         </section>
 
@@ -2335,11 +2345,9 @@ async function recordMatchScore(match, side, value) {
                   ? saveCategory()
                   : modalType === 'userRole'
                     ? saveUserRole()
-                    : modalType === 'passwordReset'
-                      ? sendAdminPasswordReset()
-                      : modalType === 'profile'
-                        ? saveUserProfile()
-                        : saveParticipant()
+                    : modalType === 'profile'
+                      ? saveUserProfile()
+                      : saveParticipant()
         "
       >
         <div class="modal-heading">
@@ -2354,11 +2362,9 @@ async function recordMatchScore(match, side, value) {
                       ? t('CATEGORY DIRECTORY')
                       : modalType === 'userRole'
                         ? t('SYSTEM SETTINGS')
-                        : modalType === 'passwordReset'
-                          ? t('ACCOUNT MANAGEMENT')
-                          : modalType === 'profile'
-                            ? t('ACCOUNT PROFILE')
-                            : t('ARCHER DIRECTORY')
+                        : modalType === 'profile'
+                          ? t('ACCOUNT PROFILE')
+                          : t('ARCHER DIRECTORY')
               }}
             </p>
             <h2>
@@ -2379,13 +2385,11 @@ async function recordMatchScore(match, side, value) {
                           : t('Create category')
                         : modalType === 'userRole'
                           ? t('Add manager')
-                          : modalType === 'passwordReset'
-                            ? t('Send password reset')
-                            : modalType === 'profile'
-                              ? t('Edit profile')
-                              : editingParticipantId
-                                ? t('Edit archer')
-                                : t('Add archer')
+                          : modalType === 'profile'
+                            ? t('Edit profile')
+                            : editingParticipantId
+                              ? t('Edit archer')
+                              : t('Add archer')
               }}
             </h2>
           </div>
@@ -2623,17 +2627,9 @@ async function recordMatchScore(match, side, value) {
             <span>{{ t('DISPLAY NAME') }} <b>*</b></span>
             <input v-model="form.displayName" required autocomplete="name" />
           </label>
-        </template>
-        <template v-else-if="modalType === 'passwordReset'">
-          <label class="form-field full">
-            <span>{{ t('ACCOUNT EMAIL') }} <b>*</b></span>
-            <input v-model="form.email" required type="email" autocomplete="email" placeholder="user@example.com" />
-          </label>
-          <p class="address-preview full">
-            {{
-              t('A one-time recovery email will be requested. Users cannot request password resets from the main menu.')
-            }}
-          </p>
+          <button v-if="userEmail" type="button" class="button button-outline" @click="sendOwnPasswordReset">
+            {{ t('Email me a password reset link') }}
+          </button>
         </template>
         <template v-else>
           <div class="form-grid">
@@ -2697,13 +2693,11 @@ async function recordMatchScore(match, side, value) {
                         : t('Create category')
                       : modalType === 'userRole'
                         ? t('Add manager')
-                        : modalType === 'passwordReset'
-                          ? t('Send reset email')
-                          : modalType === 'profile'
-                            ? t('Save profile')
-                            : editingParticipantId
-                              ? t('Save changes')
-                              : t('Save archer')
+                        : modalType === 'profile'
+                          ? t('Save profile')
+                          : editingParticipantId
+                            ? t('Save changes')
+                            : t('Save archer')
             }}
           </button>
         </div>

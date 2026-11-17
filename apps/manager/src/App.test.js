@@ -265,9 +265,30 @@ describe('participant and club workflows', () => {
     expect(wrapper.get('.category-roster-row input').element.checked).toBe(true)
   })
 
-  it('restricts User access to admins for managing manager roles', async () => {
-    const managerWrapper = mountApp(createRepository(), { userRole: 'manager', userRoles: ['manager'] })
-    expect(managerWrapper.find('button[aria-label="User access"]').exists()).toBe(false)
+  it('lets managers see User access but only admins change manager roles', async () => {
+    const roles = [
+      { userId: 'user-admin', email: 'admin@example.test', role: 'admin' },
+      { userId: 'user-manager', email: 'manager@example.test', role: 'manager' },
+    ]
+    const managerRepository = createRepository()
+    const managerWrapper = mountApp(managerRepository, {
+      userRole: 'manager',
+      userRoles: ['manager'],
+      initialData: { ...createWorkspace(), userRoles: roles },
+    })
+    await managerWrapper.get('button[aria-label="User access"]').trigger('click')
+
+    expect(managerWrapper.find('.heading-actions').exists()).toBe(false)
+    expect(managerWrapper.findAll('.row-actions button')).toHaveLength(2)
+    expect(managerWrapper.text()).not.toContain('Remove role')
+    await managerWrapper.findAll('.row-actions button')[0].trigger('click')
+    await flushPromises()
+    expect(managerRepository.sendAdminPasswordReset).toHaveBeenCalledWith('admin@example.test')
+
+    for (const userRole of ['club', 'archer']) {
+      const wrapper = mountApp(createRepository(), { userRole, userRoles: [userRole] })
+      expect(wrapper.find('button[aria-label="User access"]').exists()).toBe(false)
+    }
 
     const repository = createRepository()
     const adminWrapper = mountApp(repository, { userRole: 'admin', userRoles: ['admin'] })
@@ -284,6 +305,72 @@ describe('participant and club workflows', () => {
       role: 'manager',
       displayName: '',
     })
+  })
+
+  it('sends a password reset from each manager row without a top-of-page form', async () => {
+    const repository = createRepository()
+    const wrapper = mountApp(repository, {
+      userRole: 'admin',
+      userRoles: ['admin'],
+      initialData: {
+        ...createWorkspace(),
+        userRoles: [{ userId: 'user-manager', email: 'manager@example.test', role: 'manager' }],
+      },
+    })
+    await wrapper.get('button[aria-label="User access"]').trigger('click')
+
+    expect(wrapper.find('.heading-actions .button-outline').exists()).toBe(false)
+    expect(wrapper.find('form.modal').exists()).toBe(false)
+
+    await wrapper.get('.table-panel tbody .row-actions button').trigger('click')
+    await flushPromises()
+
+    expect(repository.sendAdminPasswordReset).toHaveBeenCalledWith('manager@example.test')
+    expect(wrapper.get('.toast-message').text()).toContain('password reset email will be sent')
+  })
+
+  it('shows the save error on the page when a password reset fails', async () => {
+    const repository = createRepository({
+      sendAdminPasswordReset: vi.fn().mockRejectedValue(new Error('Rate limit reached')),
+    })
+    const wrapper = mountApp(repository, {
+      userRole: 'admin',
+      userRoles: ['admin'],
+      initialData: {
+        ...createWorkspace(),
+        userRoles: [{ userId: 'user-manager', email: 'manager@example.test', role: 'manager' }],
+      },
+    })
+    await wrapper.get('button[aria-label="User access"]').trigger('click')
+
+    await wrapper.get('.table-panel tbody .row-actions button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('.database-error').text()).toContain('Rate limit reached')
+    expect(wrapper.find('.toast-message').exists()).toBe(false)
+  })
+
+  it('lets a signed-in user email themselves a password reset link from the profile dialog', async () => {
+    const repository = createRepository({ sendOwnPasswordReset: vi.fn().mockResolvedValue(undefined) })
+    const wrapper = mountApp(repository, { userRole: 'manager', userRoles: ['manager'] })
+    await wrapper.get('.profile-button').trigger('click')
+    await wrapper.get('form.modal button.button-outline').trigger('click')
+    await flushPromises()
+
+    expect(repository.sendOwnPasswordReset).toHaveBeenCalledWith('archer@example.test')
+    expect(wrapper.get('.toast-message').text()).toContain('password reset email will be sent')
+  })
+
+  it('shows a failed self-service password reset inside the profile dialog', async () => {
+    const repository = createRepository({
+      sendOwnPasswordReset: vi.fn().mockRejectedValue(new Error('Email rate limit exceeded')),
+    })
+    const wrapper = mountApp(repository, { userRole: 'manager', userRoles: ['manager'] })
+    await wrapper.get('.profile-button').trigger('click')
+    await wrapper.get('form.modal button.button-outline').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('form.modal .modal-error').text()).toContain('Email rate limit exceeded')
   })
 
   it('lets managers enable and disable a club user directly on the Clubs screen', async () => {

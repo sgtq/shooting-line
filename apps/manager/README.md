@@ -40,12 +40,12 @@ On the dashboard, the club row's status button shows whether the club user is en
 
 Manager records are stored in Supabase PostgreSQL tables created and evolved by the migrations in `supabase/migrations/`. A signed-in account needs a Tournament Manager app grant. Database row-level security applies each user's access rules.
 
-- **System admin:** can manage all records, assign or remove manager roles in **User access**, and request password recovery emails.
-- **Manager:** can create and manage clubs, tournament types, categories, tournaments, archers, and scores, and enable or disable club users on the **Clubs** screen.
+- **System admin:** can manage all records, assign or remove manager roles in **User access**, and send password reset emails.
+- **Manager:** can create and manage clubs, tournament types, categories, tournaments, archers, and scores, enable or disable club users on the **Clubs** screen, and view **User access** to resend password reset emails to admin and manager accounts. Managers cannot add or remove roles.
 - **Club:** can view its own club information and related tournaments and archers, edit its own club details, and create or edit archers for its own club only. Club accounts cannot create tournaments, clubs, categories, or tournament types.
 - **Archer:** read-only access to their own archer record and tournament entries.
 
-Admins manage manager roles from **User access**; the account must already exist in Supabase Auth. Club user access is enabled or disabled directly from the **Clubs** screen using the club's email and name (which grants or revokes the `club` role automatically). Admins can request a one-time password recovery email for an account; there is no self-service reset link in the main menu. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
+Admins manage manager roles from **User access**; the account must already exist in Supabase Auth. Club user access is enabled or disabled directly from the **Clubs** screen using the club's email and name (which grants or revokes the `club` role automatically). Admins and managers can resend a one-time password reset email from a row in **User access**. Any signed-in user who can open the profile dialog (everyone except archers) can choose **Email me a password reset link** there to reset their own password. Users can also request a reset from the portal sign-in screen. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
 
 The GitHub Pages development preview is served at `/develop/` (or `/<repository>/develop/` on the default project-site domain) and connects to the development Supabase project. Access to manager data is controlled by Supabase Auth, app access, and RLS roles. The static preview bundle itself is public, as required by GitHub Pages; never include private credentials in it.
 

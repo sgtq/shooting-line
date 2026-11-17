@@ -112,8 +112,8 @@ export const spanish = {
   'all records': 'Todos los registros',
   'remove role': 'Quitar rol',
   'no manager assignments found.': 'No se encontraron administradores asignados.',
-  'a reset email can only be requested by an admin. the account must already exist in supabase auth.':
-    'Solo un administrador puede solicitar el correo de restablecimiento. La cuenta debe existir en Supabase Auth.',
+  'a reset email can only be requested by an admin or manager. the account must already exist in supabase auth.':
+    'Solo un administrador del sistema o un administrador puede solicitar el correo de restablecimiento. La cuenta debe existir en Supabase Auth.',
   '← all archers': '← Todos los arqueros',
   'archer record': 'Registro del arquero',
   'tournament round and olympic match scores for this archer.':
@@ -219,8 +219,6 @@ export const spanish = {
   'display name': 'Nombre para mostrar',
   'the account must already exist in supabase auth before a manager role can be assigned.':
     'La cuenta debe existir en Supabase Auth antes de asignar el rol de administrador.',
-  'a one-time recovery email will be requested. users cannot request password resets from the main menu.':
-    'Se solicitará un correo de recuperación de un solo uso. Los usuarios no pueden solicitarlo desde el menú principal.',
   'last name': 'Apellido',
   'first name': 'Nombre',
   'no club / independent archer': 'Sin club / arquero independiente',
@@ -240,8 +238,15 @@ export const spanish = {
     ', configura los valores del proyecto Supabase y reinicia la aplicación.',
   'account recovery': 'Recuperación de cuenta',
   'choose a new password': 'Elige una nueva contraseña',
-  'your administrator requested this one-time recovery link.':
-    'Tu administrador solicitó este enlace de recuperación de un solo uso.',
+  'use this one-time recovery link to set a new password.':
+    'Usa este enlace de recuperación de un solo uso para definir una nueva contraseña.',
+  'forgot your password?': '¿Olvidaste tu contraseña?',
+  'enter your account email and we will send you a link to choose a new password.':
+    'Ingresa el correo de tu cuenta y te enviaremos un enlace para elegir una nueva contraseña.',
+  'send reset email': 'Enviar correo de restablecimiento',
+  'sending…': 'Enviando…',
+  'back to sign in': 'Volver a iniciar sesión',
+  'email me a password reset link': 'Enviarme un enlace para restablecer la contraseña',
   'new password': 'Nueva contraseña',
   'confirm new password': 'Confirmar nueva contraseña',
   'your archery workspace': 'Tu espacio de tiro con arco',
@@ -375,7 +380,6 @@ export const spanish = {
   'save profile': 'Guardar perfil',
   'save type': 'Guardar tipo',
   'select archers from your directory or add a new one.': 'Selecciona arqueros del directorio o agrega uno nuevo.',
-  'send reset email': 'Enviar correo de restablecimiento',
   'sign in': 'Iniciar sesión',
   'sign out': 'Cerrar sesión',
   'signed in': 'Sesión iniciada',
@@ -436,7 +440,6 @@ export const spanish = {
   'user role removed': 'Rol de usuario eliminado',
   'enter a display name.': 'Ingresa un nombre para mostrar.',
   'profile updated': 'Perfil actualizado',
-  'enter the account email address.': 'Ingresa el correo de la cuenta.',
   'if the account exists, a password reset email will be sent':
     'Si la cuenta existe, se enviará un correo para restablecer la contraseña',
   'select a valid category': 'Selecciona una categoría válida',

@@ -81,7 +81,7 @@ async function checkAppAccess(userId) {
 
   const managerRepository = createManagerRepository(client.value)
   try {
-    workspace.value = await managerRepository.load({ includeUserRoles: currentRole === 'admin' })
+    workspace.value = await managerRepository.load({ includeUserRoles: ['admin', 'manager'].includes(currentRole) })
   } catch (loadError) {
     errorMessage.value = `${t('Unable to load the manager database')}: ${loadError.message}`
     isChecking.value = false

@@ -35,3 +35,13 @@ export async function hasAppAccess(client, userId, appId) {
   if (error) return { allowed: false, error }
   return { allowed: data !== null, error: null }
 }
+
+/**
+ * Asks Supabase to email a recovery link. Supabase answers the same way for unknown addresses,
+ * so callers must not reveal whether the account exists.
+ * @returns {Promise<{ error: Error | null }>}
+ */
+export async function requestPasswordReset(client, email) {
+  const { error } = await client.auth.resetPasswordForEmail(email.trim())
+  return { error: error ?? null }
+}
