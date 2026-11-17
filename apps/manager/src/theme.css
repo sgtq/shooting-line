@@ -310,6 +310,18 @@ h3 {
   color: var(--sl-gold-500);
 }
 
+[data-theme='dark'] .button-icon {
+  color: var(--text-primary);
+  background-color: var(--bg-surface-alt);
+  border-color: var(--border-subtle);
+}
+
+[data-theme='dark'] .button-icon:hover:not(:disabled) {
+  color: var(--sl-gold-500);
+  background-color: var(--bg-surface-alt);
+  border-color: var(--border-subtle);
+}
+
 [data-theme='dark'] .button-soft-success,
 [data-theme='dark'] .status-active,
 [data-theme='dark'] .tip-box {

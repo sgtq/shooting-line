@@ -1501,8 +1501,14 @@ async function recordMatchScore(match, side, value) {
                   class="button button-small button-outline"
                   >{{ t('Website ↗') }}</a
                 >
-                <button v-if="canEditClub(club)" class="button button-small button-outline" @click="editClub(club)">
-                  {{ t('Edit club') }}
+                <button
+                  v-if="canEditClub(club)"
+                  class="button button-icon"
+                  :aria-label="t('Edit club')"
+                  :title="t('Edit club')"
+                  @click="editClub(club)"
+                >
+                  <NavIcon name="pencil" />
                 </button>
               </div>
             </article>
@@ -1592,11 +1598,11 @@ async function recordMatchScore(match, side, value) {
                       <div class="table-actions">
                         <button
                           v-if="canEditParticipant(person)"
-                          class="text-link"
+                          class="button button-icon"
                           :aria-label="t('Edit {name}', { name: fullName(person) })"
                           @click="editParticipant(person)"
                         >
-                          {{ t('Edit') }}
+                          <NavIcon name="pencil" />
                         </button>
                         <button
                           class="text-link"
@@ -1715,8 +1721,14 @@ async function recordMatchScore(match, side, value) {
             <article v-for="type in data.tournamentTypes" :key="type.id" class="format-card">
               <div class="format-card-head">
                 <span class="quick-icon mint"><NavIcon name="tournament-types" /></span
-                ><button v-if="canManage" class="button button-small button-outline" @click="editTournamentType(type)">
-                  {{ t('Edit type') }}
+                ><button
+                  v-if="canManage"
+                  class="button button-icon"
+                  :aria-label="t('Edit type')"
+                  :title="t('Edit type')"
+                  @click="editTournamentType(type)"
+                >
+                  <NavIcon name="pencil" />
                 </button>
               </div>
               <h2>{{ type.name }}</h2>
@@ -1767,8 +1779,14 @@ async function recordMatchScore(match, side, value) {
             <article v-for="category in data.categories" :key="category.id" class="category-card">
               <div class="format-card-head">
                 <span class="quick-icon lavender"><NavIcon name="categories" /></span
-                ><button v-if="canManage" class="button button-small button-outline" @click="editCategory(category)">
-                  {{ t('Edit category') }}
+                ><button
+                  v-if="canManage"
+                  class="button button-icon"
+                  :aria-label="t('Edit category')"
+                  :title="t('Edit category')"
+                  @click="editCategory(category)"
+                >
+                  <NavIcon name="pencil" />
                 </button>
               </div>
               <h2>{{ category.name }}</h2>
