@@ -39,8 +39,13 @@ It has no level order number, never blocks another category, and is never blocke
 - Removing an archer from a tournament, or removing only their category, clears that entry, so it no longer
   counts toward the rule.
 - The database enforces the rule with a trigger on `tournament_participants`, so it holds for any client.
+  The trigger locks per archer so two simultaneous entries cannot both pass, and it also runs when an
+  entry is moved to another archer.
   Entries made before the rule existed are kept and count as history. Their starting level order comes from the
   category's minimum age and can be adjusted.
+- Importing old browser data keeps each category's level order and exemption. Categories that have none are
+  ranked by minimum age within their bow type, and the import keeps the archers' past entries as they were
+  even when they break the rule.
 
 ## Dashboard
 

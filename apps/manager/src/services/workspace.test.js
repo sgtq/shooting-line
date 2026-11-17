@@ -241,6 +241,62 @@ describe('manager repository', () => {
     })
   })
 
+  describe('importLegacyWorkspace', () => {
+    const emptyWorkspace = {
+      clubs: [],
+      participants: [],
+      tournamentTypes: [],
+      categories: [],
+      tournaments: [],
+      scores: [],
+      matches: [],
+    }
+
+    it('gives categories from older browser data a default level order and no exemption', async () => {
+      const rpc = vi.fn().mockResolvedValue({ error: null })
+      await createManagerRepository({ rpc }).importLegacyWorkspace({
+        ...emptyWorkspace,
+        categories: [
+          { id: 'pro', name: 'Pro', minAge: 18, maxAge: '', bowType: 'Recurve' },
+          { id: 'youth', name: 'Youth', minAge: '', maxAge: 17, bowType: 'Recurve' },
+          { id: 'comp', name: 'Open', minAge: '', maxAge: '', bowType: 'Compound' },
+        ],
+      })
+
+      const categories = rpc.mock.calls[0][1].p_workspace.categories
+      expect(categories.map(({ name, sort_order: order, level_exempt: exempt }) => [name, order, exempt])).toEqual([
+        ['Pro', 1, false],
+        ['Youth', 0, false],
+        ['Open', 0, false],
+      ])
+    })
+
+    it('keeps a level order and exemption that the data already has', async () => {
+      const rpc = vi.fn().mockResolvedValue({ error: null })
+      await createManagerRepository({ rpc }).importLegacyWorkspace({
+        ...emptyWorkspace,
+        categories: [
+          {
+            id: 'masters',
+            name: 'Masters',
+            minAge: 50,
+            maxAge: '',
+            bowType: 'Recurve',
+            sortOrder: 0,
+            levelExempt: true,
+          },
+          { id: 'open', name: 'Open', minAge: '', maxAge: '', bowType: 'Recurve', sortOrder: 5, levelExempt: false },
+        ],
+      })
+
+      const categories = rpc.mock.calls[0][1].p_workspace.categories
+      expect(categories).toMatchObject([
+        { name: 'Masters', sort_order: 0, level_exempt: true },
+        { name: 'Open', sort_order: 5, level_exempt: false },
+      ])
+    })
+  })
+
   it('updates an existing participant when editing', async () => {
     const eq = vi.fn().mockResolvedValue({ error: null })
     const update = vi.fn().mockReturnValue({ eq })

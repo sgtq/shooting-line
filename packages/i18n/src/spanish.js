@@ -447,6 +447,7 @@ export const spanish = {
   "limited by the archer's age and the categories they have already entered":
     'Limitado por la edad del arquero y las categorías en las que ya participó',
   actions: 'Acciones',
+  'type a name or id': 'Escribe un nombre o ID',
   'existing archer': 'Arquero existente',
   'new archer': 'Arquero nuevo',
   'search the archer database': 'Buscar en la base de arqueros',
