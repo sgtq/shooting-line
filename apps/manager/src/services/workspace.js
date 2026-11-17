@@ -378,24 +378,22 @@ export function createManagerRepository(client) {
 
     const clubEmail = (club.email || club.userEmail || '').trim()
     const shouldEnable = Boolean(club.userEnabled && clubEmail)
-    const { error } = await client.from('clubs').upsert({
-      id: club.id,
-      name: club.name,
-      representative: club.representative,
-      phone: club.phone,
-      email: club.email,
-      website: club.website,
-      address: club.address,
-      map_url: club.mapUrl,
-      logo_url: club.logoUrl || '',
-      user_email: clubEmail,
-      user_enabled: false,
+    // One RPC so a failed account reassignment also rolls back the club details.
+    const { error } = await client.rpc('save_club_with_access', {
+      p_id: club.id,
+      p_name: club.name,
+      p_representative: club.representative,
+      p_phone: club.phone,
+      p_email: club.email,
+      p_website: club.website,
+      p_address: club.address,
+      p_map_url: club.mapUrl,
+      p_logo_url: club.logoUrl || '',
+      p_user_email: clubEmail,
+      p_enabled: shouldEnable,
+      p_sync_access: shouldEnable || hadUserEnabled,
     })
     if (error) throw error
-
-    if (shouldEnable || hadUserEnabled) {
-      await setClubEnabled(club.id, shouldEnable)
-    }
   }
 
   async function uploadClubLogo(clubId, file) {

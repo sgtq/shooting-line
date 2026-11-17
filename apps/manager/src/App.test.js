@@ -182,6 +182,42 @@ describe('participant and club workflows', () => {
   })
 
   it.each([
+    ['tournaments list', 'button[aria-label="Tournaments"]', '.tournament-card'],
+    ['dashboard upcoming list', null, '.event-row'],
+  ])('exposes the %s card as a named button that opens on Enter and Space', async (_name, nav, card) => {
+    const keys = ['enter', 'space']
+    for (const key of keys) {
+      const wrapper = mountApp()
+      if (nav) await wrapper.get(nav).trigger('click')
+      const element = wrapper.get(card)
+      expect(element.attributes('role')).toBe('button')
+      expect(element.attributes('tabindex')).toBe('0')
+      expect(element.attributes('aria-label')).toBe('Open Tournament')
+
+      await element.trigger('keydown', { key: key === 'space' ? ' ' : 'Enter' })
+      expect(wrapper.find('.roster-list').exists()).toBe(true)
+    }
+  })
+
+  it('does not wrap native buttons in a second focusable control on dashboard cards', () => {
+    const wrapper = mountApp()
+    const cards = wrapper.findAll('.stat-card, .club-preview-item')
+    expect(cards.length).toBeGreaterThan(0)
+    for (const card of cards) {
+      expect(card.attributes('tabindex')).toBeUndefined()
+      expect(card.attributes('role')).toBeUndefined()
+      expect(card.find('button').exists()).toBe(true)
+    }
+  })
+
+  it('ignores other keys on a tournament card', async () => {
+    const wrapper = mountApp()
+    await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
+    await wrapper.get('.tournament-card').trigger('keydown', { key: 'a' })
+    expect(wrapper.find('.tournament-card').exists()).toBe(true)
+  })
+
+  it.each([
     ['.stat-card:nth-child(1)', '.tournament-card'],
     ['.stat-card:nth-child(2)', '.clubs-grid'],
     ['.stat-card:nth-child(3)', '.table-wrap'],

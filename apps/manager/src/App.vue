@@ -1215,12 +1215,7 @@ async function recordMatchScore(match, side, value) {
           </div>
 
           <div class="stats-grid">
-            <article
-              class="stat-card clickable-card"
-              tabindex="0"
-              @click="openUnlessSelecting(() => (activePage = 'tournaments'))"
-              @keydown.enter.self="activePage = 'tournaments'"
-            >
+            <article class="stat-card clickable-card" @click="openUnlessSelecting(() => (activePage = 'tournaments'))">
               <div class="stat-top">
                 <span class="stat-icon olive"><NavIcon name="tournaments" /></span
                 ><span class="stat-caption">{{ t('ALL TIME') }}</span>
@@ -1235,12 +1230,7 @@ async function recordMatchScore(match, side, value) {
               <span class="stat-label">{{ t('Total tournaments') }}</span>
               <div class="stat-foot"><span class="stat-dot green"></span> {{ t('Open event calendar') }}</div>
             </article>
-            <article
-              class="stat-card clickable-card"
-              tabindex="0"
-              @click="openUnlessSelecting(() => (activePage = 'clubs'))"
-              @keydown.enter.self="activePage = 'clubs'"
-            >
+            <article class="stat-card clickable-card" @click="openUnlessSelecting(() => (activePage = 'clubs'))">
               <div class="stat-top">
                 <span class="stat-icon sand"><NavIcon name="clubs" /></span
                 ><span class="stat-caption">{{ t('REGISTERED') }}</span>
@@ -1251,12 +1241,7 @@ async function recordMatchScore(match, side, value) {
               <span class="stat-label">{{ t('Clubs') }}</span>
               <div class="stat-foot"><span class="stat-dot green"></span> {{ t('Open club directory') }}</div>
             </article>
-            <article
-              class="stat-card clickable-card"
-              tabindex="0"
-              @click="openUnlessSelecting(() => (activePage = 'participants'))"
-              @keydown.enter.self="activePage = 'participants'"
-            >
+            <article class="stat-card clickable-card" @click="openUnlessSelecting(() => (activePage = 'participants'))">
               <div class="stat-top">
                 <span class="stat-icon blue"><NavIcon name="archers" /></span
                 ><span class="stat-caption">{{ t('DATABASE') }}</span>
@@ -1274,9 +1259,7 @@ async function recordMatchScore(match, side, value) {
             <article
               class="stat-card next-stat"
               :class="{ 'clickable-card': nextTournament }"
-              :tabindex="nextTournament ? 0 : undefined"
               @click="nextTournament && openUnlessSelecting(() => openTournament(nextTournament.id))"
-              @keydown.enter.self="nextTournament && openTournament(nextTournament.id)"
             >
               <div class="stat-top">
                 <span class="stat-icon peach">◷</span><span class="stat-caption">{{ t('UP NEXT') }}</span>
@@ -1307,9 +1290,11 @@ async function recordMatchScore(match, side, value) {
                   v-for="event in upcomingTournaments.slice(0, 4)"
                   :key="event.id"
                   class="event-row clickable-card"
+                  role="button"
                   tabindex="0"
+                  :aria-label="event.name"
                   @click="openUnlessSelecting(() => openTournament(event.id))"
-                  @keydown.enter.self="openTournament(event.id)"
+                  @keydown.enter.space.self.prevent="openTournament(event.id)"
                 >
                   <div class="date-tile">
                     <span>{{ formatMonth(event.date) }}</span><strong>{{
@@ -1394,9 +1379,7 @@ async function recordMatchScore(match, side, value) {
                 v-for="club in data.clubs.slice(0, 3)"
                 :key="club.id"
                 class="club-preview-item clickable-card"
-                tabindex="0"
                 @click="openUnlessSelecting(() => openClubDetails(club))"
-                @keydown.enter.self="openClubDetails(club)"
               >
                 <span class="club-avatar">{{ club.name.charAt(0) }}</span><span class="club-preview-name"
                   ><strong>{{ club.name }}</strong
@@ -1672,9 +1655,11 @@ async function recordMatchScore(match, side, value) {
               v-for="event in filteredTournaments"
               :key="event.id"
               class="tournament-card clickable-card"
+              role="button"
               tabindex="0"
+              :aria-label="event.name"
               @click="openUnlessSelecting(() => openTournament(event.id))"
-              @keydown.enter.self="openTournament(event.id)"
+              @keydown.enter.space.self.prevent="openTournament(event.id)"
             >
               <div class="tournament-date">
                 <span>{{ formatMonth(event.date) }}</span><strong>{{
