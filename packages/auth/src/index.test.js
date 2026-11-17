@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { hasAppAccess, listAppAccess } from './index.js'
+import { hasAppAccess, listAppAccess, requestPasswordReset } from './index.js'
 
 function accessClient(result) {
   const query = {
@@ -43,5 +43,21 @@ describe('app access queries', () => {
     await expect(hasAppAccess(client, 'user-1', 'manager')).resolves.toEqual({ allowed, error: null })
     expect(query.eq).toHaveBeenNthCalledWith(1, 'user_id', 'user-1')
     expect(query.eq).toHaveBeenNthCalledWith(2, 'app_id', 'manager')
+  })
+})
+
+describe('password reset request', () => {
+  it('trims the email and reports success without an error', async () => {
+    const client = { auth: { resetPasswordForEmail: vi.fn().mockResolvedValue({ error: null }) } }
+
+    await expect(requestPasswordReset(client, '  user@example.test ')).resolves.toEqual({ error: null })
+    expect(client.auth.resetPasswordForEmail).toHaveBeenCalledWith('user@example.test')
+  })
+
+  it('returns the service error instead of throwing', async () => {
+    const error = new Error('Rate limit')
+    const client = { auth: { resetPasswordForEmail: vi.fn().mockResolvedValue({ error }) } }
+
+    await expect(requestPasswordReset(client, 'user@example.test')).resolves.toEqual({ error })
   })
 })

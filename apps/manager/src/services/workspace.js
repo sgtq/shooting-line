@@ -1,3 +1,5 @@
+import { requestPasswordReset } from '@shooting-line/auth'
+
 function throwOnError({ error }) {
   if (error) throw error
 }
@@ -436,6 +438,11 @@ export function createManagerRepository(client) {
     if (error) throw error
   }
 
+  async function sendOwnPasswordReset(email) {
+    const { error } = await requestPasswordReset(client, email)
+    if (error) throw error
+  }
+
   async function sendAdminPasswordReset(email) {
     const { error } = await client.functions.invoke('admin-password-reset', {
       body: { email },
@@ -674,6 +681,7 @@ export function createManagerRepository(client) {
     removeUserRole,
     saveUserProfile,
     sendAdminPasswordReset,
+    sendOwnPasswordReset,
     saveTournamentType,
     saveTargetType,
     saveCategory,
