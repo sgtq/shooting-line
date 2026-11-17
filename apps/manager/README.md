@@ -6,12 +6,48 @@ The manager is the current archery club and tournament application. It is a Vue 
 
 - Club directory with contact and location details.
 - Tournament types with reusable custom target types, and tournament categories.
-- Archer directory and tournament rosters.
+- Archer directory and tournament rosters. A manager picks the category when adding an archer to a tournament
+  (see [Category levels](#category-levels)).
 - Per-tournament rounds and archer scores.
 - First-round Olympic-style match seeding and match score entry.
 - Light and dark themes.
 - English and Latin American Spanish interface with a shared browser language preference.
 - Dashboard cards, upcoming tournaments, and club previews that open their sections (see [Dashboard](#dashboard)).
+
+## Category levels
+
+Each category has a **level order** number, set when the category is created or edited. A lower number is a
+lower level, and categories with different bow types are ranked separately (for example Recurve Youth 0,
+Open 1, Pro 2). A category limited only by age, such as Masters, can be marked **Not part of the level order**.
+It has no level order number, never blocks another category, and is never blocked.
+
+- The Archers tab lists only the archers entered in that tournament, under **Archer**, **Category**, and
+  **Actions** headers. The row shows the category as text. An archer with no category gets a category picker.
+  In the Category column, managers get a pencil icon that opens a picker with the allowed categories until
+  one is chosen or **Cancel** is pressed, and an X icon that removes only the category (the archer stays in
+  the tournament and the picker returns). The Actions column has **Remove from tournament**, which asks for
+  confirmation and keeps the archer in the archer database.
+- **Add archer** on the Archers tab opens a dialog with two modes. **Existing archer** searches the archer
+  database (name or affiliation number) and lists archers who are not yet in the tournament. **New archer**
+  creates a record. Both then ask for the bow type and the category (limited to that bow type) when the
+  tournament has categories. Only the category is saved with the tournament entry. The bow type just narrows
+  the list.
+- An archer who has ever entered a category cannot enter a category of the same bow type with a lower level
+  order, in any tournament, and cannot be moved down inside a tournament. Moving up is allowed. Blocked
+  categories are disabled in the pickers. Entries in other bow types do not count.
+- Only managers and admins change an archer's category. Club users cannot. The database also rejects a
+  category that the tournament does not offer, so a direct call cannot assign one from another tournament.
+- Removing an archer from a tournament, or removing only their category, clears that entry, so it no longer
+  counts toward the rule.
+- The database enforces the rule with a trigger on `tournament_participants`, so it holds for any client.
+  The trigger locks per archer so two simultaneous entries cannot both pass, and it also runs when an
+  entry is moved to another archer.
+  Entries made before the rule existed are kept and count as history. Their starting level order comes from the
+  category's minimum age and can be adjusted.
+- Only managers and admins can import old browser data, and only into an empty database. The import keeps each
+  category's level order and exemption. The database ranks any category that arrives without a level order by
+  minimum age within its bow type, whichever client sent it, and the import keeps the archers' past entries as
+  they were even when they break the rule.
 
 ## Dashboard
 

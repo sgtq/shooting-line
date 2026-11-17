@@ -241,6 +241,56 @@ describe('manager repository', () => {
     })
   })
 
+  describe('importLegacyWorkspace', () => {
+    const emptyWorkspace = {
+      clubs: [],
+      participants: [],
+      tournamentTypes: [],
+      categories: [],
+      tournaments: [],
+      scores: [],
+      matches: [],
+    }
+
+    it('sends no level order for older browser data so the database ranks the categories', async () => {
+      const rpc = vi.fn().mockResolvedValue({ error: null })
+      await createManagerRepository({ rpc }).importLegacyWorkspace({
+        ...emptyWorkspace,
+        categories: [{ id: 'pro', name: 'Pro', minAge: 18, maxAge: '', bowType: 'Recurve' }],
+      })
+
+      const [category] = rpc.mock.calls[0][1].p_workspace.categories
+      expect(category.sort_order).toBeUndefined()
+      expect(category.level_exempt).toBe(false)
+      expect(JSON.parse(JSON.stringify(category))).not.toHaveProperty('sort_order')
+    })
+
+    it('keeps a level order and exemption that the data already has', async () => {
+      const rpc = vi.fn().mockResolvedValue({ error: null })
+      await createManagerRepository({ rpc }).importLegacyWorkspace({
+        ...emptyWorkspace,
+        categories: [
+          {
+            id: 'masters',
+            name: 'Masters',
+            minAge: 50,
+            maxAge: '',
+            bowType: 'Recurve',
+            sortOrder: 0,
+            levelExempt: true,
+          },
+          { id: 'open', name: 'Open', minAge: '', maxAge: '', bowType: 'Recurve', sortOrder: 5, levelExempt: false },
+        ],
+      })
+
+      const categories = rpc.mock.calls[0][1].p_workspace.categories
+      expect(categories).toMatchObject([
+        { name: 'Masters', sort_order: 0, level_exempt: true },
+        { name: 'Open', sort_order: 5, level_exempt: false },
+      ])
+    })
+  })
+
   it('updates an existing participant when editing', async () => {
     const eq = vi.fn().mockResolvedValue({ error: null })
     const update = vi.fn().mockReturnValue({ eq })
