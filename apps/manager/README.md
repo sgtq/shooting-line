@@ -43,9 +43,9 @@ It has no level order number, never blocks another category, and is never blocke
   entry is moved to another archer.
   Entries made before the rule existed are kept and count as history. Their starting level order comes from the
   category's minimum age and can be adjusted.
-- Importing old browser data keeps each category's level order and exemption. Categories that have none are
-  ranked by minimum age within their bow type, and the import keeps the archers' past entries as they were
-  even when they break the rule.
+- Only managers and admins can import old browser data, and only into an empty database. The import keeps each
+  category's level order and exemption. Categories that have none are ranked by minimum age within their bow
+  type, and the import keeps the archers' past entries as they were even when they break the rule.
 
 ## Dashboard
 

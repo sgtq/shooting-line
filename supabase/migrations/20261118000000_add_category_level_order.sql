@@ -80,8 +80,9 @@ as $$
 declare
   importing_user uuid := (select auth.uid());
 begin
-  if importing_user is null or not public.has_app_access('manager') then
-    raise exception 'Manager app access is required';
+  -- Club accounts also hold the manager app grant, so the role is checked as the table policies do.
+  if importing_user is null or not public.is_manager_or_admin() then
+    raise exception 'Manager or administrator access is required';
   end if;
 
   if exists (
