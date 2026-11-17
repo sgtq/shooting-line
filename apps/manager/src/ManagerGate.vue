@@ -24,6 +24,8 @@ const isChecking = ref(true)
 const isAuthorized = ref(false)
 const hasAccess = ref(false)
 const isImportPrompt = ref(false)
+const isPlanLapsed = ref(false)
+const lastPlanEndedOn = ref('')
 const isImporting = ref(false)
 let authSubscription
 
@@ -78,6 +80,28 @@ async function checkAppAccess(userId) {
     userMetadata.value.name ||
     userMetadata.value.given_name ||
     ''
+
+  // The database shows a club without an active plan no data at all, so the app is not opened for it.
+  if (currentRole === 'club') {
+    const planResult = await client.value.rpc('has_active_plan')
+    if (planResult.error) {
+      errorMessage.value = `${t('Unable to check your club plan')}: ${planResult.error.message}`
+      isChecking.value = false
+      return
+    }
+    if (!planResult.data) {
+      const lastPlan = await client.value
+        .from('user_subscriptions')
+        .select('ends_on')
+        .eq('user_id', userId)
+        .order('ends_on', { ascending: false })
+        .limit(1)
+      lastPlanEndedOn.value = lastPlan.data?.[0]?.ends_on || ''
+      isPlanLapsed.value = true
+      isChecking.value = false
+      return
+    }
+  }
 
   const managerRepository = createManagerRepository(client.value)
   try {
@@ -178,6 +202,18 @@ onUnmounted(() => authSubscription?.unsubscribe())
     :user-roles="userRoles"
     :user-scope="userScope"
   />
+
+  <main v-else-if="isPlanLapsed" class="manager-access-state">
+    <section class="manager-access-panel" role="status">
+      <LanguageSwitcher />
+      <p class="manager-access-eyebrow">{{ t('ShootingLine access') }}</p>
+      <h1>{{ t('The plan for your club is no longer current') }}</h1>
+      <p v-if="lastPlanEndedOn">{{ t('Your last plan ended on {date}.', { date: lastPlanEndedOn }) }}</p>
+      <p v-else>{{ t('Your club has no plan yet.') }}</p>
+      <p>{{ t('Ask a manager to renew it to use Tournament Manager again.') }}</p>
+      <a href="../">{{ t('Return to main menu') }}</a>
+    </section>
+  </main>
 
   <main v-else-if="isImportPrompt" class="manager-access-state">
     <section class="manager-access-panel">

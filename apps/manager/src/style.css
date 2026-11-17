@@ -1395,10 +1395,6 @@ tbody tr:last-child td {
   align-items: center;
   gap: 10px;
 }
-.archer-source {
-  display: flex;
-  gap: 8px;
-}
 .archer-pick-list {
   max-height: 220px;
   overflow-y: auto;

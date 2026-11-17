@@ -45,7 +45,7 @@ The quality workflow runs ESLint, Prettier, `vue-tsc`, unit and end-to-end tests
 
 ## Shared access and database
 
-The portal and manager authenticate through Supabase Auth. PostgreSQL schema and RLS policies are in `supabase/migrations/`. The `app_access` table controls which app IDs a signed-in user can open. Manager roles are `admin`, `manager`, `club`, and `archer`; database RLS scopes club and archer data access.
+The portal and manager authenticate through Supabase Auth. PostgreSQL schema and RLS policies are in `supabase/migrations/`. The `app_access` table controls which app IDs a signed-in user can open. Manager roles are `admin`, `manager`, `club`, and `archer`; database RLS scopes club and archer data access. Club accounts need an active plan, assigned by a manager, to create tournaments.
 
 The repository does not contain project credentials. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in a local `.env` file based on `.env.example`. GitHub Pages builds use separate repository Actions variables for production and development. These Supabase URL and publishable-key values are public client configuration; the browser app does not use a service-role key.
 
