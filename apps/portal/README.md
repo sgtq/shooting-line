@@ -5,7 +5,8 @@ The portal is the shared entry point for ShootingLine. It signs users in through
 ## Current behavior
 
 - Email and password sign-in for invited Supabase Auth users.
-- Password recovery pages are shown only for one-time links requested by an admin or manager from Tournament Manager.
+- A **Forgot your password?** link on the sign-in screen emails a one-time recovery link to the address entered. The confirmation is the same for every address, so it does not reveal which accounts exist.
+- The password recovery page opens from a one-time link requested by the user, or resent by an admin or manager from Tournament Manager.
 - Reads the user's app grants from `public.app_access`.
 - Links to Tournament Manager only when the user has the `manager` grant.
 - Shows the Ianseo Dashboard and Shooting Scorecard as unavailable placeholders.
@@ -13,7 +14,7 @@ The portal is the shared entry point for ShootingLine. It signs users in through
 - Offers English and Latin American Spanish, sharing the browser's language preference with Tournament Manager.
 - The GitHub Pages development preview uses its separate Supabase project and displays a Development / QA label.
 
-There is no sign-up flow or self-service password reset link. An admin or manager initiates password recovery from Tournament Manager; Supabase Auth sends the recovery email and the recipient chooses a new password from its one-time link. App grants are assigned in Supabase. RLS policies remain the enforcement layer for database access.
+There is no sign-up flow. Users can request password recovery from the sign-in screen, and admins and managers can resend it from Tournament Manager; Supabase Auth sends the recovery email and the recipient chooses a new password from its one-time link. App grants are assigned in Supabase. RLS policies remain the enforcement layer for database access.
 
 Supabase and other service error details may remain in their original language.
 
