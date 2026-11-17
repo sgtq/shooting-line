@@ -57,7 +57,9 @@ jobs:
       - name: Apply migrations in order
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: supabase db push --remote="$SUPABASE_DB_URL" --yes
+        # --include-all applies files dated before the newest remote migration. Without it, a migration merged
+        # out of order is skipped and the whole push fails.
+        run: supabase db push --remote="$SUPABASE_DB_URL" --include-all --yes
 
       - name: Bootstrap system administrator
         env:
