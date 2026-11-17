@@ -443,6 +443,20 @@ export const spanish = {
   'if the account exists, a password reset email will be sent':
     'Si la cuenta existe, se enviará un correo para restablecer la contraseña',
   'select a valid category': 'Selecciona una categoría válida',
+  'add to category': 'Agregar a categoría',
+  'change category': 'Cambiar categoría',
+  'change category of {name}': 'Cambiar la categoría de {name}',
+  'choose bow type': 'Elegir tipo de arco',
+  'not part of the level order (limited only by age, such as masters)':
+    'No forma parte del orden de nivel (limitada solo por edad, como Másters)',
+  add: 'Agregar',
+  remove: 'Quitar',
+  'remove {name} from tournament': 'Quitar a {name} del torneo',
+  'already entered {category}, a higher level': 'Ya participó en {category}, un nivel superior',
+  'level order': 'Orden de nivel',
+  'e.g. 0 for the lowest level': 'p. ej. 0 para el nivel más bajo',
+  'within a bow type, an archer who entered a category can never enter one with a lower level order.':
+    'Dentro de un tipo de arco, un arquero que participó en una categoría nunca podrá participar en una con menor orden de nivel.',
   "{name} is below this category's minimum age": '{name} no cumple la edad mínima de esta categoría',
   "{name} is above this category's maximum age": '{name} supera la edad máxima de esta categoría',
   'that round already exists for this tournament': 'Esa ronda ya existe en este torneo',

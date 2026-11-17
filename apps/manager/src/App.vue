@@ -4,6 +4,7 @@ import LanguageSwitcher from '@shooting-line/i18n/LanguageSwitcher.vue'
 import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import NavIcon from './components/NavIcon.vue'
+import { findBlockingCategory } from './services/categoryRules'
 
 const props = defineProps({
   initialData: { type: Object, required: true },
@@ -332,6 +333,8 @@ const blankCategory = () => ({
   minAge: '',
   maxAge: '',
   bowType: '',
+  sortOrder: '',
+  levelExempt: false,
 })
 const blankParticipant = () => ({
   firstName: '',
@@ -340,6 +343,9 @@ const blankParticipant = () => ({
   waId: '',
   aetayId: '',
   clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : '',
+  // Only used when the archer is created from a tournament roster. They are not saved on the archer.
+  bowType: '',
+  categoryId: '',
 })
 const blankUserRole = () => ({
   email: '',
@@ -719,6 +725,9 @@ async function saveCategory() {
     id: editingCategoryId.value || makeId(),
     minAge: form.value.minAge === '' ? null : Number(form.value.minAge),
     maxAge: form.value.maxAge === '' ? null : Number(form.value.maxAge),
+    // Exempt categories are not ranked, so their order is stored as 0 and never read.
+    sortOrder: form.value.levelExempt ? 0 : Number(form.value.sortOrder),
+    levelExempt: Boolean(form.value.levelExempt),
   }
   if (category.minAge !== null && category.maxAge !== null && category.minAge > category.maxAge) {
     notify('Minimum age cannot be greater than maximum age')
@@ -859,36 +868,63 @@ async function toggleTournamentCategory(tournament, categoryId) {
     return
 }
 
-async function setParticipantCategory(tournament, participant, event) {
-  const categoryId = event.target.value
-  if (categoryId) {
-    const category = categoryFor(categoryId)
-    if (!category) {
-      notify('Select a valid category')
-      event.target.value = tournament.categoryAssignments[participant.id] || ''
-      return
-    }
-    const age = ageAtTournament(participant, tournament)
-    if (age !== null && category.minAge !== null && category.minAge !== '' && age < category.minAge) {
-      notify("{name} is below this category's minimum age", { name: fullName(participant) })
-      event.target.value = tournament.categoryAssignments[participant.id] || ''
-      return
-    }
-    if (age !== null && category.maxAge !== null && category.maxAge !== '' && age > category.maxAge) {
-      notify("{name} is above this category's maximum age", { name: fullName(participant) })
-      event.target.value = tournament.categoryAssignments[participant.id] || ''
-      return
-    }
+/** @returns {object | null} A higher level category of the same bow type the archer already entered. */
+function blockingCategoryFor(tournament, participant, category) {
+  return findBlockingCategory({
+    participantId: participant.id,
+    category,
+    tournaments: data.value.tournaments,
+    categories: data.value.categories,
+  })
+}
+
+/** @returns {object[]} The tournament's categories the entered archer may move to, other than the current one. */
+function categoryChangeOptions(tournament, participant) {
+  const currentId = tournament.categoryAssignments[participant.id]
+  return tournament.categoryIds
+    .filter((categoryId) => categoryId !== currentId)
+    .map(categoryFor)
+    .filter((category) => category && !categoryBlockReason(tournament, participant, category))
+}
+
+/** @returns {string[]} The bow types of the categories offered by the tournament. */
+function tournamentBowTypes(tournament) {
+  return [...new Set(tournament.categoryIds.map((categoryId) => categoryFor(categoryId)?.bowType ?? ''))]
+}
+
+/** @returns {string} The reason an archer cannot enter the category, or an empty string. */
+function categoryBlockReason(tournament, participant, category) {
+  const age = ageAtTournament(participant, tournament)
+  if (age !== null && category.minAge !== null && category.minAge !== '' && age < category.minAge) {
+    return t("{name} is below this category's minimum age", { name: fullName(participant) })
   }
-  const existingCategoryId = tournament.categoryAssignments[participant.id] || ''
-  const saved = await persistChange(
-    () => props.repository.setParticipantCategory(tournament.id, participant.id, categoryId),
+  if (age !== null && category.maxAge !== null && category.maxAge !== '' && age > category.maxAge) {
+    return t("{name} is above this category's maximum age", { name: fullName(participant) })
+  }
+  const blocking = blockingCategoryFor(tournament, participant, category)
+  return blocking ? t('Already entered {category}, a higher level', { category: blocking.name }) : ''
+}
+
+async function addParticipantWithCategory(tournament, participant, event) {
+  const categoryId = event.target.value
+  const category = categoryFor(categoryId)
+  event.target.value = ''
+  if (!category) {
+    notify('Select a valid category')
+    return
+  }
+  const reason = categoryBlockReason(tournament, participant, category)
+  if (reason) {
+    notify(reason)
+    return
+  }
+  await persistChange(
+    () => props.repository.setTournamentParticipant(tournament.id, participant.id, true, categoryId),
     () => {
-      if (categoryId) tournament.categoryAssignments[participant.id] = categoryId
-      else delete tournament.categoryAssignments[participant.id]
+      if (!tournament.participantIds.includes(participant.id)) tournament.participantIds.push(participant.id)
+      tournament.categoryAssignments[participant.id] = categoryId
     },
   )
-  if (!saved) event.target.value = existingCategoryId
 }
 
 async function setParticipantClub(participant, event) {
@@ -944,22 +980,40 @@ async function addRound() {
 
 async function saveParticipant() {
   const isEditing = Boolean(editingParticipantId.value)
+  // eslint-disable-next-line no-unused-vars
+  const { bowType, categoryId: chosenCategoryId, ...fields } = form.value
   const participant = {
-    ...form.value,
+    ...fields,
     id: editingParticipantId.value || makeId(),
     clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : form.value.clubId || '',
   }
   const tournament = !isEditing && assignNewParticipant.value ? selectedTournament.value : null
+  const categoryId = tournament?.categoryIds.length ? chosenCategoryId : ''
+  if (tournament?.categoryIds.length) {
+    const category = categoryFor(categoryId)
+    if (!category) {
+      notify('Select a valid category')
+      return
+    }
+    const reason = categoryBlockReason(tournament, participant, category)
+    if (reason) {
+      notify(reason)
+      return
+    }
+  }
   if (
     !(await persistChange(
-      () => props.repository.saveParticipant(participant, tournament?.id || '', isEditing),
+      () => props.repository.saveParticipant(participant, tournament?.id || '', isEditing, categoryId),
       () => {
         if (isEditing) {
           const existing = participantById(participant.id)
           if (existing) Object.assign(existing, participant)
         } else {
           data.value.participants.unshift(participant)
-          if (tournament) tournament.participantIds.push(participant.id)
+          if (tournament) {
+            tournament.participantIds.push(participant.id)
+            if (categoryId) tournament.categoryAssignments[participant.id] = categoryId
+          }
         }
       },
       'modal',
@@ -996,8 +1050,12 @@ async function toggleParticipant(tournament, participantId) {
     !(await persistChange(
       () => props.repository.setTournamentParticipant(tournament.id, participantId, included),
       () => {
-        if (included) tournament.participantIds.push(participantId)
-        else tournament.participantIds.splice(index, 1)
+        if (included) {
+          tournament.participantIds.push(participantId)
+        } else {
+          tournament.participantIds.splice(index, 1)
+          delete tournament.categoryAssignments[participantId]
+        }
       },
     ))
   )
@@ -2026,13 +2084,6 @@ async function recordMatchScore(match, side, value) {
               </div>
               <div v-if="filteredTournamentParticipantsDirectory.length" class="roster-list">
                 <div v-for="person in filteredTournamentParticipantsDirectory" :key="person.id" class="roster-row">
-                  <input
-                    type="checkbox"
-                    :aria-label="t('Add {name} to tournament', { name: fullName(person) })"
-                    :checked="selectedTournament.participantIds.includes(person.id)"
-                    :disabled="!canManage"
-                    @change="toggleParticipant(selectedTournament, person.id)"
-                  />
                   <span class="person-avatar">{{ person.firstName.charAt(0) }}{{ person.lastName.charAt(0) }}</span>
                   <span class="roster-name"
                     ><strong>{{ person.lastName }}, {{ person.firstName }}</strong
@@ -2051,26 +2102,63 @@ async function recordMatchScore(match, side, value) {
                         ? t('Directory')
                         : t('Not entered')
                   }}</span>
+                  <span v-if="selectedTournament.participantIds.includes(person.id)" class="category-select">{{
+                    categoryFor(selectedTournament.categoryAssignments[person.id])?.name || '—'
+                  }}</span>
                   <select
-                    v-if="canManage"
+                    v-else-if="canManage && selectedTournament.categoryIds.length"
                     class="category-select"
-                    :aria-label="t('{name} category', { name: fullName(person) })"
-                    :disabled="
-                      !selectedTournament.participantIds.includes(person.id) || !selectedTournament.categoryIds.length
-                    "
-                    :value="selectedTournament.categoryAssignments[person.id] || ''"
-                    @change="setParticipantCategory(selectedTournament, person, $event)"
+                    :aria-label="t('Add {name} to tournament', { name: fullName(person) })"
+                    value=""
+                    @change="addParticipantWithCategory(selectedTournament, person, $event)"
                   >
-                    <option value="">
-                      {{ selectedTournament.categoryIds.length ? t('Choose category') : t('No categories') }}
-                    </option>
-                    <option v-for="categoryId in selectedTournament.categoryIds" :key="categoryId" :value="categoryId">
+                    <option value="">{{ t('Add to category') }}</option>
+                    <option
+                      v-for="categoryId in selectedTournament.categoryIds"
+                      :key="categoryId"
+                      :value="categoryId"
+                      :disabled="Boolean(categoryBlockReason(selectedTournament, person, categoryFor(categoryId)))"
+                      :title="categoryBlockReason(selectedTournament, person, categoryFor(categoryId))"
+                    >
                       {{ categoryFor(categoryId)?.name }}
                     </option>
                   </select>
-                  <span v-else class="category-select">{{
-                    categoryFor(selectedTournament.categoryAssignments[person.id])?.name || '—'
-                  }}</span>
+                  <button
+                    v-else-if="canManage"
+                    class="button"
+                    :aria-label="t('Add {name} to tournament', { name: fullName(person) })"
+                    @click="toggleParticipant(selectedTournament, person.id)"
+                  >
+                    {{ t('Add') }}
+                  </button>
+                  <select
+                    v-if="
+                      canManage &&
+                      selectedTournament.participantIds.includes(person.id) &&
+                      categoryChangeOptions(selectedTournament, person).length
+                    "
+                    class="category-select"
+                    :aria-label="t('Change category of {name}', { name: fullName(person) })"
+                    value=""
+                    @change="addParticipantWithCategory(selectedTournament, person, $event)"
+                  >
+                    <option value="">{{ t('Change category') }}</option>
+                    <option
+                      v-for="category in categoryChangeOptions(selectedTournament, person)"
+                      :key="category.id"
+                      :value="category.id"
+                    >
+                      {{ category.name }}
+                    </option>
+                  </select>
+                  <button
+                    v-if="canManage && selectedTournament.participantIds.includes(person.id)"
+                    class="button"
+                    :aria-label="t('Remove {name} from tournament', { name: fullName(person) })"
+                    @click="toggleParticipant(selectedTournament, person.id)"
+                  >
+                    {{ t('Remove') }}
+                  </button>
                 </div>
               </div>
               <div v-else class="empty-state">
@@ -2581,6 +2669,26 @@ async function recordMatchScore(match, side, value) {
                 <option value="Traditional">{{ t('Traditional') }}</option>
               </select></label
             >
+            <label class="form-field full checkbox-field"
+              ><input v-model="form.levelExempt" type="checkbox" /><span>{{
+                t('Not part of the level order (limited only by age, such as Masters)')
+              }}</span></label
+            >
+            <label v-if="!form.levelExempt" class="form-field full"
+              ><span>{{ t('LEVEL ORDER') }} <b>*</b></span
+              ><input
+                v-model.number="form.sortOrder"
+                required
+                type="number"
+                min="0"
+                step="1"
+                :placeholder="t('e.g. 0 for the lowest level')"
+            /></label>
+            <p v-if="!form.levelExempt" class="address-preview full">
+              {{
+                t('Within a bow type, an archer who entered a category can never enter one with a lower level order.')
+              }}
+            </p>
             <p class="address-preview full">
               {{
                 t(
@@ -2655,6 +2763,33 @@ async function recordMatchScore(match, side, value) {
                 >{{ t('AETAY ID') }} <small>{{ t('OPTIONAL') }}</small></span
               ><input v-model="form.aetayId" :placeholder="t('Affiliation number')"
             /></label>
+            <template v-if="assignNewParticipant && !editingParticipantId && selectedTournament?.categoryIds.length">
+              <label class="form-field"
+                ><span>{{ t('BOW TYPE') }} <b>*</b></span
+                ><select v-model="form.bowType" required aria-label="Bow type" @change="form.categoryId = ''">
+                  <option value="" disabled>{{ t('Choose bow type') }}</option>
+                  <option v-for="bowType in tournamentBowTypes(selectedTournament)" :key="bowType" :value="bowType">
+                    {{ bowType ? displayChoice(bowType) : t('Any bow type') }}
+                  </option>
+                </select></label
+              >
+              <label class="form-field"
+                ><span>{{ t('CATEGORY') }} <b>*</b></span
+                ><select v-model="form.categoryId" required aria-label="Category">
+                  <option value="" disabled>{{ t('Choose category') }}</option>
+                  <option
+                    v-for="categoryId in selectedTournament.categoryIds.filter(
+                      (id) => categoryFor(id)?.bowType === form.bowType,
+                    )"
+                    :key="categoryId"
+                    :value="categoryId"
+                    :disabled="Boolean(categoryBlockReason(selectedTournament, form, categoryFor(categoryId)))"
+                  >
+                    {{ categoryFor(categoryId)?.name }}
+                  </option>
+                </select></label
+              >
+            </template>
             <p class="privacy-note full">{{ t('Archer details are stored in the shared manager database.') }}</p>
           </div>
         </template>

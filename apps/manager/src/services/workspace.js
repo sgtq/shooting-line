@@ -68,6 +68,8 @@ function mapCategory(row) {
     minAge: row.min_age,
     maxAge: row.max_age,
     bowType: row.bow_type,
+    sortOrder: row.sort_order,
+    levelExempt: row.level_exempt,
   }
 }
 
@@ -482,6 +484,8 @@ export function createManagerRepository(client) {
       min_age: category.minAge,
       max_age: category.maxAge,
       bow_type: category.bowType,
+      sort_order: category.sortOrder,
+      level_exempt: category.levelExempt,
     })
     if (error) throw error
   }
@@ -516,7 +520,7 @@ export function createManagerRepository(client) {
     roundIds.set(roundKey(tournament.id, 'Qualification'), roundId)
   }
 
-  async function saveParticipant(participant, tournamentId = '', isEditing = false) {
+  async function saveParticipant(participant, tournamentId = '', isEditing = false, categoryId = '') {
     const payload = {
       first_name: participant.firstName,
       last_name: participant.lastName,
@@ -541,6 +545,7 @@ export function createManagerRepository(client) {
       const { error: assignmentError } = await client.from('tournament_participants').insert({
         tournament_id: tournamentId,
         participant_id: participant.id,
+        category_id: categoryId || null,
       })
       if (assignmentError) {
         const { error: cleanupError } = await client.from('participants').delete().eq('id', participant.id)
@@ -577,15 +582,6 @@ export function createManagerRepository(client) {
     if (error) throw error
   }
 
-  async function setParticipantCategory(tournamentId, participantId, categoryId) {
-    const { error } = await client
-      .from('tournament_participants')
-      .update({ category_id: categoryId || null })
-      .eq('tournament_id', tournamentId)
-      .eq('participant_id', participantId)
-    if (error) throw error
-  }
-
   async function addTournamentRound(tournamentId, roundName, position) {
     const id = makeId()
     const { error } = await client.from('tournament_rounds').insert({
@@ -598,11 +594,12 @@ export function createManagerRepository(client) {
     roundIds.set(roundKey(tournamentId, roundName), id)
   }
 
-  async function setTournamentParticipant(tournamentId, participantId, included) {
+  async function setTournamentParticipant(tournamentId, participantId, included, categoryId = '') {
     if (included) {
       const { error } = await client.from('tournament_participants').upsert({
         tournament_id: tournamentId,
         participant_id: participantId,
+        category_id: categoryId || null,
       })
       if (error) throw error
       return
@@ -688,7 +685,6 @@ export function createManagerRepository(client) {
     setParticipantClub,
     setClubEnabled,
     setTournamentCategory,
-    setParticipantCategory,
     addTournamentRound,
     setTournamentParticipant,
     saveScore,
