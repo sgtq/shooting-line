@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultLevelOrders, findBlockingCategory } from './categoryRules'
+import { findBlockingCategory } from './categoryRules'
 
 const categories = [
   { id: 'rec-youth', bowType: 'Recurve', sortOrder: 0 },
@@ -48,27 +48,5 @@ describe('findBlockingCategory', () => {
     expect(check('rec-master', 'rec-youth')).toBeNull()
     expect(check('rec-master', 'rec-open')).toBeNull()
     expect(check('rec-master', 'rec-pro')).toBeNull()
-  })
-})
-
-describe('defaultLevelOrders', () => {
-  it('ranks each bow type separately by minimum age, then maximum age, then list position', () => {
-    const orders = defaultLevelOrders([
-      { id: 'rec-pro', bowType: 'Recurve', minAge: 18, maxAge: null },
-      { id: 'rec-youth', bowType: 'Recurve', minAge: '', maxAge: 17 },
-      { id: 'comp-open', bowType: 'Compound', minAge: 18, maxAge: null },
-      { id: 'rec-open', bowType: 'Recurve', minAge: null, maxAge: 40 },
-      { id: 'rec-same', bowType: 'Recurve', minAge: 18, maxAge: null },
-    ])
-
-    expect(orders.get('rec-youth')).toBe(0)
-    expect(orders.get('rec-open')).toBe(1)
-    expect(orders.get('rec-pro')).toBe(2)
-    expect(orders.get('rec-same')).toBe(3)
-    expect(orders.get('comp-open')).toBe(0)
-  })
-
-  it('returns an empty map for no categories', () => {
-    expect(defaultLevelOrders([]).size).toBe(0)
   })
 })

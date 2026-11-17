@@ -252,23 +252,17 @@ describe('manager repository', () => {
       matches: [],
     }
 
-    it('gives categories from older browser data a default level order and no exemption', async () => {
+    it('sends no level order for older browser data so the database ranks the categories', async () => {
       const rpc = vi.fn().mockResolvedValue({ error: null })
       await createManagerRepository({ rpc }).importLegacyWorkspace({
         ...emptyWorkspace,
-        categories: [
-          { id: 'pro', name: 'Pro', minAge: 18, maxAge: '', bowType: 'Recurve' },
-          { id: 'youth', name: 'Youth', minAge: '', maxAge: 17, bowType: 'Recurve' },
-          { id: 'comp', name: 'Open', minAge: '', maxAge: '', bowType: 'Compound' },
-        ],
+        categories: [{ id: 'pro', name: 'Pro', minAge: 18, maxAge: '', bowType: 'Recurve' }],
       })
 
-      const categories = rpc.mock.calls[0][1].p_workspace.categories
-      expect(categories.map(({ name, sort_order: order, level_exempt: exempt }) => [name, order, exempt])).toEqual([
-        ['Pro', 1, false],
-        ['Youth', 0, false],
-        ['Open', 0, false],
-      ])
+      const [category] = rpc.mock.calls[0][1].p_workspace.categories
+      expect(category.sort_order).toBeUndefined()
+      expect(category.level_exempt).toBe(false)
+      expect(JSON.parse(JSON.stringify(category))).not.toHaveProperty('sort_order')
     })
 
     it('keeps a level order and exemption that the data already has', async () => {

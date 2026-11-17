@@ -119,8 +119,18 @@ begin
   from jsonb_to_recordset(coalesce(p_workspace->'tournament_types', '[]'::jsonb))
     as input_row(id uuid, name text, distance numeric, distance_unit text, target_type text, ends integer, arrows_per_end integer);
 
+  -- A category sent without a level order is ranked like the backfill above, so callers that predate
+  -- level orders (an older browser client, or a direct call) still get a working level rule.
   insert into public.categories (id, name, min_age, max_age, bow_type, sort_order, level_exempt)
-  select id, name, min_age, max_age, bow_type, coalesce(sort_order, 0), coalesce(level_exempt, false)
+  select id, name, min_age, max_age, bow_type,
+    coalesce(
+      sort_order,
+      (row_number() over (
+        partition by bow_type
+        order by coalesce(min_age, 0), coalesce(max_age, 1000), name, id
+      ) - 1)::integer
+    ),
+    coalesce(level_exempt, false)
   from jsonb_to_recordset(coalesce(p_workspace->'categories', '[]'::jsonb))
     as input_row(id uuid, name text, min_age integer, max_age integer, bow_type text, sort_order integer, level_exempt boolean);
 

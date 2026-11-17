@@ -1,5 +1,4 @@
 import { requestPasswordReset } from '@shooting-line/auth'
-import { defaultLevelOrders } from './categoryRules'
 
 function throwOnError({ error }) {
   if (error) throw error
@@ -237,7 +236,6 @@ export function createManagerRepository(client) {
     const participantIds = remapIds(workspace.participants)
     const typeIds = remapIds(workspace.tournamentTypes)
     const categoryIds = remapIds(workspace.categories)
-    const levelOrders = defaultLevelOrders(workspace.categories)
     const tournamentIds = remapIds(workspace.tournaments)
     const roundMap = new Map()
     const getRoundId = (tournamentId, roundName) => {
@@ -283,8 +281,8 @@ export function createManagerRepository(client) {
         min_age: category.minAge === '' ? null : category.minAge,
         max_age: category.maxAge === '' ? null : category.maxAge,
         bow_type: category.bowType || '',
-        // Browser data from before level orders has neither field, so it gets the default ranking.
-        sort_order: category.sortOrder ?? levelOrders.get(category.id),
+        // Browser data from before level orders has no sortOrder. The database then ranks the category.
+        sort_order: category.sortOrder,
         level_exempt: Boolean(category.levelExempt),
       })),
       tournaments: workspace.tournaments.map((tournament) => ({
