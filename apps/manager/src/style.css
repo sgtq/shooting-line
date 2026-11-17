@@ -1376,11 +1376,73 @@ tbody tr:last-child td {
 }
 .roster-row {
   min-height: 53px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 215px minmax(0, 150px);
   align-items: center;
   gap: 10px;
   border-bottom: 1px solid #f0f1ef;
+}
+.roster-head {
+  min-height: 34px;
+  color: #929990;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+}
+.roster-person {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.archer-source {
+  display: flex;
+  gap: 8px;
+}
+.archer-pick-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #eef0ed;
+  border-radius: 6px;
+}
+.archer-pick {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #f0f1ef;
   cursor: pointer;
+}
+.archer-pick input {
+  accent-color: #547653;
+}
+.archer-pick-list .address-preview {
+  margin: 0;
+  padding: 10px;
+}
+.roster-category-cell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.roster-category-cell .button-icon {
+  min-width: 26px;
+  min-height: 26px;
+}
+.roster-category-cell .button-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.roster-category {
+  color: #50574f;
+  font-size: 10px;
+  font-weight: 600;
+}
+.roster-actions {
+  display: flex;
+  gap: 6px;
 }
 .roster-row > input {
   accent-color: #547653;
@@ -1598,7 +1660,8 @@ tbody tr:last-child td {
   font-weight: 700;
   letter-spacing: 0.9px;
 }
-.select-field select {
+.select-field select,
+.select-field input {
   min-width: 175px;
   height: 33px;
   padding: 0 27px 0 9px;
@@ -2259,14 +2322,16 @@ tbody tr:last-child td {
     width: 115px;
   }
   .roster-row {
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
     padding: 8px 0;
   }
-  .roster-name {
-    flex-basis: calc(100% - 85px);
+  .roster-head {
+    display: none;
   }
-  .roster-state {
-    margin-left: 39px;
+  .roster-category-cell,
+  .roster-actions {
+    margin-left: 40px;
   }
   .olympic-toolbar {
     align-items: stretch;

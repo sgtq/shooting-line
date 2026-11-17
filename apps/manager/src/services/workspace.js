@@ -582,6 +582,15 @@ export function createManagerRepository(client) {
     if (error) throw error
   }
 
+  async function setParticipantCategory(tournamentId, participantId, categoryId) {
+    const { error } = await client
+      .from('tournament_participants')
+      .update({ category_id: categoryId || null })
+      .eq('tournament_id', tournamentId)
+      .eq('participant_id', participantId)
+    if (error) throw error
+  }
+
   async function addTournamentRound(tournamentId, roundName, position) {
     const id = makeId()
     const { error } = await client.from('tournament_rounds').insert({
@@ -686,6 +695,7 @@ export function createManagerRepository(client) {
     setClubEnabled,
     setTournamentCategory,
     addTournamentRound,
+    setParticipantCategory,
     setTournamentParticipant,
     saveScore,
     replaceMatches,

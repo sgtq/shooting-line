@@ -21,17 +21,23 @@ lower level, and categories with different bow types are ranked separately (for 
 Open 1, Pro 2). A category limited only by age, such as Masters, can be marked **Not part of the level order**.
 It has no level order number, never blocks another category, and is never blocked.
 
-- On a tournament's Archers tab, an archer who is not yet entered has a category picker. Choosing a category
-  adds the archer with it. Entered archers show their category, a **Change category** picker, and a **Remove**
-  button. A tournament with no categories shows an **Add** button instead.
-- **Add archer** on the Archers tab asks for the bow type and then the category (limited to that bow type) when
-  the tournament has categories. Only the category is saved with the tournament entry. The bow type just
-  narrows the list.
+- The Archers tab lists only the archers entered in that tournament, under **Archer**, **Category**, and
+  **Actions** headers. The row shows the category as text. An archer with no category gets a category picker.
+  In the Category column, managers get a pencil icon that opens a picker with the allowed categories until
+  one is chosen or **Cancel** is pressed, and an X icon that removes only the category (the archer stays in
+  the tournament and the picker returns). The Actions column has **Remove from tournament**, which asks for
+  confirmation and keeps the archer in the archer database.
+- **Add archer** on the Archers tab opens a dialog with two modes. **Existing archer** searches the archer
+  database (name or affiliation number) and lists archers who are not yet in the tournament. **New archer**
+  creates a record. Both then ask for the bow type and the category (limited to that bow type) when the
+  tournament has categories. Only the category is saved with the tournament entry. The bow type just narrows
+  the list.
 - An archer who has ever entered a category cannot enter a category of the same bow type with a lower level
   order, in any tournament, and cannot be moved down inside a tournament. Moving up is allowed. Blocked
   categories are disabled in the pickers. Entries in other bow types do not count.
 - Only managers and admins change an archer's category. Club users cannot.
-- Removing an archer from a tournament removes that entry, so it no longer counts toward the rule.
+- Removing an archer from a tournament, or removing only their category, clears that entry, so it no longer
+  counts toward the rule.
 - The database enforces the rule with a trigger on `tournament_participants`, so it holds for any client.
   Entries made before the rule existed are kept and count as history. Their starting level order comes from the
   category's minimum age and can be adjusted.
