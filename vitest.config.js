@@ -6,7 +6,12 @@ export default defineConfig({
   test: {
     clearMocks: true,
     environment: 'jsdom',
-    include: ['apps/**/*.{test,spec}.{js,ts}'],
+    globals: true,
+    include: [
+      'apps/**/*.{test,spec}.{js,ts}',
+      'packages/**/*.{test,spec}.{js,ts}',
+      'supabase/functions/**/*.{test,spec}.{js,ts}',
+    ],
     restoreMocks: true,
   },
 })

@@ -1,3 +1,5 @@
+import { requestPasswordReset } from '@shooting-line/auth'
+
 function throwOnError({ error }) {
   if (error) throw error
 }
@@ -355,19 +357,41 @@ export function createManagerRepository(client) {
     if (error) throw error
   }
 
-  async function saveClub(club) {
-    const { error } = await client.from('clubs').upsert({
-      id: club.id,
-      name: club.name,
-      representative: club.representative,
-      phone: club.phone,
-      email: club.email,
-      website: club.website,
-      address: club.address,
-      map_url: club.mapUrl,
-      logo_url: club.logoUrl || '',
-      user_email: club.userEmail,
-      user_enabled: club.userEnabled,
+  async function saveClub(club, { syncUserAccess = false, hadUserEnabled = false } = {}) {
+    if (!syncUserAccess) {
+      const { error } = await client
+        .from('clubs')
+        .update({
+          name: club.name,
+          representative: club.representative,
+          phone: club.phone,
+          email: club.email,
+          website: club.website,
+          address: club.address,
+          map_url: club.mapUrl,
+          logo_url: club.logoUrl || '',
+        })
+        .eq('id', club.id)
+      if (error) throw error
+      return
+    }
+
+    const clubEmail = (club.email || club.userEmail || '').trim()
+    const shouldEnable = Boolean(club.userEnabled && clubEmail)
+    // One RPC so a failed account reassignment also rolls back the club details.
+    const { error } = await client.rpc('save_club_with_access', {
+      p_id: club.id,
+      p_name: club.name,
+      p_representative: club.representative,
+      p_phone: club.phone,
+      p_email: club.email,
+      p_website: club.website,
+      p_address: club.address,
+      p_map_url: club.mapUrl,
+      p_logo_url: club.logoUrl || '',
+      p_user_email: clubEmail,
+      p_enabled: shouldEnable,
+      p_sync_access: shouldEnable || hadUserEnabled,
     })
     if (error) throw error
   }
@@ -409,6 +433,11 @@ export function createManagerRepository(client) {
       display_name: displayName,
       updated_at: new Date().toISOString(),
     })
+    if (error) throw error
+  }
+
+  async function sendOwnPasswordReset(email) {
+    const { error } = await requestPasswordReset(client, email)
     if (error) throw error
   }
 
@@ -487,15 +516,24 @@ export function createManagerRepository(client) {
     roundIds.set(roundKey(tournament.id, 'Qualification'), roundId)
   }
 
-  async function saveParticipant(participant, tournamentId = '') {
-    const { error } = await client.from('participants').insert({
-      id: participant.id,
+  async function saveParticipant(participant, tournamentId = '', isEditing = false) {
+    const payload = {
       first_name: participant.firstName,
       last_name: participant.lastName,
       birth_date: participant.birthDate || null,
       wa_id: participant.waId,
       aetay_id: participant.aetayId,
       club_id: participant.clubId || null,
+    }
+    if (isEditing) {
+      const { error } = await client.from('participants').update(payload).eq('id', participant.id)
+      if (error) throw error
+      return
+    }
+
+    const { error } = await client.from('participants').insert({
+      id: participant.id,
+      ...payload,
     })
     if (error) throw error
 
@@ -523,7 +561,10 @@ export function createManagerRepository(client) {
   }
 
   async function setClubEnabled(clubId, enabled) {
-    const { error } = await client.from('clubs').update({ user_enabled: enabled }).eq('id', clubId)
+    const { error } = await client.rpc('set_club_user_access', {
+      p_club_id: clubId,
+      p_enabled: enabled,
+    })
     if (error) throw error
   }
 
@@ -638,6 +679,7 @@ export function createManagerRepository(client) {
     removeUserRole,
     saveUserProfile,
     sendAdminPasswordReset,
+    sendOwnPasswordReset,
     saveTournamentType,
     saveTargetType,
     saveCategory,

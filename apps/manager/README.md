@@ -10,17 +10,42 @@ The manager is the current archery club and tournament application. It is a Vue 
 - Per-tournament rounds and archer scores.
 - First-round Olympic-style match seeding and match score entry.
 - Light and dark themes.
+- English and Latin American Spanish interface with a shared browser language preference.
+- Dashboard cards, upcoming tournaments, and club previews that open their sections (see [Dashboard](#dashboard)).
+
+## Dashboard
+
+The dashboard is the first screen after sign-in. Each item opens the related screen:
+
+- **Total tournaments** card: opens the Tournaments screen. The **Open tournaments** count button does the same.
+- **Clubs** card: opens the Clubs screen. The club count button opens the same screen.
+- **Archers** card: opens the Archers screen. The archer count button opens the same screen.
+- **Up next** card: opens the next upcoming tournament. The **View tournament** link does the same. When no tournament is scheduled, the card does nothing.
+- **Upcoming tournaments** rows: each row opens its tournament. Each row is a button named after the tournament, so keyboard and screen reader users can focus it and press Enter or Space.
+- **Your clubs** rows: each row opens club details (see [Club details](#club-details)). Keyboard users use the **Details** button on the row.
+
+Clicking a card or row does not open it when the user has selected text inside it, so text can be copied without navigating away. Cards that already contain a button (the stat cards and club rows) are not focusable themselves; their inner button is the keyboard control. The tournament cards on the Tournaments screen work like the upcoming tournaments rows.
+
+### Club details
+
+Club details depend on the signed-in role:
+
+- **Admin and manager:** the row opens the club edit form. The **Details** button on the row does the same.
+- **Club user:** the row opens the club edit form only for their own club. For other clubs, it opens the Clubs directory.
+- **Archer:** the row opens the Clubs directory.
+
+On the dashboard, the club row's status button shows whether the club user is enabled or disabled. Admins and managers can click it to enable or disable access. The status button is separate from **Details**, so clicking it does not open the club form. Club users see the status only, with no button.
 
 ## Data and access
 
 Manager records are stored in Supabase PostgreSQL tables created and evolved by the migrations in `supabase/migrations/`. A signed-in account needs a Tournament Manager app grant. Database row-level security applies each user's access rules.
 
-- **System admin:** can manage all records and assign or remove user roles.
-- **Manager:** can manage all clubs, archers, tournaments, categories, and scores.
-- **Club:** can view its own club information and related tournaments and archers, and edit its own club details. Club accounts cannot create tournaments.
+- **System admin:** can manage all records, assign or remove manager roles in **User access**, and send password reset emails.
+- **Manager:** can create and manage clubs, tournament types, categories, tournaments, archers, and scores, enable or disable club users on the **Clubs** screen, and view **User access** to resend password reset emails to admin and manager accounts. Managers cannot add or remove roles.
+- **Club:** can view its own club information and related tournaments and archers, edit its own club details, and create or edit archers for its own club only. Club accounts cannot create tournaments, clubs, categories, or tournament types.
 - **Archer:** read-only access to their own archer record and tournament entries.
 
-Admins assign roles from **User access**. The account must already exist in Supabase Auth. Club and archer roles require a club or archer scope. When a club record has a related user email, admins can also use **Assign club user** on that club card to prefill the club role assignment. Admins and managers can request a one-time password recovery email for an account; there is no self-service reset link in the main menu. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
+Admins manage manager roles from **User access**; the account must already exist in Supabase Auth. Club user access is enabled or disabled directly from the **Clubs** screen using the club's email and name (which grants or revokes the `club` role automatically). Saving a club's details and its access happens in one step, so if the access change fails (for example, no account exists for the email), the details are not saved either. One account can hold the club role for only one club; enabling a second club with the same email is rejected, even when two requests arrive at the same time. Enabling uses the club's saved login email, and falls back to its contact email when none is saved. A club shows as Enabled when at least one account holds its club role, including roles an admin assigned directly. Admins and managers can resend a one-time password reset email from a row in **User access**. Any signed-in user who can open the profile dialog (everyone except archers) can choose **Email me a password reset link** there to reset their own password. Users can also request a reset from the portal sign-in screen. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
 
 The GitHub Pages development preview is served at `/develop/` (or `/<repository>/develop/` on the default project-site domain) and connects to the development Supabase project. Access to manager data is controlled by Supabase Auth, app access, and RLS roles. The static preview bundle itself is public, as required by GitHub Pages; never include private credentials in it.
 
@@ -56,6 +81,7 @@ From the repository root:
 npm run dev
 npm run dev:manager
 npm run build:manager
+npm run test:unit
 ```
 
 `npm run dev` starts the portal and manager together, serving the manager at `/manager/` on the portal's origin. `npm run dev:manager` starts the manager Vite server on port 5174. The production manager bundle is written to `dist/manager/`.
@@ -63,3 +89,6 @@ npm run build:manager
 ## Limitations
 
 The manager is not a complete competition system. Byes, set points, tie-breaks, advancement, and later bracket rounds are not implemented. Archer birth dates and affiliation IDs are personal data.
+
+User-entered names and existing saved round labels are displayed as stored. Details returned by Supabase or other
+services may remain in their original language.

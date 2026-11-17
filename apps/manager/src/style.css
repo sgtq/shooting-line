@@ -108,10 +108,15 @@ a {
   font-weight: 600;
 }
 .nav-icon {
+  display: inline-flex;
   width: 18px;
-  text-align: center;
-  font-size: 17px;
-  line-height: 1;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+}
+.nav-icon-svg {
+  width: 18px;
+  height: 18px;
 }
 .nav-count {
   margin-left: auto;
@@ -384,6 +389,22 @@ h3 {
   padding: 0 10px;
   font-size: 10px;
 }
+.button-icon {
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  color: #596258;
+  background: #fff;
+  border-color: #e4e8e2;
+}
+.button-icon:hover:not(:disabled) {
+  background: #f8faf7;
+  border-color: #cbd4c8;
+}
+.button-icon svg {
+  width: 18px;
+  height: 18px;
+}
 .button-soft-danger {
   color: #9b5250;
   background: #fff5f4;
@@ -444,6 +465,20 @@ h3 {
   color: #a87353;
   background: #fbf0e9;
 }
+.stat-icon .nav-icon-svg,
+.quick-icon .nav-icon-svg {
+  width: 16px;
+  height: 16px;
+}
+.empty-icon .nav-icon-svg {
+  width: 22px;
+  height: 22px;
+}
+.tournament-meta .nav-icon-svg {
+  width: 11px;
+  height: 11px;
+  vertical-align: -2px;
+}
 .stat-caption {
   color: #adb2ab;
   font-size: 8px;
@@ -458,6 +493,21 @@ h3 {
     700 27px/1 'Segoe UI',
     sans-serif;
   letter-spacing: -0.8px;
+}
+.stat-value-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+[data-theme='dark'] .stat-value-button:hover,
+.stat-value-button:hover {
+  color: var(--green);
+}
+.stat-value-button:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 .stat-label {
   display: block;
@@ -504,6 +554,11 @@ h3 {
   background: transparent;
   font-size: 10px;
   font-weight: 600;
+}
+.row-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
 }
 .text-link:hover {
   color: #304d35;
@@ -612,12 +667,12 @@ h3 {
 .row-arrow {
   width: 24px;
   height: 24px;
-  border: 0;
+  display: grid;
+  place-items: center;
   color: #a4aaa2;
-  background: transparent;
   font-size: 13px;
 }
-.row-arrow:hover {
+.clickable-card:hover .row-arrow {
   color: #486b4c;
 }
 .quick-panel {
@@ -753,6 +808,18 @@ h3 {
   font-size: 9px;
   white-space: nowrap;
 }
+.status-pill-button {
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+.status-pill-button:hover {
+  filter: brightness(0.95);
+}
+.status-pill-button:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
 .status-pill i {
   width: 5px;
   height: 5px;
@@ -794,6 +861,33 @@ h3 {
 .toolbar-count span {
   padding: 0 5px;
   color: #c2c6c0;
+}
+.tournament-filters {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-surface-alt);
+}
+.tournament-filters button {
+  min-height: 27px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text-primary);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 600;
+}
+.tournament-filters button.active {
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+}
+.tournament-filters button:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 1px;
 }
 .type-shortcut {
   display: flex;
@@ -857,6 +951,12 @@ h3 {
   height: 38px;
   border-radius: 9px;
   font-size: 15px;
+}
+.club-logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  object-fit: contain;
 }
 .more-button {
   border: 0;
@@ -930,6 +1030,18 @@ h3 {
   font-size: 9px;
   font-weight: 500;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.club-user-row > .club-user-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   white-space: nowrap;
 }
 .club-card-actions {
@@ -1064,6 +1176,16 @@ tbody tr:last-child td {
   border-radius: 8px;
   background: #fff;
   box-shadow: var(--shadow);
+}
+.clickable-card {
+  cursor: pointer;
+}
+.clickable-card:hover {
+  border-color: var(--green);
+}
+.clickable-card:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
 }
 .tournament-date {
   width: 52px;
@@ -2010,7 +2132,14 @@ tbody tr:last-child td {
     margin-left: 64px;
   }
   .topbar {
+    height: auto;
+    min-height: 66px;
+    flex-wrap: wrap;
+    gap: 8px;
     padding: 0 22px;
+  }
+  .topbar-actions {
+    flex-wrap: wrap;
   }
   .page-container {
     padding: 32px 22px 50px;
@@ -2043,8 +2172,8 @@ tbody tr:last-child td {
     min-width: 360px;
   }
   .topbar {
-    height: 56px;
-    padding: 0 15px;
+    min-height: 56px;
+    padding: 8px 15px;
   }
   .demo-chip {
     max-width: 140px;
