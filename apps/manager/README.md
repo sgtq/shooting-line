@@ -21,10 +21,10 @@ The dashboard is the first screen after sign-in. Each item opens the related scr
 - **Clubs** card: opens the Clubs screen. The club count button opens the same screen.
 - **Archers** card: opens the Archers screen. The archer count button opens the same screen.
 - **Up next** card: opens the next upcoming tournament. The **View tournament** link does the same. When no tournament is scheduled, the card does nothing.
-- **Upcoming tournaments** rows: each row opens its tournament. Keyboard users can focus a row and press Enter.
-- **Your clubs** rows: each row opens club details (see [Club details](#club-details)). Keyboard users can focus a row and press Enter.
+- **Upcoming tournaments** rows: each row opens its tournament. Each row is a button named after the tournament, so keyboard and screen reader users can focus it and press Enter or Space.
+- **Your clubs** rows: each row opens club details (see [Club details](#club-details)). Keyboard users use the **Details** button on the row.
 
-Clicking a card or row does not open it when the user has selected text inside it, so text can be copied without navigating away.
+Clicking a card or row does not open it when the user has selected text inside it, so text can be copied without navigating away. Cards that already contain a button (the stat cards and club rows) are not focusable themselves; their inner button is the keyboard control. The tournament cards on the Tournaments screen work like the upcoming tournaments rows.
 
 ### Club details
 
@@ -45,7 +45,7 @@ Manager records are stored in Supabase PostgreSQL tables created and evolved by 
 - **Club:** can view its own club information and related tournaments and archers, edit its own club details, and create or edit archers for its own club only. Club accounts cannot create tournaments, clubs, categories, or tournament types.
 - **Archer:** read-only access to their own archer record and tournament entries.
 
-Admins manage manager roles from **User access**; the account must already exist in Supabase Auth. Club user access is enabled or disabled directly from the **Clubs** screen using the club's email and name (which grants or revokes the `club` role automatically). Admins and managers can resend a one-time password reset email from a row in **User access**. Any signed-in user who can open the profile dialog (everyone except archers) can choose **Email me a password reset link** there to reset their own password. Users can also request a reset from the portal sign-in screen. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
+Admins manage manager roles from **User access**; the account must already exist in Supabase Auth. Club user access is enabled or disabled directly from the **Clubs** screen using the club's email and name (which grants or revokes the `club` role automatically). Saving a club's details and its access happens in one step, so if the access change fails (for example, no account exists for the email), the details are not saved either. One account can hold the club role for only one club; enabling a second club with the same email is rejected. A club shows as Enabled when at least one account holds its club role, including roles an admin assigned directly. Admins and managers can resend a one-time password reset email from a row in **User access**. Any signed-in user who can open the profile dialog (everyone except archers) can choose **Email me a password reset link** there to reset their own password. Users can also request a reset from the portal sign-in screen. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
 
 The GitHub Pages development preview is served at `/develop/` (or `/<repository>/develop/` on the default project-site domain) and connects to the development Supabase project. Access to manager data is controlled by Supabase Auth, app access, and RLS roles. The static preview bundle itself is public, as required by GitHub Pages; never include private credentials in it.
 
