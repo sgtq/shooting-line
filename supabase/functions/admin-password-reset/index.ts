@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { canResetPassword } from './authorization.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,10 +43,10 @@ Deno.serve(async (request) => {
     .select('role')
     .eq('user_id', userResult.user.id)
     .in('role', ['admin', 'manager'])
-    .limit(1)
 
   if (roleError) return respond({ error: `Unable to verify reset permissions: ${roleError.message}` }, 500)
   if (!roles.length) return respond({ error: 'Administrator or manager access is required' }, 403)
+  const callerRoles = roles.map((record) => record.role as string)
 
   let payload: { email?: unknown }
   try {
@@ -57,6 +58,22 @@ Deno.serve(async (request) => {
   const email = typeof payload.email === 'string' ? payload.email.trim() : ''
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return respond({ error: 'Enter a valid account email address' }, 400)
+  }
+
+  // The UI only lists admin and manager accounts, but the request body can be edited, so managers are checked here.
+  if (!callerRoles.includes('admin')) {
+    const { data: privileged, error: privilegedError } = await adminClient
+      .from('user_roles')
+      .select('email')
+      .in('role', ['admin', 'manager'])
+    if (privilegedError) {
+      return respond({ error: `Unable to verify reset permissions: ${privilegedError.message}` }, 500)
+    }
+
+    const privilegedEmails = privileged.map((record) => record.email as string | null).filter(Boolean) as string[]
+    if (!canResetPassword(callerRoles, email, privilegedEmails)) {
+      return respond({ error: 'Managers can only send resets to administrator and manager accounts' }, 403)
+    }
   }
 
   const recoveryClient = createClient(supabaseUrl, anonKey, {

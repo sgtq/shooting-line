@@ -122,6 +122,7 @@ function closeForgotPassword() {
 async function sendResetEmail() {
   isSendingReset.value = true
   errorMessage.value = ''
+  resetRequested.value = false
   const { error } = await requestPasswordReset(client.value, email.value)
   if (error) errorMessage.value = error.message
   // The same message is shown for every address so the form cannot be used to find registered accounts.

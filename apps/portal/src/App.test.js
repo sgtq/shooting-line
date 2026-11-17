@@ -60,6 +60,22 @@ describe('portal forgot password', () => {
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
   })
 
+  it('clears an earlier confirmation when a later request fails', async () => {
+    const wrapper = await openForgotPassword()
+    await wrapper.get('input[type="email"]').setValue('archer@example.test')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[role="status"]').exists()).toBe(true)
+
+    auth.requestPasswordReset.mockResolvedValue({ error: new Error('Too many requests') })
+    await wrapper.get('input[type="email"]').setValue('other@example.test')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('Too many requests')
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+  })
+
   it('returns to the sign-in form', async () => {
     const wrapper = await openForgotPassword()
     await wrapper.findAll('button.secondary-button')[0].trigger('click')
