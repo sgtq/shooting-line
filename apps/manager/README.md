@@ -35,7 +35,8 @@ It has no level order number, never blocks another category, and is never blocke
 - An archer who has ever entered a category cannot enter a category of the same bow type with a lower level
   order, in any tournament, and cannot be moved down inside a tournament. Moving up is allowed. Blocked
   categories are disabled in the pickers. Entries in other bow types do not count.
-- Only managers and admins change an archer's category. Club users cannot.
+- Only managers and admins change an archer's category. Club users cannot. The database also rejects a
+  category that the tournament does not offer, so a direct call cannot assign one from another tournament.
 - Removing an archer from a tournament, or removing only their category, clears that entry, so it no longer
   counts toward the rule.
 - The database enforces the rule with a trigger on `tournament_participants`, so it holds for any client.

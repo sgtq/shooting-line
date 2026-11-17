@@ -68,9 +68,40 @@ create trigger tournament_participants_category_level
   before insert or update of participant_id, category_id on public.tournament_participants
   for each row execute function public.enforce_participant_category_level();
 
--- The browser-data import now carries each category's level order and exemption. The level rule is
--- switched off while the archers' entries are inserted, because old history can already break it and
--- the import must keep that history as it was. The switch is undone in the same transaction.
+-- An entry can only use a category that its tournament offers. The app already limits the pickers to those
+-- categories, and this keeps any other client from assigning one from elsewhere.
+create function public.enforce_participant_category_offered()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.category_id is null then
+    return new;
+  end if;
+
+  if not exists (
+    select 1
+    from public.tournament_categories tc
+    where tc.tournament_id = new.tournament_id
+      and tc.category_id = new.category_id
+  ) then
+    raise exception 'The category % is not offered by this tournament',
+      coalesce((select name from public.categories where id = new.category_id), new.category_id::text);
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger tournament_participants_category_offered
+  before insert or update of tournament_id, category_id on public.tournament_participants
+  for each row execute function public.enforce_participant_category_offered();
+
+-- The browser-data import now carries each category's level order and exemption. The category triggers are
+-- switched off while the archers' entries are inserted, because old history can already break them and
+-- the import must keep that history as it was. The switches are undone in the same transaction.
 create or replace function public.import_manager_workspace(p_workspace jsonb)
 returns void
 language plpgsql
@@ -150,6 +181,7 @@ begin
     as input_row(tournament_id uuid, category_id uuid);
 
   alter table public.tournament_participants disable trigger tournament_participants_category_level;
+  alter table public.tournament_participants disable trigger tournament_participants_category_offered;
 
   insert into public.tournament_participants (tournament_id, participant_id, category_id)
   select tournament_id, participant_id, category_id
@@ -157,6 +189,7 @@ begin
     as input_row(tournament_id uuid, participant_id uuid, category_id uuid);
 
   alter table public.tournament_participants enable trigger tournament_participants_category_level;
+  alter table public.tournament_participants enable trigger tournament_participants_category_offered;
 
   insert into public.round_scores (tournament_id, round_id, participant_id, category_id, score)
   select tournament_id, round_id, participant_id, category_id, score
