@@ -129,10 +129,11 @@ describe('participant and club workflows', () => {
     const bowSelect = wrapper.get('form.modal select')
     expect(bowSelect.get('option[value="Recurve"]').text()).toBe('Recurvo')
     await bowSelect.setValue('Recurve')
+    await wrapper.get('form.modal input[required][type="number"]').setValue(2)
     await wrapper.get('form.modal').trigger('submit')
     await flushPromises()
     expect(repository.saveCategory).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'My custom name', bowType: 'Recurve' }),
+      expect.objectContaining({ name: 'My custom name', bowType: 'Recurve', sortOrder: 2 }),
     )
     expect(wrapper.text()).toContain('My custom name')
   })
@@ -155,8 +156,19 @@ describe('participant and club workflows', () => {
     expect(wrapper.get('form.modal select').element.value).toBe('club-north')
   })
 
-  it('filters tournament directory participants by club', async () => {
-    const wrapper = mountApp()
+  it('filters tournament archers by club and lists only archers in the tournament', async () => {
+    const initialData = createWorkspace()
+    initialData.participants.push({
+      id: 'participant-outside',
+      firstName: 'Olga',
+      lastName: 'Outside',
+      birthDate: '1999-01-01',
+      waId: '',
+      aetayId: '',
+      clubId: 'club-north',
+    })
+    initialData.tournaments[0].participantIds = ['participant-club', 'participant-independent']
+    const wrapper = mountApp(createRepository(), { initialData })
     await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
     await wrapper.get('.tournament-card').trigger('click')
     await wrapper.get('select[aria-label="Filter archers by club"]').setValue('club-north')
@@ -164,6 +176,7 @@ describe('participant and club workflows', () => {
     const roster = wrapper.get('.roster-list').text()
     expect(roster).toContain('Archer, Alex')
     expect(roster).not.toContain('Shooter, Sam')
+    expect(roster).not.toContain('Outside, Olga')
   })
 
   it('opens a tournament by clicking its card unless text is selected', async () => {
@@ -178,7 +191,7 @@ describe('participant and club workflows', () => {
     selection.mockReturnValue({ toString: () => '' })
     await wrapper.get('.tournament-card').trigger('click')
     expect(wrapper.find('.tournament-card').exists()).toBe(false)
-    expect(wrapper.find('.roster-list').exists()).toBe(true)
+    expect(wrapper.find('.roster-panel').exists()).toBe(true)
   })
 
   it.each([
@@ -195,7 +208,7 @@ describe('participant and club workflows', () => {
       expect(element.attributes('aria-label')).toBe('Open Tournament')
 
       await element.trigger('keydown', { key: key === 'space' ? ' ' : 'Enter' })
-      expect(wrapper.find('.roster-list').exists()).toBe(true)
+      expect(wrapper.find('.roster-panel').exists()).toBe(true)
     }
   })
 
@@ -221,7 +234,7 @@ describe('participant and club workflows', () => {
     ['.stat-card:nth-child(1)', '.tournament-card'],
     ['.stat-card:nth-child(2)', '.clubs-grid'],
     ['.stat-card:nth-child(3)', '.table-wrap'],
-    ['.event-row', '.roster-list'],
+    ['.event-row', '.roster-panel'],
   ])('opens the section when clicking the dashboard item %s', async (item, destination) => {
     const wrapper = mountApp()
     await wrapper.get(item).trigger('click')
@@ -299,6 +312,388 @@ describe('participant and club workflows', () => {
 
     expect(wrapper.get('.category-roster-row input').element.disabled).toBe(true)
     expect(wrapper.get('.category-roster-row input').element.checked).toBe(true)
+  })
+
+  describe('tournament archers and categories', () => {
+    const hint = "Limited by the archer's age and the categories they have already entered"
+
+    // Alex has entered `pastCategoryId` in an earlier tournament. The open tournament has no archers yet.
+    function createLevelWorkspace(pastCategoryId = 'rec-open') {
+      const initialData = createWorkspace()
+      const recurve = (id, name, sortOrder) => ({ id, name, minAge: null, maxAge: null, bowType: 'Recurve', sortOrder })
+      initialData.categories = [
+        recurve('rec-youth', 'Youth', 0),
+        recurve('rec-open', 'Open', 1),
+        recurve('rec-pro', 'Pro', 2),
+        { id: 'comp-youth', name: 'Compound Youth', minAge: null, maxAge: null, bowType: 'Compound', sortOrder: 0 },
+      ]
+      initialData.tournaments[0].categoryIds = ['rec-youth', 'rec-open', 'rec-pro', 'comp-youth']
+      initialData.tournaments.push({
+        ...initialData.tournaments[0],
+        id: 'tournament-past',
+        name: 'Past Tournament',
+        date: '2098-01-01',
+        participantIds: ['participant-club'],
+        categoryIds: ['rec-open'],
+        categoryAssignments: pastCategoryId ? { 'participant-club': pastCategoryId } : {},
+      })
+      return initialData
+    }
+
+    // Alex is already entered in the open tournament with `categoryId` (or none).
+    function createEnteredWorkspace(categoryId = 'rec-open') {
+      const initialData = createLevelWorkspace('')
+      initialData.tournaments[0].participantIds = ['participant-club']
+      initialData.tournaments[0].categoryAssignments = categoryId ? { 'participant-club': categoryId } : {}
+      return initialData
+    }
+
+    async function openArchers(repository, initialData) {
+      const wrapper = mountApp(repository, { initialData })
+      await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
+      await wrapper
+        .findAll('.tournament-card')
+        .find((card) => card.text().includes('Open Tournament'))
+        .trigger('click')
+      return wrapper
+    }
+
+    const openAddDialog = (wrapper) => wrapper.get('.panel-heading .button-outline').trigger('click')
+    const bowSelect = (wrapper) => wrapper.get('form.modal select[aria-label="Bow type"]')
+    const categorySelect = (wrapper) => wrapper.get('form.modal select[aria-label="Category"]')
+    const option = (wrapper, value) => categorySelect(wrapper).get(`option[value="${value}"]`).element
+
+    async function chooseExistingRecurve(wrapper, archerId = 'participant-club') {
+      await openAddDialog(wrapper)
+      await wrapper.get(`input[name="existing-archer"][value="${archerId}"]`).setValue()
+      await bowSelect(wrapper).setValue('Recurve')
+    }
+
+    describe('listing archers', () => {
+      it('shows only archers in the tournament, with column headers and no state labels', async () => {
+        const wrapper = await openArchers(createRepository(), createEnteredWorkspace('rec-open'))
+
+        expect(wrapper.findAll('.roster-head span').map((cell) => cell.text())).toEqual([
+          'ARCHER',
+          'CATEGORY',
+          'ACTIONS',
+        ])
+        const rows = wrapper.findAll('.roster-row:not(.roster-head)')
+        expect(rows).toHaveLength(1)
+        expect(rows[0].text()).toContain('Archer, Alex')
+        expect(wrapper.text()).not.toContain('Shooter, Sam')
+        expect(wrapper.text()).not.toContain('Directory')
+        expect(wrapper.text()).not.toContain('Added')
+        expect(wrapper.find('.roster-row input[type="checkbox"]').exists()).toBe(false)
+      })
+
+      it('shows an empty state with an Add archer button when nobody is entered', async () => {
+        const wrapper = await openArchers(createRepository(), createLevelWorkspace())
+
+        expect(wrapper.find('.roster-list').exists()).toBe(false)
+        expect(wrapper.get('.empty-state').text()).toContain('No archers in this tournament')
+        expect(wrapper.get('.empty-state button').text()).toBe('Add archer')
+      })
+    })
+
+    describe('adding an existing archer', () => {
+      it('searches the database and adds the archer with the chosen category', async () => {
+        const repository = createRepository()
+        const wrapper = await openArchers(repository, createLevelWorkspace())
+        await openAddDialog(wrapper)
+
+        const radios = () => wrapper.findAll('input[name="existing-archer"]').map((radio) => radio.element.value)
+        expect(radios()).toEqual(['participant-club', 'participant-independent'])
+        await wrapper.get('input[aria-label="Search the archer database"]').setValue('shooter')
+        expect(radios()).toEqual(['participant-independent'])
+        await wrapper.get('input[aria-label="Search the archer database"]').setValue('')
+
+        await wrapper.get('input[name="existing-archer"][value="participant-club"]').setValue()
+        await bowSelect(wrapper).setValue('Recurve')
+        await categorySelect(wrapper).setValue('rec-pro')
+        await wrapper.get('form.modal').trigger('submit')
+        await flushPromises()
+
+        expect(repository.setTournamentParticipant).toHaveBeenCalledWith(
+          'tournament-open',
+          'participant-club',
+          true,
+          'rec-pro',
+        )
+        expect(repository.saveParticipant).not.toHaveBeenCalled()
+        expect(wrapper.get('.roster-row:not(.roster-head)').text()).toContain('Archer, Alex')
+        expect(wrapper.get('.roster-category').text()).toBe('Pro')
+        expect(wrapper.find('form.modal').exists()).toBe(false)
+      })
+
+      it('does not offer archers who are already in the tournament', async () => {
+        const wrapper = await openArchers(createRepository(), createEnteredWorkspace('rec-open'))
+        await openAddDialog(wrapper)
+
+        const radios = wrapper.findAll('input[name="existing-archer"]').map((radio) => radio.element.value)
+        expect(radios).toEqual(['participant-independent'])
+      })
+
+      it('asks for an archer before saving', async () => {
+        const repository = createRepository()
+        const wrapper = await openArchers(repository, createLevelWorkspace())
+        await openAddDialog(wrapper)
+        await wrapper.get('form.modal').trigger('submit')
+        await flushPromises()
+
+        expect(repository.setTournamentParticipant).not.toHaveBeenCalled()
+        expect(wrapper.text()).toContain('Select an archer')
+      })
+
+      it('adds without a category when the tournament has none', async () => {
+        const repository = createRepository()
+        const initialData = createLevelWorkspace()
+        initialData.tournaments[0].categoryIds = []
+        const wrapper = await openArchers(repository, initialData)
+        await openAddDialog(wrapper)
+        await wrapper.get('input[name="existing-archer"][value="participant-club"]').setValue()
+
+        expect(wrapper.find('form.modal select[aria-label="Bow type"]').exists()).toBe(false)
+        await wrapper.get('form.modal').trigger('submit')
+        await flushPromises()
+
+        expect(repository.setTournamentParticipant).toHaveBeenCalledWith(
+          'tournament-open',
+          'participant-club',
+          true,
+          '',
+        )
+      })
+
+      it('opens on the new archer form when every archer is already entered', async () => {
+        const initialData = createEnteredWorkspace('rec-open')
+        initialData.tournaments[0].participantIds = ['participant-club', 'participant-independent']
+        const wrapper = await openArchers(createRepository(), initialData)
+        await openAddDialog(wrapper)
+
+        expect(wrapper.find('input[name="existing-archer"]').exists()).toBe(false)
+        expect(wrapper.find('input[autocomplete="family-name"]').exists()).toBe(true)
+      })
+    })
+
+    describe('adding a new archer', () => {
+      it('asks for bow type and category and saves the archer into the tournament', async () => {
+        const repository = createRepository()
+        const wrapper = await openArchers(repository, createLevelWorkspace(''))
+        await openAddDialog(wrapper)
+        await wrapper.findAll('.archer-source button')[1].trigger('click')
+        await wrapper.get('input[autocomplete="family-name"]').setValue('Newman')
+        await wrapper.get('input[autocomplete="given-name"]').setValue('Nia')
+        await wrapper.get('input[type="date"]').setValue('2000-05-05')
+
+        expect(categorySelect(wrapper).findAll('option:not([disabled])')).toHaveLength(0)
+        await bowSelect(wrapper).setValue('Recurve')
+        expect(
+          categorySelect(wrapper)
+            .findAll('option:not([disabled])')
+            .map((item) => item.element.value),
+        ).toEqual(['rec-youth', 'rec-open', 'rec-pro'])
+        await categorySelect(wrapper).setValue('rec-open')
+        await wrapper.get('form.modal').trigger('submit')
+        await flushPromises()
+
+        expect(repository.saveParticipant).toHaveBeenCalledWith(
+          expect.not.objectContaining({ bowType: expect.anything(), categoryId: expect.anything() }),
+          'tournament-open',
+          false,
+          'rec-open',
+        )
+        expect(wrapper.text()).toContain('Newman, Nia')
+      })
+    })
+
+    describe('the level rule in the add dialog', () => {
+      it('disables lower levels of the same bow type but not other bow types', async () => {
+        const wrapper = await openArchers(createRepository(), createLevelWorkspace('rec-open'))
+        await chooseExistingRecurve(wrapper)
+
+        expect(option(wrapper, 'rec-youth').disabled).toBe(true)
+        expect(option(wrapper, 'rec-open').disabled).toBe(false)
+        expect(option(wrapper, 'rec-pro').disabled).toBe(false)
+        await bowSelect(wrapper).setValue('Compound')
+        expect(option(wrapper, 'comp-youth').disabled).toBe(false)
+      })
+
+      it('blocks every lower level after the highest one', async () => {
+        const wrapper = await openArchers(createRepository(), createLevelWorkspace('rec-pro'))
+        await chooseExistingRecurve(wrapper)
+
+        expect(option(wrapper, 'rec-youth').disabled).toBe(true)
+        expect(option(wrapper, 'rec-open').disabled).toBe(true)
+        expect(option(wrapper, 'rec-pro').disabled).toBe(false)
+      })
+
+      it('does not save when a blocked category is forced', async () => {
+        const repository = createRepository()
+        const wrapper = await openArchers(repository, createLevelWorkspace('rec-open'))
+        await chooseExistingRecurve(wrapper)
+        await categorySelect(wrapper).setValue('rec-youth')
+        await wrapper.get('form.modal').trigger('submit')
+        await flushPromises()
+
+        expect(repository.setTournamentParticipant).not.toHaveBeenCalled()
+        expect(wrapper.text()).toContain('Already entered Open, a higher level')
+      })
+
+      it('lets an exempt category such as Masters be entered after any level', async () => {
+        const initialData = createLevelWorkspace('rec-pro')
+        initialData.categories.push({
+          id: 'rec-master',
+          name: 'Masters',
+          minAge: 50,
+          maxAge: null,
+          bowType: 'Recurve',
+          sortOrder: 0,
+          levelExempt: true,
+        })
+        initialData.participants[0].birthDate = '1960-01-01'
+        initialData.tournaments[0].categoryIds.push('rec-master')
+        const repository = createRepository()
+        const wrapper = await openArchers(repository, initialData)
+        await chooseExistingRecurve(wrapper)
+
+        expect(option(wrapper, 'rec-master').disabled).toBe(false)
+        expect(option(wrapper, 'rec-open').disabled).toBe(true)
+        await categorySelect(wrapper).setValue('rec-master')
+        await wrapper.get('form.modal').trigger('submit')
+        await flushPromises()
+        expect(repository.setTournamentParticipant).toHaveBeenCalledWith(
+          'tournament-open',
+          'participant-club',
+          true,
+          'rec-master',
+        )
+      })
+
+      it('does not let an exempt entry block the levels', async () => {
+        const initialData = createLevelWorkspace('rec-master')
+        initialData.categories.push({
+          id: 'rec-master',
+          name: 'Masters',
+          minAge: null,
+          maxAge: null,
+          bowType: 'Recurve',
+          sortOrder: 0,
+          levelExempt: true,
+        })
+        const wrapper = await openArchers(createRepository(), initialData)
+        await chooseExistingRecurve(wrapper)
+
+        expect(option(wrapper, 'rec-youth').disabled).toBe(false)
+        expect(option(wrapper, 'rec-pro').disabled).toBe(false)
+      })
+
+      it('explains on the category dropdowns that they are limited by age and known categories', async () => {
+        const wrapper = await openArchers(createRepository(), createEnteredWorkspace(''))
+        expect(wrapper.get('.roster-category-cell select').attributes('title')).toBe(hint)
+
+        await openAddDialog(wrapper)
+        await wrapper.get('input[name="existing-archer"][value="participant-independent"]').setValue()
+        expect(categorySelect(wrapper).attributes('title')).toBe(hint)
+      })
+    })
+
+    describe('changing and removing a category', () => {
+      it('lets an entered archer move up but never down', async () => {
+        const repository = createRepository()
+        const wrapper = await openArchers(repository, createEnteredWorkspace('rec-open'))
+        const changeSelector = 'select[aria-label="Change category of Alex Archer"]'
+        expect(wrapper.find(changeSelector).exists()).toBe(false)
+        expect(wrapper.get('.roster-category').text()).toBe('Open')
+
+        await wrapper.get('button[aria-label="Change category of Alex Archer"]').trigger('click')
+        const changer = wrapper.get(changeSelector)
+        expect(changer.findAll('option').map((item) => item.element.value)).toEqual(['', 'rec-pro', 'comp-youth'])
+        await changer.setValue('rec-pro')
+        await flushPromises()
+
+        expect(repository.setTournamentParticipant).toHaveBeenCalledWith(
+          'tournament-open',
+          'participant-club',
+          true,
+          'rec-pro',
+        )
+        expect(wrapper.find(changeSelector).exists()).toBe(false)
+        expect(wrapper.get('.roster-category').text()).toBe('Pro')
+      })
+
+      it('closes the change picker with Cancel without saving', async () => {
+        const repository = createRepository()
+        const wrapper = await openArchers(repository, createEnteredWorkspace('rec-open'))
+        await wrapper.get('button[aria-label="Change category of Alex Archer"]').trigger('click')
+        await wrapper.get('button[aria-label="Cancel changing the category of Alex Archer"]').trigger('click')
+
+        expect(wrapper.find('select[aria-label="Change category of Alex Archer"]').exists()).toBe(false)
+        expect(wrapper.get('.roster-category').text()).toBe('Open')
+        expect(repository.setTournamentParticipant).not.toHaveBeenCalled()
+      })
+
+      it('offers no category change to an archer already at the top level', async () => {
+        const initialData = createEnteredWorkspace('rec-pro')
+        initialData.tournaments[0].categoryIds = ['rec-youth', 'rec-open', 'rec-pro']
+        const wrapper = await openArchers(createRepository(), initialData)
+
+        expect(wrapper.find('button[aria-label="Change category of Alex Archer"]').exists()).toBe(false)
+      })
+
+      it('removes only the category and brings the picker back', async () => {
+        const repository = createRepository({ setParticipantCategory: vi.fn().mockResolvedValue(undefined) })
+        const wrapper = await openArchers(repository, createEnteredWorkspace('rec-open'))
+        await wrapper.get('button[aria-label="Remove the category of Alex Archer"]').trigger('click')
+        await flushPromises()
+
+        expect(repository.setParticipantCategory).toHaveBeenCalledWith('tournament-open', 'participant-club', '')
+        expect(repository.setTournamentParticipant).not.toHaveBeenCalled()
+        expect(wrapper.find('.roster-category').exists()).toBe(false)
+        const picker = wrapper.get('select[aria-label="Choose category of Alex Archer"]')
+        expect(picker.get('option').text()).toBe('Choose category')
+        expect(wrapper.get('.roster-row:not(.roster-head)').text()).toContain('Archer, Alex')
+      })
+
+      it('keeps the category icons apart from the archer action', async () => {
+        const wrapper = await openArchers(createRepository(), createEnteredWorkspace('rec-open'))
+
+        expect(wrapper.get('.roster-category-cell').findAll('button')).toHaveLength(2)
+        expect(wrapper.get('.roster-actions').text()).toBe('Remove from tournament')
+      })
+    })
+
+    describe('removing an archer from the tournament', () => {
+      const removeButton = 'button[aria-label="Remove Alex Archer from tournament"]'
+
+      it('removes the archer from the list after confirming, but keeps them in the database', async () => {
+        const confirm = vi.fn().mockReturnValue(true)
+        vi.stubGlobal('confirm', confirm)
+        const repository = createRepository()
+        const wrapper = await openArchers(repository, createEnteredWorkspace('rec-open'))
+        await wrapper.get(removeButton).trigger('click')
+        await flushPromises()
+
+        expect(confirm).toHaveBeenCalledWith('Remove Alex Archer from this tournament?')
+        expect(repository.setTournamentParticipant).toHaveBeenCalledWith('tournament-open', 'participant-club', false)
+        expect(wrapper.text()).not.toContain('Archer, Alex')
+        expect(repository.saveParticipant).not.toHaveBeenCalled()
+
+        await openAddDialog(wrapper)
+        expect(wrapper.find('input[name="existing-archer"][value="participant-club"]').exists()).toBe(true)
+      })
+
+      it('keeps the archer when the removal is not confirmed', async () => {
+        vi.stubGlobal('confirm', vi.fn().mockReturnValue(false))
+        const repository = createRepository()
+        const wrapper = await openArchers(repository, createEnteredWorkspace('rec-open'))
+        await wrapper.get(removeButton).trigger('click')
+        await flushPromises()
+
+        expect(repository.setTournamentParticipant).not.toHaveBeenCalled()
+        expect(wrapper.get('.roster-category').text()).toBe('Open')
+      })
+    })
   })
 
   it('lets managers see User access but only admins change manager roles', async () => {
@@ -504,6 +899,7 @@ describe('participant and club workflows', () => {
       }),
       '',
       true,
+      '',
     )
 
     await wrapper.get('.page-heading .button-primary').trigger('click')
