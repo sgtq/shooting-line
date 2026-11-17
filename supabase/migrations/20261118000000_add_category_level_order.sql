@@ -20,12 +20,13 @@ where ranked.id = c.id;
 
 -- An archer who has entered a category can never enter a lower level of the same bow type,
 -- including by changing the category of an entry they already hold or by moving an entry to another archer.
--- Runs as the table owner so that entries in tournaments the caller cannot read still count.
+-- Runs as the caller. Only managers and admins can write these rows and they can read every entry, so the
+-- whole history counts. A BEFORE trigger fires before the table policy's check, so anyone else who tries a
+-- write only sees the entries they are allowed to read in the error, not other archers' history.
 -- On an update, the stored row still holds the old category, so a downgrade is rejected too.
 create function public.enforce_participant_category_level()
 returns trigger
 language plpgsql
-security definer
 set search_path = ''
 as $$
 declare
@@ -73,7 +74,6 @@ create trigger tournament_participants_category_level
 create function public.enforce_participant_category_offered()
 returns trigger
 language plpgsql
-security definer
 set search_path = ''
 as $$
 begin
