@@ -8,13 +8,12 @@ import PlansPage from './components/PlansPage.vue'
 import { findBlockingCategory } from './services/categoryRules'
 import { activeSubscription, findOverlappingSubscription, todayString } from './services/planRules'
 import {
-  expandRange,
   firstDay,
   lastDay,
   MAX_TOURNAMENT_DAYS,
-  normalizeDays,
-  validateDays,
-  validateRange,
+  datesToForm,
+  isConsecutive,
+  resolveDays,
 } from './services/tournamentDates'
 
 const props = defineProps({
@@ -472,8 +471,7 @@ function formatDate(value) {
 function formatDates(tournament) {
   const days = tournament.dates
   if (days.length < 2) return formatDate(days[0])
-  const isConsecutive = expandRange(days[0], days[days.length - 1]).length === days.length
-  return isConsecutive
+  return isConsecutive(days)
     ? t('{start} to {end}', { start: formatDate(firstDay(tournament)), end: formatDate(lastDay(tournament)) })
     : t('{start} ({count} days)', { start: formatDate(firstDay(tournament)), count: days.length })
 }
@@ -751,14 +749,14 @@ async function saveTournament() {
     return
   }
   const { dateMode, startDate, endDate, days, ...details } = form.value
-  const dateError = dateMode === 'range' ? validateRange(startDate, endDate) : validateDays(days)
+  const { dates, error: dateError } = resolveDays({ dateMode, startDate, endDate, days })
   if (dateError) {
     modalError.value = t(dateError)
     return
   }
   const tournament = {
     ...details,
-    dates: dateMode === 'range' ? expandRange(startDate, endDate) : normalizeDays(days),
+    dates,
     // A club user can only host for their own club, whatever the form holds.
     clubId: canManage.value ? form.value.clubId : props.userScope.clubId,
     id: makeId(),
@@ -781,6 +779,31 @@ async function saveTournament() {
   closeModal()
   activePage.value = 'tournament-detail'
   notify('Tournament created')
+}
+
+function openTournamentDatesModal(tournament) {
+  openModal('tournamentDates')
+  form.value = datesToForm(tournament.dates)
+}
+
+async function saveTournamentDates() {
+  const tournament = selectedTournament.value
+  if (!tournament || !canEditTournament.value) return
+  const { dates, error } = resolveDays(form.value)
+  if (error) {
+    modalError.value = t(error)
+    return
+  }
+  const saved = await persistChange(
+    () => props.repository.saveTournamentDates(tournament.id, dates),
+    () => {
+      tournament.dates = dates
+    },
+    'modal',
+  )
+  if (!saved) return
+  closeModal()
+  notify('Tournament dates updated')
 }
 
 async function savePlan(plan) {
@@ -2311,20 +2334,29 @@ async function recordMatchScore(match, side, value) {
                   }}
                 </p>
               </div>
-              <button
-                v-if="canStartTournament"
-                class="button button-outline"
-                @click="toggleTournamentStarted(selectedTournament)"
-              >
-                {{ t('Start tournament') }}
-              </button>
-              <button
-                v-else-if="canManage && selectedTournament.startedAt"
-                class="button button-outline"
-                @click="toggleTournamentStarted(selectedTournament)"
-              >
-                {{ t('Reopen tournament') }}
-              </button>
+              <div class="heading-actions">
+                <button
+                  v-if="canEditTournament"
+                  class="button button-outline"
+                  @click="openTournamentDatesModal(selectedTournament)"
+                >
+                  {{ t('Edit dates') }}
+                </button>
+                <button
+                  v-if="canStartTournament"
+                  class="button button-outline"
+                  @click="toggleTournamentStarted(selectedTournament)"
+                >
+                  {{ t('Start tournament') }}
+                </button>
+                <button
+                  v-else-if="canManage && selectedTournament.startedAt"
+                  class="button button-outline"
+                  @click="toggleTournamentStarted(selectedTournament)"
+                >
+                  {{ t('Reopen tournament') }}
+                </button>
+              </div>
             </div>
             <section class="tournament-summary">
               <div>
@@ -2772,15 +2804,17 @@ async function recordMatchScore(match, side, value) {
             ? saveClub()
             : modalType === 'tournament'
               ? saveTournament()
-              : modalType === 'tournamentType'
-                ? saveTournamentType()
-                : modalType === 'category'
-                  ? saveCategory()
-                  : modalType === 'userRole'
-                    ? saveUserRole()
-                    : modalType === 'profile'
-                      ? saveUserProfile()
-                      : saveParticipant()
+              : modalType === 'tournamentDates'
+                ? saveTournamentDates()
+                : modalType === 'tournamentType'
+                  ? saveTournamentType()
+                  : modalType === 'category'
+                    ? saveCategory()
+                    : modalType === 'userRole'
+                      ? saveUserRole()
+                      : modalType === 'profile'
+                        ? saveUserProfile()
+                        : saveParticipant()
         "
       >
         <div class="modal-heading">
@@ -2789,7 +2823,7 @@ async function recordMatchScore(match, side, value) {
               {{
                 modalType === 'club'
                   ? t('CLUB DIRECTORY')
-                  : modalType === 'tournament' || modalType === 'tournamentType'
+                  : modalType === 'tournament' || modalType === 'tournamentDates' || modalType === 'tournamentType'
                     ? t('EVENT MANAGEMENT')
                     : modalType === 'category'
                       ? t('CATEGORY DIRECTORY')
@@ -2808,21 +2842,23 @@ async function recordMatchScore(match, side, value) {
                     : t('Add a club')
                   : modalType === 'tournament'
                     ? t('Create tournament')
-                    : modalType === 'tournamentType'
-                      ? editingTournamentTypeId
-                        ? t('Edit tournament type')
-                        : t('Create tournament type')
-                      : modalType === 'category'
-                        ? editingCategoryId
-                          ? t('Edit category')
-                          : t('Create category')
-                        : modalType === 'userRole'
-                          ? t('Add manager')
-                          : modalType === 'profile'
-                            ? t('Edit profile')
-                            : editingParticipantId
-                              ? t('Edit archer')
-                              : t('Add archer')
+                    : modalType === 'tournamentDates'
+                      ? t('Edit tournament dates')
+                      : modalType === 'tournamentType'
+                        ? editingTournamentTypeId
+                          ? t('Edit tournament type')
+                          : t('Create tournament type')
+                        : modalType === 'category'
+                          ? editingCategoryId
+                            ? t('Edit category')
+                            : t('Create category')
+                          : modalType === 'userRole'
+                            ? t('Add manager')
+                            : modalType === 'profile'
+                              ? t('Edit profile')
+                              : editingParticipantId
+                                ? t('Edit archer')
+                                : t('Add archer')
               }}
             </h2>
           </div>
@@ -2887,9 +2923,9 @@ async function recordMatchScore(match, side, value) {
             />
           </div>
         </template>
-        <template v-else-if="modalType === 'tournament'">
+        <template v-else-if="modalType === 'tournament' || modalType === 'tournamentDates'">
           <div class="form-grid">
-            <label class="form-field full"
+            <label v-if="modalType === 'tournament'" class="form-field full"
               ><span>{{ t('TOURNAMENT NAME') }} <b>*</b></span
               ><input v-model="form.name" required :placeholder="t('e.g. Spring Championship')"
             /></label>
@@ -2936,76 +2972,80 @@ async function recordMatchScore(match, side, value) {
                 {{ t('Add date') }}
               </button>
             </div>
-            <label class="form-field"
-              ><span>{{ t('DISCIPLINE') }}</span
-              ><select v-model="form.discipline">
-                <option value="Outdoor target">{{ t('Outdoor target') }}</option>
-                <option value="Indoor target">{{ t('Indoor target') }}</option>
-                <option value="Field">{{ t('Field') }}</option>
-                <option>3D</option>
-                <option value="Other">{{ t('Other') }}</option>
-              </select></label
-            >
-            <div class="form-field full">
-              <span>{{ t('TOURNAMENT TYPE') }} <b>*</b></span>
-              <div class="field-with-button">
-                <select v-model="form.tournamentTypeId" required :aria-label="t('Tournament type')">
-                  <option value="" disabled>{{ t('Select a tournament type') }}</option>
-                  <option v-for="type in data.tournamentTypes" :key="type.id" :value="type.id">
-                    {{ type.name }} — {{ type.distance }} {{ type.distanceUnit }}, {{ type.targetType }}
-                  </option>
-                </select>
-                <button
-                  v-if="canManage"
-                  type="button"
-                  class="icon-button target-type-add"
-                  :aria-label="t('Add tournament type')"
-                  :title="t('Add tournament type')"
-                  @click="openTournamentChildModal('tournamentType')"
-                >
-                  ＋
-                </button>
-              </div>
-            </div>
-            <div class="form-field full">
-              <span>{{ t('HOST CLUB') }}</span>
-              <div class="field-with-button">
-                <select v-model="form.clubId" :disabled="!canManage" :aria-label="t('Host club')">
-                  <option v-if="canManage" value="">{{ t('No club / independent event') }}</option>
-                  <option
-                    v-for="club in canManage ? data.clubs : data.clubs.filter((item) => item.id === userScope.clubId)"
-                    :key="club.id"
-                    :value="club.id"
+            <template v-if="modalType === 'tournament'">
+              <label class="form-field"
+                ><span>{{ t('DISCIPLINE') }}</span
+                ><select v-model="form.discipline">
+                  <option value="Outdoor target">{{ t('Outdoor target') }}</option>
+                  <option value="Indoor target">{{ t('Indoor target') }}</option>
+                  <option value="Field">{{ t('Field') }}</option>
+                  <option>3D</option>
+                  <option value="Other">{{ t('Other') }}</option>
+                </select></label
+              >
+              <div class="form-field full">
+                <span>{{ t('TOURNAMENT TYPE') }} <b>*</b></span>
+                <div class="field-with-button">
+                  <select v-model="form.tournamentTypeId" required :aria-label="t('Tournament type')">
+                    <option value="" disabled>{{ t('Select a tournament type') }}</option>
+                    <option v-for="type in data.tournamentTypes" :key="type.id" :value="type.id">
+                      {{ type.name }} — {{ type.distance }} {{ type.distanceUnit }}, {{ type.targetType }}
+                    </option>
+                  </select>
+                  <button
+                    v-if="canManage"
+                    type="button"
+                    class="icon-button target-type-add"
+                    :aria-label="t('Add tournament type')"
+                    :title="t('Add tournament type')"
+                    @click="openTournamentChildModal('tournamentType')"
                   >
-                    {{ club.name }}
-                  </option>
-                </select>
-                <button
-                  v-if="canManage"
-                  type="button"
-                  class="icon-button target-type-add"
-                  :aria-label="t('Add new club')"
-                  :title="t('Add new club')"
-                  @click="openTournamentChildModal('club')"
-                >
-                  ＋
-                </button>
+                    ＋
+                  </button>
+                </div>
               </div>
-            </div>
-            <div class="form-field full">
-              <span>{{ t('TOURNAMENT LOCATION') }}</span>
-              <div class="radio-row">
-                <label><input v-model="form.venueMode" type="radio" value="club" /> {{ t('Use club address') }}</label
-                ><label><input v-model="form.venueMode" type="radio" value="custom" /> {{ t('Custom address') }}</label>
+              <div class="form-field full">
+                <span>{{ t('HOST CLUB') }}</span>
+                <div class="field-with-button">
+                  <select v-model="form.clubId" :disabled="!canManage" :aria-label="t('Host club')">
+                    <option v-if="canManage" value="">{{ t('No club / independent event') }}</option>
+                    <option
+                      v-for="club in canManage ? data.clubs : data.clubs.filter((item) => item.id === userScope.clubId)"
+                      :key="club.id"
+                      :value="club.id"
+                    >
+                      {{ club.name }}
+                    </option>
+                  </select>
+                  <button
+                    v-if="canManage"
+                    type="button"
+                    class="icon-button target-type-add"
+                    :aria-label="t('Add new club')"
+                    :title="t('Add new club')"
+                    @click="openTournamentChildModal('club')"
+                  >
+                    ＋
+                  </button>
+                </div>
               </div>
-            </div>
-            <label v-if="form.venueMode === 'custom'" class="form-field full"
-              ><span>{{ t('CUSTOM ADDRESS') }} <b>*</b></span
-              ><input v-model="form.customAddress" required :placeholder="t('Street, city, state, ZIP')"
-            /></label>
-            <p v-else-if="form.clubId" class="address-preview full">
-              ⌖ {{ clubFor(form.clubId)?.address || t('This club has no address yet.') }}
-            </p>
+              <div class="form-field full">
+                <span>{{ t('TOURNAMENT LOCATION') }}</span>
+                <div class="radio-row">
+                  <label><input v-model="form.venueMode" type="radio" value="club" /> {{ t('Use club address') }}</label
+                  ><label
+                    ><input v-model="form.venueMode" type="radio" value="custom" /> {{ t('Custom address') }}</label
+                  >
+                </div>
+              </div>
+              <label v-if="form.venueMode === 'custom'" class="form-field full"
+                ><span>{{ t('CUSTOM ADDRESS') }} <b>*</b></span
+                ><input v-model="form.customAddress" required :placeholder="t('Street, city, state, ZIP')"
+              /></label>
+              <p v-else-if="form.clubId" class="address-preview full">
+                ⌖ {{ clubFor(form.clubId)?.address || t('This club has no address yet.') }}
+              </p>
+            </template>
           </div>
         </template>
         <template v-else-if="modalType === 'tournamentType'">
@@ -3271,23 +3311,25 @@ async function recordMatchScore(match, side, value) {
                   : t('Save club')
                 : modalType === 'tournament'
                   ? t('Create tournament')
-                  : modalType === 'tournamentType'
-                    ? editingTournamentTypeId
-                      ? t('Save type')
-                      : t('Create type')
-                    : modalType === 'category'
-                      ? editingCategoryId
-                        ? t('Save category')
-                        : t('Create category')
-                      : modalType === 'userRole'
-                        ? t('Add manager')
-                        : modalType === 'profile'
-                          ? t('Save profile')
-                          : editingParticipantId
-                            ? t('Save changes')
-                            : selectedMatch
-                              ? t('Add to tournament')
-                              : t('Save archer')
+                  : modalType === 'tournamentDates'
+                    ? t('Save dates')
+                    : modalType === 'tournamentType'
+                      ? editingTournamentTypeId
+                        ? t('Save type')
+                        : t('Create type')
+                      : modalType === 'category'
+                        ? editingCategoryId
+                          ? t('Save category')
+                          : t('Create category')
+                        : modalType === 'userRole'
+                          ? t('Add manager')
+                          : modalType === 'profile'
+                            ? t('Save profile')
+                            : editingParticipantId
+                              ? t('Save changes')
+                              : selectedMatch
+                                ? t('Add to tournament')
+                                : t('Save archer')
             }}
           </button>
         </div>

@@ -61,6 +61,11 @@ It has no level order number, never blocks another category, and is never blocke
   The date tile, the order of the lists, and the age checks use the first day. The upcoming and past filters and the
   Up next card use the last day, so a tournament in progress is still upcoming.
 - An archer's age for category limits is the age on the first day, both in the app warning and in the database check.
+- **Edit dates** on the tournament page changes the days of an existing tournament. It opens with the saved days
+  (consecutive days as a range, others as a list) and follows the same rules as the create form. A manager can do
+  this at any time. A club can do it for its own tournament while it has an active plan and the tournament is not
+  started. The save adds the new days first, then removes the days no longer listed. Archers already entered are not
+  checked again against the age limits of their category after a change of first day.
 - Old browser data with a single `date` imports as a one-day tournament.
 
 ## Dashboard

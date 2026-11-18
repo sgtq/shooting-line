@@ -1412,6 +1412,113 @@ describe('plans and club tournament creation', () => {
       expect(wrapper.text()).toContain('Start tournament')
     })
 
+    describe('editing the dates', () => {
+      const editButton = (wrapper) => wrapper.findAll('button').find((button) => button.text() === 'Edit dates')
+
+      async function openDatesForm(repository, props = clubProps, initialData = rosterWorkspace([active])) {
+        initialData.tournaments[0].dates = ['2099-04-01', '2099-04-02']
+        const wrapper = mountApp(repository, { ...props, initialData })
+        await openTournament(wrapper)
+        await editButton(wrapper).trigger('click')
+        return wrapper
+      }
+
+      async function submit(wrapper) {
+        await wrapper.get('form.modal').trigger('submit')
+        await flushPromises()
+      }
+
+      it('opens with the current days and shows only the date fields', async () => {
+        const wrapper = await openDatesForm(createRepository())
+        const [start, end] = wrapper.findAll('input[type="date"]')
+
+        expect(wrapper.get('.modal h2').text()).toBe('Edit tournament dates')
+        expect(start.element.value).toBe('2099-04-01')
+        expect(end.element.value).toBe('2099-04-02')
+        expect(wrapper.find('select[aria-label="Tournament type"]').exists()).toBe(false)
+        expect(wrapper.find('input[required][placeholder="e.g. Spring Championship"]').exists()).toBe(false)
+      })
+
+      it('opens separate days as a list', async () => {
+        const initialData = rosterWorkspace([active])
+        const wrapper = await openDatesForm(createRepository(), clubProps, initialData)
+        await wrapper.get('button.modal-close').trigger('click')
+        initialData.tournaments[0].dates = ['2099-04-01', '2099-04-09']
+        await editButton(wrapper).trigger('click')
+
+        expect(wrapper.get('select[aria-label="How to enter the dates"]').element.value).toBe('days')
+        expect(wrapper.findAll('input[type="date"]').map((input) => input.element.value)).toEqual([
+          '2099-04-01',
+          '2099-04-09',
+        ])
+      })
+
+      it('saves the new days and shows them on the page', async () => {
+        const saveTournamentDates = vi.fn().mockResolvedValue(undefined)
+        const wrapper = await openDatesForm(createRepository({ saveTournamentDates }))
+        await wrapper.findAll('input[type="date"]')[1].setValue('2099-04-04')
+        await submit(wrapper)
+
+        expect(saveTournamentDates).toHaveBeenCalledWith('tournament-open', [
+          '2099-04-01',
+          '2099-04-02',
+          '2099-04-03',
+          '2099-04-04',
+        ])
+        expect(wrapper.find('.modal').exists()).toBe(false)
+        expect(wrapper.text()).toContain('Apr 1, 2099 to Apr 4, 2099')
+        expect(wrapper.text()).toContain('Tournament dates updated')
+      })
+
+      it('keeps the form open and the old days when the save fails', async () => {
+        const saveTournamentDates = vi.fn().mockRejectedValue(new Error('network down'))
+        const wrapper = await openDatesForm(createRepository({ saveTournamentDates }))
+        await wrapper.findAll('input[type="date"]')[1].setValue('2099-04-04')
+        await submit(wrapper)
+
+        expect(wrapper.get('.modal-error').text()).toContain('network down')
+        await wrapper.get('button.modal-close').trigger('click')
+        expect(wrapper.text()).toContain('Apr 1, 2099 to Apr 2, 2099')
+      })
+
+      it('refuses an end date before the start date', async () => {
+        const saveTournamentDates = vi.fn()
+        const wrapper = await openDatesForm(createRepository({ saveTournamentDates }))
+        await wrapper.findAll('input[type="date"]')[1].setValue('2099-03-01')
+        await submit(wrapper)
+
+        expect(saveTournamentDates).not.toHaveBeenCalled()
+        expect(wrapper.get('.modal-error').text()).toContain('The end date cannot be before the start date')
+      })
+
+      it('hides the button from a club once the tournament is started', async () => {
+        const initialData = rosterWorkspace([active])
+        initialData.tournaments[0].startedAt = '2030-01-01T00:00:00Z'
+        const wrapper = mountApp(createRepository(), { ...clubProps, initialData })
+        await openTournament(wrapper)
+
+        expect(editButton(wrapper)).toBeUndefined()
+      })
+
+      it('hides the button from a club that does not own the tournament', async () => {
+        const wrapper = mountApp(createRepository(), {
+          ...clubProps,
+          initialData: rosterWorkspace([active], 'club-other'),
+        })
+        await openTournament(wrapper)
+
+        expect(editButton(wrapper)).toBeUndefined()
+      })
+
+      it('lets a manager change the days of a started tournament', async () => {
+        const initialData = rosterWorkspace([])
+        initialData.tournaments[0].startedAt = '2030-01-01T00:00:00Z'
+        const wrapper = await openDatesForm(createRepository(), {}, initialData)
+
+        expect(wrapper.get('.modal h2').text()).toBe('Edit tournament dates')
+      })
+    })
+
     function withOtherClubArcher(workspace) {
       workspace.participants.push({
         id: 'participant-other',

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  datesToForm,
   expandRange,
   firstDay,
+  isConsecutive,
   lastDay,
   MAX_TOURNAMENT_DAYS,
   normalizeDays,
+  resolveDays,
   validateDays,
   validateRange,
 } from './tournamentDates.js'
@@ -94,5 +97,69 @@ describe('firstDay and lastDay', () => {
   it('return an empty string for no days', () => {
     expect(firstDay({ dates: [] })).toBe('')
     expect(lastDay({ dates: [] })).toBe('')
+  })
+})
+
+describe('isConsecutive', () => {
+  it('is true for no days, one day, or days with no gap', () => {
+    expect(isConsecutive([])).toBe(true)
+    expect(isConsecutive(['2026-03-15'])).toBe(true)
+    expect(isConsecutive(['2026-03-31', '2026-04-01'])).toBe(true)
+  })
+
+  it('is false when a day is missing in between', () => {
+    expect(isConsecutive(['2026-03-15', '2026-03-17'])).toBe(false)
+  })
+})
+
+describe('datesToForm', () => {
+  it('opens consecutive days as a range', () => {
+    expect(datesToForm(['2026-03-15', '2026-03-16', '2026-03-17'])).toEqual({
+      dateMode: 'range',
+      startDate: '2026-03-15',
+      endDate: '2026-03-17',
+      days: ['2026-03-15', '2026-03-16', '2026-03-17'],
+    })
+  })
+
+  it('opens days with a gap as a list', () => {
+    expect(datesToForm(['2026-03-15', '2026-03-20'])).toMatchObject({
+      dateMode: 'days',
+      days: ['2026-03-15', '2026-03-20'],
+    })
+  })
+
+  it('opens a tournament with no days as an empty list with one blank row', () => {
+    expect(datesToForm([])).toEqual({ dateMode: 'days', startDate: '', endDate: '', days: [''] })
+  })
+
+  it('does not share the days array with the tournament', () => {
+    const days = ['2026-03-15']
+    datesToForm(days).days.push('2026-03-16')
+    expect(days).toEqual(['2026-03-15'])
+  })
+})
+
+describe('resolveDays', () => {
+  it('expands a range', () => {
+    expect(resolveDays({ dateMode: 'range', startDate: '2026-03-15', endDate: '2026-03-16', days: [] })).toEqual({
+      dates: ['2026-03-15', '2026-03-16'],
+      error: '',
+    })
+  })
+
+  it('sorts separate days and drops blanks', () => {
+    const fields = { dateMode: 'days', startDate: '', endDate: '', days: ['2026-04-02', '', '2026-04-01'] }
+    expect(resolveDays(fields)).toEqual({ dates: ['2026-04-01', '2026-04-02'], error: '' })
+  })
+
+  it('returns the first problem and no days', () => {
+    const range = { dateMode: 'range', startDate: '2026-03-16', endDate: '2026-03-15', days: [] }
+    expect(resolveDays(range)).toEqual({ dates: [], error: 'The end date cannot be before the start date' })
+    const list = { dateMode: 'days', startDate: '', endDate: '', days: ['2026-03-15', '2026-03-15'] }
+    expect(resolveDays(list)).toEqual({ dates: [], error: 'Tournament dates cannot repeat' })
+    expect(resolveDays({ dateMode: 'days', startDate: '', endDate: '', days: [''] }).error).toBe(
+      'Add at least one tournament date',
+    )
   })
 })

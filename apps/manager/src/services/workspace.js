@@ -726,6 +726,24 @@ export function createManagerRepository(client) {
     roundIds.set(roundKey(tournament.id, 'Qualification'), roundId)
   }
 
+  // New days go in first so the tournament never has none if the second step fails.
+  async function saveTournamentDates(tournamentId, dates) {
+    const days = normalizeDays(dates)
+    if (!days.length) throw new Error('A tournament needs at least one day')
+    const { error: insertError } = await client.from('tournament_dates').upsert(
+      days.map((day) => ({ tournament_id: tournamentId, day })),
+      { onConflict: 'tournament_id,day', ignoreDuplicates: true },
+    )
+    if (insertError) throw insertError
+
+    const { error: deleteError } = await client
+      .from('tournament_dates')
+      .delete()
+      .eq('tournament_id', tournamentId)
+      .not('day', 'in', `(${days.join(',')})`)
+    if (deleteError) throw deleteError
+  }
+
   async function saveParticipant(participant, tournamentId = '', isEditing = false, categoryId = '') {
     const payload = {
       first_name: participant.firstName,
@@ -904,6 +922,7 @@ export function createManagerRepository(client) {
     saveTargetType,
     saveCategory,
     saveTournament,
+    saveTournamentDates,
     saveParticipant,
     setParticipantClub,
     setClubEnabled,
