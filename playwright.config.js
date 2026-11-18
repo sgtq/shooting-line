@@ -19,9 +19,11 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'VITE_BASE_PATH=/ npm run dev',
+    command: 'npm run dev',
     url: 'http://127.0.0.1:5174/manager/',
-    reuseExistingServer: !process.env.CI,
+    // A running dev server was started with the real .env Supabase URL, so the faked sign-in
+    // would miss it. Playwright stops with an "already used" error instead of reusing it.
+    reuseExistingServer: false,
     timeout: 120_000,
     env: {
       ...process.env,
