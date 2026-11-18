@@ -118,3 +118,91 @@ export function subscriptionFor(kind, today) {
       return null
   }
 }
+
+export const SEED_TOURNAMENT_TYPE = {
+  id: id(801),
+  name: 'Seed Indoor 18m',
+  distance: 18,
+  distanceUnit: 'm',
+  targetType: '40 cm',
+  ends: 10,
+  arrowsPerEnd: 3,
+}
+
+// No age limits, so the age check never needs a birth date.
+export const SEED_CATEGORY = { id: id(701), name: 'Seed Recurve Open', bowType: 'Recurve' }
+
+const PAID = id(201)
+const FREE_ACTIVE_CLUB = id(202)
+
+/**
+ * Tournaments that cover what an archer can see: past scores, one under way that the archer is in, one under way
+ * that the archer is not in (hidden from them), and one that has not started (listed for everyone).
+ * Days count from today, so a repeat run keeps the cases true.
+ * @param {Date} today
+ * @returns {Array<{
+ *   id: string, name: string, club: string, days: string[], started: boolean,
+ *   entries: string[], scores: Array<{ participantId: string, round: string, score: number }>,
+ *   matches: Array<{ round: string, seed1Id: string, seed2Id: string, score1: number, score2: number }>
+ * }>}
+ */
+export function seedTournaments(today) {
+  const todayDay = shiftDate(today, 0)
+  return [
+    {
+      id: id(301),
+      name: 'Seed Autumn Indoor',
+      club: 'active',
+      days: [shiftDate(today, -90)],
+      started: true,
+      entries: [PAID],
+      scores: [{ participantId: PAID, round: 'Qualification 1', score: 590 }],
+      matches: [],
+    },
+    {
+      id: id(302),
+      name: 'Seed Winter Indoor',
+      club: 'active',
+      days: [shiftDate(today, -30)],
+      started: true,
+      entries: [PAID, FREE_ACTIVE_CLUB],
+      scores: [
+        { participantId: PAID, round: 'Qualification 1', score: 560 },
+        { participantId: PAID, round: 'Qualification 2', score: 575 },
+        { participantId: FREE_ACTIVE_CLUB, round: 'Qualification 1', score: 540 },
+        { participantId: FREE_ACTIVE_CLUB, round: 'Qualification 2', score: 552 },
+      ],
+      matches: [{ round: 'Semifinal', seed1Id: PAID, seed2Id: FREE_ACTIVE_CLUB, score1: 140, score2: 132 }],
+    },
+    {
+      id: id(303),
+      name: 'Seed Weekend Cup',
+      club: 'active',
+      days: [shiftDate(today, -1), todayDay, shiftDate(today, 1)],
+      started: true,
+      entries: [PAID],
+      scores: [{ participantId: PAID, round: 'Qualification 1', score: 548 }],
+      matches: [],
+    },
+    {
+      id: id(304),
+      name: 'Seed Closed Cup',
+      club: 'lapsed',
+      days: [shiftDate(today, -1), todayDay],
+      started: true,
+      entries: [FREE_ACTIVE_CLUB],
+      scores: [],
+      matches: [],
+    },
+    {
+      id: id(305),
+      name: 'Seed Spring Open',
+      club: 'active',
+      days: [shiftDate(today, 30), shiftDate(today, 31)],
+      started: false,
+      entries: [],
+      scores: [],
+      matches: [],
+    },
+  ]
+}

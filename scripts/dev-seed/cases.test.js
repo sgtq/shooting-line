@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { SEED_ACCOUNTS, SEED_CLUBS, SEED_EMAIL_DOMAIN, emailFor, shiftDate, subscriptionFor } from './cases.js'
+import {
+  SEED_ACCOUNTS,
+  SEED_CLUBS,
+  SEED_EMAIL_DOMAIN,
+  emailFor,
+  seedTournaments,
+  shiftDate,
+  subscriptionFor,
+} from './cases.js'
 
 const TODAY = new Date(Date.UTC(2026, 10, 18))
 
@@ -62,5 +70,45 @@ describe('subscriptionFor', () => {
   it('makes the paid archer plan cost money and the free one cost nothing with no end date', () => {
     expect(subscriptionFor('archer-paid', TODAY).pricePaid).toBeGreaterThan(0)
     expect(subscriptionFor('archer-free', TODAY)).toMatchObject({ plan: 'basic', pricePaid: 0, endsOn: null })
+  })
+})
+
+describe('seedTournaments', () => {
+  const tournaments = seedTournaments(TODAY)
+  const byName = (name) => tournaments.find((tournament) => tournament.name === name)
+  const paidArcher = SEED_ACCOUNTS.find((account) => account.localPart === 'archer-paid').participantId
+
+  it('has unique ids and only refers to seed clubs and seed archers', () => {
+    expect(new Set(tournaments.map((tournament) => tournament.id)).size).toBe(tournaments.length)
+    const archerIds = SEED_ACCOUNTS.map((account) => account.participantId)
+    for (const tournament of tournaments) {
+      expect(SEED_CLUBS.map((club) => club.key)).toContain(tournament.club)
+      for (const participantId of [...tournament.entries, ...tournament.scores.map((s) => s.participantId)]) {
+        expect(archerIds).toContain(participantId)
+      }
+    }
+  })
+
+  it('only scores archers who are entered', () => {
+    for (const tournament of tournaments) {
+      for (const score of tournament.scores) expect(tournament.entries).toContain(score.participantId)
+    }
+  })
+
+  it('covers past scores, a tournament under way with the paid archer, and one under way without them', () => {
+    expect(byName('Seed Winter Indoor').days[0] < '2026-11-18').toBe(true)
+    expect(byName('Seed Winter Indoor').scores.length).toBeGreaterThan(0)
+    expect(byName('Seed Winter Indoor').matches).toHaveLength(1)
+    expect(byName('Seed Weekend Cup').days).toContain('2026-11-18')
+    expect(byName('Seed Weekend Cup').entries).toContain(paidArcher)
+    expect(byName('Seed Closed Cup').days).toContain('2026-11-18')
+    expect(byName('Seed Closed Cup').entries).not.toContain(paidArcher)
+  })
+
+  it('has a future tournament that nobody has entered and that is not started', () => {
+    const future = byName('Seed Spring Open')
+    expect(future.days[0] > '2026-11-18').toBe(true)
+    expect(future.entries).toEqual([])
+    expect(future.started).toBe(false)
   })
 })

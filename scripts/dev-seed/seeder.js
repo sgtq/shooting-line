@@ -2,11 +2,16 @@ import {
   BASIC_ARCHER_PLAN_NAME,
   SEED_ACCOUNTS,
   SEED_CLUBS,
+  SEED_CATEGORY,
   SEED_EMAIL_DOMAIN,
   SEED_PLANS,
+  SEED_TOURNAMENT_TYPE,
   emailFor,
+  seedTournaments,
   subscriptionFor,
 } from './cases.js'
+
+import { randomUUID } from 'node:crypto'
 
 const USERS_PER_PAGE = 1000
 
@@ -157,6 +162,128 @@ async function saveSubscription(client, account, userId, planIds, today) {
 }
 
 /**
+ * Writes one tournament with its dates, rounds, entries, scores, and matches. The rounds are replaced on every run,
+ * so scores never double up.
+ * @param {import('@supabase/supabase-js').SupabaseClient} client
+ * @param {ReturnType<typeof seedTournaments>[number]} tournament
+ * @param {Date} today
+ * @returns {Promise<void>}
+ */
+async function saveTournament(client, tournament, today) {
+  const name = tournament.name
+  const clubId = SEED_CLUBS.find((club) => club.key === tournament.club).id
+  must(
+    await client.from('tournaments').upsert({
+      id: tournament.id,
+      name,
+      discipline: 'Indoor',
+      tournament_type_id: SEED_TOURNAMENT_TYPE.id,
+      club_id: clubId,
+      venue_mode: 'club',
+      started_at: tournament.started ? today.toISOString() : null,
+    }),
+    `Save ${name}`,
+  )
+  must(await client.from('tournament_dates').delete().eq('tournament_id', tournament.id), `Clear dates of ${name}`)
+  must(
+    await client.from('tournament_dates').insert(tournament.days.map((day) => ({ tournament_id: tournament.id, day }))),
+    `Save dates of ${name}`,
+  )
+  must(
+    await client.from('tournament_categories').upsert({ tournament_id: tournament.id, category_id: SEED_CATEGORY.id }),
+    `Save categories of ${name}`,
+  )
+  must(await client.from('tournament_rounds').delete().eq('tournament_id', tournament.id), `Clear rounds of ${name}`)
+  must(await client.from('tournament_participants').delete().eq('tournament_id', tournament.id), `Clear entries`)
+
+  const roundNames = [...new Set(['Qualification 1', ...tournament.scores.map((score) => score.round)])].sort()
+  const rounds = roundNames.map((roundName, position) => ({
+    id: randomUUID(),
+    tournament_id: tournament.id,
+    name: roundName,
+    position,
+  }))
+  must(await client.from('tournament_rounds').insert(rounds), `Save rounds of ${name}`)
+
+  if (tournament.entries.length) {
+    must(
+      await client.from('tournament_participants').insert(
+        tournament.entries.map((participantId) => ({
+          tournament_id: tournament.id,
+          participant_id: participantId,
+          category_id: SEED_CATEGORY.id,
+        })),
+      ),
+      `Save entries of ${name}`,
+    )
+  }
+  if (tournament.scores.length) {
+    must(
+      await client.from('round_scores').insert(
+        tournament.scores.map((score) => ({
+          tournament_id: tournament.id,
+          round_id: rounds.find((round) => round.name === score.round).id,
+          participant_id: score.participantId,
+          category_id: SEED_CATEGORY.id,
+          score: score.score,
+        })),
+      ),
+      `Save scores of ${name}`,
+    )
+  }
+  if (tournament.matches.length) {
+    must(
+      await client.from('matches').insert(
+        tournament.matches.map((match, index) => ({
+          tournament_id: tournament.id,
+          source_round_id: rounds[rounds.length - 1].id,
+          category_id: SEED_CATEGORY.id,
+          round: match.round,
+          seed1_id: match.seed1Id,
+          seed2_id: match.seed2Id,
+          seed1: index * 2 + 1,
+          seed2: index * 2 + 2,
+          score1: match.score1,
+          score2: match.score2,
+        })),
+      ),
+      `Save matches of ${name}`,
+    )
+  }
+}
+
+/**
+ * Saves the tournament type and category, then every seed tournament. The archers and clubs must exist first.
+ * @param {import('@supabase/supabase-js').SupabaseClient} client
+ * @param {Date} today
+ * @returns {Promise<void>}
+ */
+async function saveTournaments(client, today) {
+  const type = SEED_TOURNAMENT_TYPE
+  must(
+    await client.from('tournament_types').upsert({
+      id: type.id,
+      name: type.name,
+      distance: type.distance,
+      distance_unit: type.distanceUnit,
+      target_type: type.targetType,
+      ends: type.ends,
+      arrows_per_end: type.arrowsPerEnd,
+    }),
+    'Save tournament type',
+  )
+  must(
+    await client
+      .from('categories')
+      .upsert({ id: SEED_CATEGORY.id, name: SEED_CATEGORY.name, bow_type: SEED_CATEGORY.bowType }),
+    'Save category',
+  )
+  for (const tournament of seedTournaments(today)) {
+    await saveTournament(client, tournament, today)
+  }
+}
+
+/**
  * Creates or refreshes every seed account with the clubs, archers, and plans it needs.
  * @param {import('@supabase/supabase-js').SupabaseClient} client
  * @param {{ password: string, today?: Date }} options
@@ -179,6 +306,8 @@ export async function seedDevData(client, { password, today = new Date() }) {
     'Save archers',
   )
 
+  await saveTournaments(client, today)
+
   const existingUsers = await listAllUsers(client)
   for (const account of SEED_ACCOUNTS) {
     const userId = await ensureAuthUser(client, existingUsers, emailFor(account), password)
@@ -199,6 +328,12 @@ export async function removeDevData(client) {
   for (const user of seedUsers) {
     must(await client.auth.admin.deleteUser(user.id), `Delete ${user.email}`)
   }
+
+  // Tournaments go first: their entries, scores, and matches point at the archers, type, and category.
+  const tournamentIds = seedTournaments(new Date()).map((tournament) => tournament.id)
+  must(await client.from('tournaments').delete().in('id', tournamentIds), 'Delete tournaments')
+  must(await client.from('tournament_types').delete().eq('id', SEED_TOURNAMENT_TYPE.id), 'Delete tournament type')
+  must(await client.from('categories').delete().eq('id', SEED_CATEGORY.id), 'Delete category')
 
   const participantIds = SEED_ACCOUNTS.filter((account) => account.participantId).map(
     (account) => account.participantId,
