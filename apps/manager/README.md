@@ -8,6 +8,7 @@ The manager is the current archery club and tournament application. It is a Vue 
 - Tournament types with reusable custom target types, and tournament categories.
 - Archer directory and tournament rosters. A manager picks the category when adding an archer to a tournament
   (see [Category levels](#category-levels)).
+- Tournament dates: a date range or separate days (see [Tournament dates](#tournament-dates)).
 - Per-tournament rounds and archer scores.
 - First-round Olympic-style match seeding and match score entry.
 - Light and dark themes.
@@ -48,6 +49,19 @@ It has no level order number, never blocks another category, and is never blocke
   category's level order and exemption. The database ranks any category that arrives without a level order by
   minimum age within its bow type, whichever client sent it, and the import keeps the archers' past entries as
   they were even when they break the rule.
+
+## Tournament dates
+
+- A tournament has one or more days. The create form offers **Date range** (a start and an end) or **Separate dates**
+  (days added one by one with **Add date** and taken out with **Remove date**).
+- At least one day is required. The end cannot be before the start, a day cannot repeat, and a tournament can last at
+  most 31 days. The form and the app check this before saving.
+- A range is saved as one row per day in `tournament_dates`, so a range and separate days read the same way.
+- Lists show one day, a start to end range when the days are consecutive, or the first day with a day count.
+  The date tile, the order of the lists, and the age checks use the first day. The upcoming and past filters and the
+  Up next card use the last day, so a tournament in progress is still upcoming.
+- An archer's age for category limits is the age on the first day, both in the app warning and in the database check.
+- Old browser data with a single `date` imports as a one-day tournament.
 
 ## Dashboard
 

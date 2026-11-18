@@ -7,6 +7,15 @@ import NavIcon from './components/NavIcon.vue'
 import PlansPage from './components/PlansPage.vue'
 import { findBlockingCategory } from './services/categoryRules'
 import { activeSubscription, findOverlappingSubscription, todayString } from './services/planRules'
+import {
+  expandRange,
+  firstDay,
+  lastDay,
+  MAX_TOURNAMENT_DAYS,
+  normalizeDays,
+  validateDays,
+  validateRange,
+} from './services/tournamentDates'
 
 const props = defineProps({
   initialData: { type: Object, required: true },
@@ -207,8 +216,11 @@ const roleSummary = computed(() => {
     .filter(Boolean)
     .join(' · ')
 })
-const upcomingTournaments = computed(() => [...data.value.tournaments].sort((a, b) => a.date.localeCompare(b.date)))
-const nextTournament = computed(() => upcomingTournaments.value.find((item) => item.date >= today()))
+const upcomingTournaments = computed(() =>
+  [...data.value.tournaments].sort((a, b) => firstDay(a).localeCompare(firstDay(b))),
+)
+// A tournament still counts as next while its last day has not passed.
+const nextTournament = computed(() => upcomingTournaments.value.find((item) => lastDay(item) >= today()))
 // Name-only archers (other clubs') appear in tournaments and scores but never in the directory or its pickers,
 // so a club cannot browse archers it does not own.
 const directoryParticipants = computed(() => data.value.participants.filter((person) => !person.nameOnly))
@@ -258,7 +270,7 @@ const selectedMatch = computed(
 const filteredTournaments = computed(() =>
   upcomingTournaments.value.filter((tournament) => {
     const matchesSearch = tournament.name.toLowerCase().includes(tournamentQuery.value.toLowerCase())
-    const isPast = tournament.date < today()
+    const isPast = lastDay(tournament) < today()
     const matchesStatus = tournamentStatusFilter.value === 'past' ? isPast : !isPast
     return matchesSearch && matchesStatus
   }),
@@ -341,7 +353,9 @@ const selectedParticipantScoreRows = computed(() =>
         },
       ]
     }),
-  ].sort((a, b) => (b.tournament?.date || '').localeCompare(a.tournament?.date || '')),
+  ].sort((a, b) =>
+    (b.tournament ? firstDay(b.tournament) : '').localeCompare(a.tournament ? firstDay(a.tournament) : ''),
+  ),
 )
 
 const blankClub = () => ({
@@ -360,7 +374,10 @@ const blankClub = () => ({
 })
 const blankTournament = () => ({
   name: '',
-  date: '',
+  dateMode: 'range',
+  startDate: '',
+  endDate: '',
+  days: [''],
   discipline: 'Outdoor target',
   tournamentTypeId: data.value.tournamentTypes[0]?.id || '',
   clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : data.value.clubs[0]?.id || '',
@@ -448,7 +465,25 @@ function formatDate(value) {
   }).format(new Date(`${value}T00:00:00Z`))
 }
 
+/**
+ * @param {{ dates: string[] }} tournament Tournament with its days oldest first.
+ * @returns {string} One day, a start to end range for consecutive days, or the first day with a day count.
+ */
+function formatDates(tournament) {
+  const days = tournament.dates
+  if (days.length < 2) return formatDate(days[0])
+  const isConsecutive = expandRange(days[0], days[days.length - 1]).length === days.length
+  return isConsecutive
+    ? t('{start} to {end}', { start: formatDate(firstDay(tournament)), end: formatDate(lastDay(tournament)) })
+    : t('{start} ({count} days)', { start: formatDate(firstDay(tournament)), count: days.length })
+}
+
+function dayOfMonth(value) {
+  return value ? new Date(`${value}T00:00:00Z`).getUTCDate() : ''
+}
+
 function formatMonth(value) {
+  if (!value) return ''
   return new Intl.DateTimeFormat(language.value, { month: 'short', timeZone: 'UTC' }).format(
     new Date(`${value}T00:00:00Z`),
   )
@@ -499,9 +534,10 @@ function categoryDescription(category) {
 }
 
 function ageAtTournament(participant, tournament) {
-  if (!participant.birthDate || !tournament.date) return null
+  const startDay = firstDay(tournament)
+  if (!participant.birthDate || !startDay) return null
   const birthDate = new Date(`${participant.birthDate}T00:00:00Z`)
-  const eventDate = new Date(`${tournament.date}T00:00:00Z`)
+  const eventDate = new Date(`${startDay}T00:00:00Z`)
   const years = eventDate.getUTCFullYear() - birthDate.getUTCFullYear()
   const birthdayHasPassed =
     eventDate.getUTCMonth() > birthDate.getUTCMonth() ||
@@ -714,8 +750,15 @@ async function saveTournament() {
     notify('Select a host club or use a custom address')
     return
   }
+  const { dateMode, startDate, endDate, days, ...details } = form.value
+  const dateError = dateMode === 'range' ? validateRange(startDate, endDate) : validateDays(days)
+  if (dateError) {
+    modalError.value = t(dateError)
+    return
+  }
   const tournament = {
-    ...form.value,
+    ...details,
+    dates: dateMode === 'range' ? expandRange(startDate, endDate) : normalizeDays(days),
     // A club user can only host for their own club, whatever the form holds.
     clubId: canManage.value ? form.value.clubId : props.userScope.clubId,
     id: makeId(),
@@ -1580,7 +1623,7 @@ async function recordMatchScore(match, side, value) {
               </div>
               <strong class="next-event">{{ nextTournament?.name || t('No upcoming events') }}</strong>
               <span class="stat-label">{{
-                nextTournament ? formatDate(nextTournament.date) : t('No event scheduled')
+                nextTournament ? formatDates(nextTournament) : t('No event scheduled')
               }}</span>
               <button v-if="nextTournament" class="text-link" @click="openTournament(nextTournament.id)">
                 {{ t('View tournament') }} <span>→</span>
@@ -1611,9 +1654,7 @@ async function recordMatchScore(match, side, value) {
                   @keydown.enter.space.self.prevent="openTournament(event.id)"
                 >
                   <div class="date-tile">
-                    <span>{{ formatMonth(event.date) }}</span><strong>{{
-                      new Date(`${event.date}T00:00:00Z`).getUTCDate()
-                    }}</strong>
+                    <span>{{ formatMonth(firstDay(event)) }}</span><strong>{{ dayOfMonth(firstDay(event)) }}</strong>
                   </div>
                   <div class="event-info">
                     <strong>{{ event.name }}</strong><span
@@ -1989,10 +2030,8 @@ async function recordMatchScore(match, side, value) {
               @keydown.enter.space.self.prevent="openTournament(event.id)"
             >
               <div class="tournament-date">
-                <span>{{ formatMonth(event.date) }}</span><strong>{{
-                  new Date(`${event.date}T00:00:00Z`).getUTCDate()
-                }}</strong
-                ><small>{{ new Date(`${event.date}T00:00:00Z`).getUTCFullYear() }}</small>
+                <span>{{ formatMonth(firstDay(event)) }}</span><strong>{{ dayOfMonth(firstDay(event)) }}</strong
+                ><small>{{ firstDay(event).slice(0, 4) }}</small>
               </div>
               <div class="tournament-details">
                 <span class="event-tag">{{
@@ -2230,7 +2269,7 @@ async function recordMatchScore(match, side, value) {
                     :key="`${row.tournamentId}-${row.round}-${index}`"
                   >
                     <td>{{ row.tournament?.name || t('Tournament removed') }}</td>
-                    <td>{{ row.tournament ? formatDate(row.tournament.date) : '—' }}</td>
+                    <td>{{ row.tournament ? formatDates(row.tournament) : '—' }}</td>
                     <td>{{ row.category?.name || t('Unassigned') }}</td>
                     <td>{{ row.scoreType }}</td>
                     <td>{{ row.round }}</td>
@@ -2262,7 +2301,7 @@ async function recordMatchScore(match, side, value) {
                 <p class="eyebrow">{{ t('TOURNAMENT DETAILS') }}</p>
                 <h1>{{ selectedTournament.name }}</h1>
                 <p class="page-subtitle">
-                  {{ formatDate(selectedTournament.date) }} · {{ displayChoice(selectedTournament.discipline) }}
+                  {{ formatDates(selectedTournament) }} · {{ displayChoice(selectedTournament.discipline) }}
                 </p>
                 <p v-if="selectedTournament.startedAt" class="page-subtitle">
                   {{
@@ -2854,10 +2893,49 @@ async function recordMatchScore(match, side, value) {
               ><span>{{ t('TOURNAMENT NAME') }} <b>*</b></span
               ><input v-model="form.name" required :placeholder="t('e.g. Spring Championship')"
             /></label>
-            <label class="form-field"
-              ><span>{{ t('DATE') }} <b>*</b></span
-              ><input v-model="form.date" required type="date"
-            /></label>
+            <div class="form-field full">
+              <span>{{ t('DATES') }} <b>*</b></span>
+              <select v-model="form.dateMode" :aria-label="t('How to enter the dates')">
+                <option value="range">{{ t('Date range') }}</option>
+                <option value="days">{{ t('Separate dates') }}</option>
+              </select>
+            </div>
+            <template v-if="form.dateMode === 'range'">
+              <label class="form-field"
+                ><span>{{ t('START DATE') }} <b>*</b></span
+                ><input v-model="form.startDate" required type="date"
+              /></label>
+              <label class="form-field"
+                ><span>{{ t('END DATE') }} <b>*</b></span
+                ><input v-model="form.endDate" required type="date" :min="form.startDate || undefined"
+              /></label>
+            </template>
+            <div v-else class="form-field full">
+              <div v-for="(day, index) in form.days" :key="index" class="field-with-button">
+                <input
+                  v-model="form.days[index]"
+                  required
+                  type="date"
+                  :aria-label="t('Tournament date {number}', { number: index + 1 })"
+                />
+                <button
+                  v-if="form.days.length > 1"
+                  type="button"
+                  class="button button-outline"
+                  @click="form.days.splice(index, 1)"
+                >
+                  {{ t('Remove date') }}
+                </button>
+              </div>
+              <button
+                type="button"
+                class="button button-outline"
+                :disabled="form.days.length >= MAX_TOURNAMENT_DAYS"
+                @click="form.days.push('')"
+              >
+                {{ t('Add date') }}
+              </button>
+            </div>
             <label class="form-field"
               ><span>{{ t('DISCIPLINE') }}</span
               ><select v-model="form.discipline">

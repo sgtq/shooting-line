@@ -1,4 +1,5 @@
 import { requestPasswordReset } from '@shooting-line/auth'
+import { normalizeDays } from './tournamentDates.js'
 
 function throwOnError({ error }) {
   if (error) throw error
@@ -184,6 +185,7 @@ export function createManagerRepository(client) {
       'target_types',
       'categories',
       'tournaments',
+      'tournament_dates',
       'tournament_rounds',
       'tournament_categories',
       'tournament_participants',
@@ -207,6 +209,7 @@ export function createManagerRepository(client) {
       targetTypesResult,
       categoriesResult,
       tournamentsResult,
+      datesResult,
       roundsResult,
       tournamentCategoriesResult,
       tournamentParticipantsResult,
@@ -227,6 +230,13 @@ export function createManagerRepository(client) {
       const tournamentRounds = roundsByTournament.get(round.tournament_id) || []
       tournamentRounds.push(round)
       roundsByTournament.set(round.tournament_id, tournamentRounds)
+    }
+
+    const datesByTournament = new Map()
+    for (const entry of datesResult.data) {
+      const days = datesByTournament.get(entry.tournament_id) || []
+      days.push(entry.day)
+      datesByTournament.set(entry.tournament_id, days)
     }
 
     const participantsByTournament = new Map()
@@ -263,7 +273,7 @@ export function createManagerRepository(client) {
       tournaments: tournamentsResult.data.map((row) => ({
         id: row.id,
         name: row.name,
-        date: row.date,
+        dates: (datesByTournament.get(row.id) || []).sort(),
         discipline: row.discipline,
         tournamentTypeId: row.tournament_type_id,
         clubId: row.club_id || '',
@@ -368,13 +378,19 @@ export function createManagerRepository(client) {
       tournaments: workspace.tournaments.map((tournament) => ({
         id: tournamentIds.get(tournament.id),
         name: tournament.name,
-        date: tournament.date,
         discipline: tournament.discipline || '',
         tournament_type_id: typeIds.get(tournament.tournamentTypeId) || null,
         club_id: clubIds.get(tournament.clubId) || null,
         venue_mode: tournament.venueMode || 'club',
         custom_address: tournament.customAddress || '',
       })),
+      tournament_dates: workspace.tournaments.flatMap((tournament) =>
+        // Browser data from before multi-day tournaments holds a single date.
+        normalizeDays(tournament.dates ?? [tournament.date]).map((day) => ({
+          tournament_id: tournamentIds.get(tournament.id),
+          day,
+        })),
+      ),
       tournament_rounds: workspace.tournaments.flatMap((tournament) =>
         tournament.rounds.map((name, position) => ({
           id: getRoundId(tournament.id, name),
@@ -668,11 +684,24 @@ export function createManagerRepository(client) {
     if (error) throw error
   }
 
+  /**
+   * Deletes a half-created tournament so a failed save leaves nothing behind, then rethrows the original error.
+   * @param {string} tournamentId Tournament to remove.
+   * @param {Error} cause The error that stopped the save.
+   * @returns {Promise<never>} Always throws.
+   */
+  async function removeTournamentAfterFailure(tournamentId, cause) {
+    const { error: cleanupError } = await client.from('tournaments').delete().eq('id', tournamentId)
+    if (cleanupError) {
+      throw new Error(`${cause.message}; cleanup also failed: ${cleanupError.message}`)
+    }
+    throw cause
+  }
+
   async function saveTournament(tournament) {
     const { error: tournamentError } = await client.from('tournaments').insert({
       id: tournament.id,
       name: tournament.name,
-      date: tournament.date,
       discipline: tournament.discipline,
       tournament_type_id: tournament.tournamentTypeId || null,
       club_id: tournament.clubId || null,
@@ -681,6 +710,11 @@ export function createManagerRepository(client) {
     })
     if (tournamentError) throw tournamentError
 
+    const { error: datesError } = await client
+      .from('tournament_dates')
+      .insert(normalizeDays(tournament.dates).map((day) => ({ tournament_id: tournament.id, day })))
+    if (datesError) await removeTournamentAfterFailure(tournament.id, datesError)
+
     const roundId = makeId()
     const { error: roundError } = await client.from('tournament_rounds').insert({
       id: roundId,
@@ -688,13 +722,7 @@ export function createManagerRepository(client) {
       name: 'Qualification',
       position: 0,
     })
-    if (roundError) {
-      const { error: cleanupError } = await client.from('tournaments').delete().eq('id', tournament.id)
-      if (cleanupError) {
-        throw new Error(`${roundError.message}; cleanup also failed: ${cleanupError.message}`)
-      }
-      throw roundError
-    }
+    if (roundError) await removeTournamentAfterFailure(tournament.id, roundError)
     roundIds.set(roundKey(tournament.id, 'Qualification'), roundId)
   }
 
