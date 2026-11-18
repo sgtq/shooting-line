@@ -1,6 +1,6 @@
 ---
 name: work-ticket
-description: Work a ticket from start to a ready commit. Looks the ticket up by number in docs/planning/tickets.md, or reads it from a URL if one is given. Plans the change, builds it with tests, docs, and translations, and runs CI. Use when the user asks to work, start, build, or implement a ticket.
+description: Work a ticket from start to a ready commit. Looks the ticket up by number in docs/planning/<app>/tickets.md, or reads it from a URL if one is given. Plans the change, builds it with tests, docs, and translations, and runs CI. Use when the user asks to work, start, build, or implement a ticket.
 argument-hint: '<ticket number or URL>'
 ---
 
@@ -13,10 +13,12 @@ language, no em dashes, and ask the user when something is unclear instead of gu
 
 - If the argument is a URL, read the ticket from that URL (use `gh issue view <url>` for GitHub issues).
   Do not look in `tickets.md` first.
-- Otherwise treat the argument as a ticket number and look it up in `docs/planning/tickets.md`.
-  Ids can be sub-tickets such as `5a` or `5b`.
-- The same number can appear in more than one phase table (for example Manager and Scoresheet both have
-  `11`). If the number matches more than one row, list the matches and ask which one.
+- Otherwise treat the argument as a ticket number and look it up in the per-app files
+  `docs/planning/<app>/tickets.md` (`manager`, `ianseo-dashboard`, `scorecard`). Ids can be sub-tickets
+  such as `5a` or `5b`.
+- The same number can appear in more than one app (for example Manager and Scorecard both have `11`).
+  If the number matches more than one row, list the matches with their app and ask which one. The app
+  folder also holds a `plan.md` when there is one. Read it before planning.
 - If there is no argument, or no row matches, say so and ask. Do not pick a ticket yourself.
 
 Read the full ticket text. If the ticket is vague, has open choices, or touches scope you cannot judge
@@ -82,7 +84,7 @@ user at the end instead of fixing it.
 
 ## 7. Update the ticket status
 
-Keep the status in `docs/planning/tickets.md` current as the work moves, not only at the end:
+Keep the status in the app's `docs/planning/<app>/tickets.md` current as the work moves, not only at the end:
 
 - Set `[~]` as soon as the branch is ready (end of step 3), before planning or coding.
 - Set `[x]` only when the work is finished and verified (step 6 passed).
