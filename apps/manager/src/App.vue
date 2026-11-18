@@ -4,7 +4,9 @@ import LanguageSwitcher from '@shooting-line/i18n/LanguageSwitcher.vue'
 import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import NavIcon from './components/NavIcon.vue'
+import PlansPage from './components/PlansPage.vue'
 import { findBlockingCategory } from './services/categoryRules'
+import { activeSubscription, findOverlappingSubscription, todayString } from './services/planRules'
 
 const props = defineProps({
   initialData: { type: Object, required: true },
@@ -66,13 +68,40 @@ const allNavItems = [
   { id: 'clubs', label: 'Clubs', icon: 'clubs' },
   { id: 'participants', label: 'Archers', icon: 'archers' },
   { id: 'user-access', label: 'User access', icon: 'user-access' },
+  { id: 'plans', label: 'Plans', icon: 'plans' },
 ]
 const canManage = computed(() => ['admin', 'manager'].includes(props.userRole))
 const isAdmin = computed(() => props.userRole === 'admin')
 const isClubUser = computed(() => props.userRole === 'club')
-const canManageParticipants = computed(() => canManage.value || (isClubUser.value && Boolean(props.userScope.clubId)))
+// Clubs can create tournaments only while they hold an active plan. The database enforces the same rule.
+const clubHasActivePlan = computed(() =>
+  Boolean(activeSubscription(data.value.subscriptions ?? [], props.userId, todayString())),
+)
+const canCreateTournament = computed(
+  () => canManage.value || (isClubUser.value && Boolean(props.userScope.clubId) && clubHasActivePlan.value),
+)
+// Clubs can read every tournament but change only their own, and only until it is started. A manager can
+// always change a tournament, and is the only one who can reopen a started one.
+const canEditTournament = computed(
+  () =>
+    canManage.value ||
+    Boolean(
+      clubHasActivePlan.value &&
+      isClubUser.value &&
+      selectedTournament.value?.clubId === props.userScope.clubId &&
+      !selectedTournament.value.startedAt,
+    ),
+)
+const canStartTournament = computed(() => !selectedTournament.value?.startedAt && canEditTournament.value)
+const showPlanNotice = computed(() => isClubUser.value && !canManage.value && !clubHasActivePlan.value)
+const clubUserAccounts = computed(() =>
+  (data.value.userRoles ?? []).filter((item) => item.role === 'club').map(({ userId, email }) => ({ userId, email })),
+)
+// A club without an active plan can read but cannot change anything.
+const canClubEdit = computed(() => isClubUser.value && clubHasActivePlan.value)
+const canManageParticipants = computed(() => canManage.value || (canClubEdit.value && Boolean(props.userScope.clubId)))
 function canEditClub(club) {
-  return canManage.value || (isClubUser.value && club.id === props.userScope.clubId)
+  return canManage.value || (canClubEdit.value && club.id === props.userScope.clubId)
 }
 // Clubs have no separate detail page; the edit form is the club's detail view, so users who cannot edit
 // are taken to the Clubs directory instead.
@@ -81,11 +110,11 @@ function openClubDetails(club) {
   else activePage.value = 'clubs'
 }
 function canEditParticipant(person) {
-  return canManage.value || (isClubUser.value && person.clubId === props.userScope.clubId)
+  return canManage.value || (canClubEdit.value && person.clubId === props.userScope.clubId)
 }
 const visibleNavItems = computed(() =>
   allNavItems
-    .filter((item) => item.id !== 'user-access' || canManage.value)
+    .filter((item) => !['user-access', 'plans'].includes(item.id) || canManage.value)
     .map((item) => ({
       ...item,
       label: t(item.label),
@@ -113,10 +142,11 @@ const targetTypeName = ref('')
 const targetTypeError = ref('')
 const assignNewParticipant = ref(false)
 const changingCategoryKey = ref('')
-// 'existing' picks an archer already in the database. 'new' creates one. Only used when adding to a tournament.
-const archerSource = ref('new')
-const existingArcherSearch = ref('')
-const existingArcherId = ref('')
+// Matches for what the user types in the add-archer form. Each has a one-time token and never a database ID.
+const archerMatches = ref([])
+const selectedMatchToken = ref('')
+let archerSearchTimer = null
+let archerSearchRun = 0
 const editingClubId = ref('')
 const editingParticipantId = ref('')
 const toast = ref('')
@@ -177,10 +207,13 @@ const roleSummary = computed(() => {
 })
 const upcomingTournaments = computed(() => [...data.value.tournaments].sort((a, b) => a.date.localeCompare(b.date)))
 const nextTournament = computed(() => upcomingTournaments.value.find((item) => item.date >= today()))
+// Name-only archers (other clubs') appear in tournaments and scores but never in the directory or its pickers,
+// so a club cannot browse archers it does not own.
+const directoryParticipants = computed(() => data.value.participants.filter((person) => !person.nameOnly))
 const filteredParticipants = computed(() => {
   const term = search.value.trim().toLowerCase()
-  if (!term) return data.value.participants
-  return data.value.participants.filter((person) =>
+  if (!term) return directoryParticipants.value
+  return directoryParticipants.value.filter((person) =>
     [person.firstName, person.lastName, person.waId, person.aetayId]
       .filter(Boolean)
       .some((value) => value.toLowerCase().includes(term)),
@@ -217,28 +250,8 @@ const participantSearchOptions = computed(() => {
     .filter(Boolean)
   return [...new Set(values)]
 })
-const availableArchers = computed(() => {
-  const entered = selectedTournament.value?.participantIds ?? []
-  const term = existingArcherSearch.value.trim().toLowerCase()
-  return data.value.participants.filter(
-    (person) =>
-      !entered.includes(person.id) &&
-      (!term ||
-        [person.firstName, person.lastName, person.waId, person.aetayId]
-          .filter(Boolean)
-          .some((value) => value.toLowerCase().includes(term))),
-  )
-})
-const isPickingExistingArcher = computed(
-  () =>
-    modalType.value === 'participant' &&
-    assignNewParticipant.value &&
-    !editingParticipantId.value &&
-    archerSource.value === 'existing',
-)
-// The archer whose age and history decide which categories the pickers disable.
-const categorySubject = computed(() =>
-  isPickingExistingArcher.value ? participantById(existingArcherId.value) || form.value : form.value,
+const selectedMatch = computed(
+  () => archerMatches.value.find((match) => match.token === selectedMatchToken.value) || null,
 )
 const filteredTournaments = computed(() =>
   upcomingTournaments.value.filter((tournament) => {
@@ -282,7 +295,7 @@ const scoredCount = computed(
     ).length,
 )
 const scoreSummaries = computed(() =>
-  data.value.participants.map((participant) => {
+  directoryParticipants.value.map((participant) => {
     const roundScores = data.value.scores.filter((item) => item.participantId === participant.id)
     const matchScores = data.value.matches.filter(
       (match) =>
@@ -348,7 +361,7 @@ const blankTournament = () => ({
   date: '',
   discipline: 'Outdoor target',
   tournamentTypeId: data.value.tournamentTypes[0]?.id || '',
-  clubId: data.value.clubs[0]?.id || '',
+  clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : data.value.clubs[0]?.id || '',
   venueMode: 'club',
   customAddress: '',
 })
@@ -385,6 +398,39 @@ const blankUserRole = () => ({
   displayName: '',
 })
 const form = ref({})
+// Searches while the user types: the affiliation IDs first, then the name. Only the add-archer form searches, and
+// only for users who may change data, so a club without an active plan never reaches the database.
+const canSearchArchers = computed(() => canManage.value || (isClubUser.value && clubHasActivePlan.value))
+watch(() => [form.value.waId, form.value.aetayId, form.value.lastName, form.value.firstName], scheduleArcherSearch)
+
+/** @returns {void} */
+function scheduleArcherSearch() {
+  window.clearTimeout(archerSearchTimer)
+  selectedMatchToken.value = ''
+  const isAddingArcher = showModal.value && modalType.value === 'participant' && !editingParticipantId.value
+  const query = {
+    affiliationId: (form.value.waId || '').trim() || (form.value.aetayId || '').trim(),
+    lastName: (form.value.lastName || '').trim(),
+    firstName: (form.value.firstName || '').trim(),
+    tournamentId: assignNewParticipant.value ? selectedTournamentId.value : '',
+  }
+  if (!isAddingArcher || !canSearchArchers.value || (!query.affiliationId && query.lastName.length < 3)) {
+    archerSearchRun += 1
+    archerMatches.value = []
+    return
+  }
+  const run = (archerSearchRun += 1)
+  archerSearchTimer = window.setTimeout(async () => {
+    try {
+      const found = await props.repository.searchArchers(query)
+      if (run === archerSearchRun) archerMatches.value = found
+    } catch (error) {
+      if (run !== archerSearchRun) return
+      archerMatches.value = []
+      modalError.value = `${t('Archer search failed')}: ${error.message}`
+    }
+  }, 300)
+}
 
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -485,9 +531,10 @@ function openModal(type, assignToCurrentTournament = false) {
   showTargetTypeModal.value = false
   modalType.value = type
   assignNewParticipant.value = assignToCurrentTournament
-  archerSource.value = 'new'
-  existingArcherSearch.value = ''
-  existingArcherId.value = ''
+  window.clearTimeout(archerSearchTimer)
+  archerSearchRun += 1
+  archerMatches.value = []
+  selectedMatchToken.value = ''
   editingClubId.value = ''
   editingParticipantId.value = ''
   editingTournamentTypeId.value = ''
@@ -561,9 +608,6 @@ function addParticipantToClub(clubId) {
 
 function addParticipantToTournament() {
   openModal('participant', true)
-  if (data.value.participants.some((person) => !selectedTournament.value.participantIds.includes(person.id))) {
-    archerSource.value = 'existing'
-  }
   if (participantClubFilter.value && participantClubFilter.value !== '__unassigned__') {
     form.value.clubId = participantClubFilter.value
   }
@@ -660,12 +704,18 @@ async function saveClub() {
 }
 
 async function saveTournament() {
+  if (!canCreateTournament.value) {
+    notify('An active plan is required to create tournaments')
+    return
+  }
   if (form.value.venueMode === 'club' && !form.value.clubId) {
     notify('Select a host club or use a custom address')
     return
   }
   const tournament = {
     ...form.value,
+    // A club user can only host for their own club, whatever the form holds.
+    clubId: canManage.value ? form.value.clubId : props.userScope.clubId,
     id: makeId(),
     rounds: ['Qualification'],
     participantIds: [],
@@ -686,6 +736,56 @@ async function saveTournament() {
   closeModal()
   activePage.value = 'tournament-detail'
   notify('Tournament created')
+}
+
+async function savePlan(plan) {
+  const saved = { ...plan, id: plan.id || makeId(), userRole: 'club', isActive: plan.isActive ?? true }
+  await persistChange(
+    () => props.repository.savePlan(saved),
+    () => {
+      data.value.plans ??= []
+      const index = data.value.plans.findIndex((item) => item.id === saved.id)
+      if (index === -1) data.value.plans.push(saved)
+      else data.value.plans[index] = saved
+    },
+  )
+}
+
+async function savePlanPrice(price) {
+  const saved = { ...price, id: makeId() }
+  const wasSaved = await persistChange(
+    () => props.repository.savePlanPrice(saved),
+    () => {
+      data.value.planPrices ??= []
+      data.value.planPrices.push(saved)
+    },
+  )
+  if (wasSaved) notify('Price saved')
+}
+
+async function saveSubscription(subscription) {
+  if (findOverlappingSubscription(data.value.subscriptions ?? [], subscription)) {
+    notify('This club account already has a plan during these dates')
+    return
+  }
+  const saved = { ...subscription, id: makeId() }
+  const wasSaved = await persistChange(
+    () => props.repository.saveSubscription(saved),
+    () => {
+      data.value.subscriptions ??= []
+      data.value.subscriptions.push(saved)
+    },
+  )
+  if (wasSaved) notify('Plan assigned')
+}
+
+async function removeSubscription(subscription) {
+  await persistChange(
+    () => props.repository.removeSubscription(subscription.id),
+    () => {
+      data.value.subscriptions = data.value.subscriptions.filter((item) => item.id !== subscription.id)
+    },
+  )
 }
 
 async function saveTournamentType() {
@@ -989,6 +1089,19 @@ async function clearParticipantCategory(tournament, participant) {
   )
 }
 
+async function toggleTournamentStarted(tournament) {
+  const starting = !tournament.startedAt
+  if (starting && !window.confirm(t('Start this tournament? A club cannot change it after it starts.'))) return
+  const startedAt = starting ? new Date().toISOString() : ''
+  const saved = await persistChange(
+    () => props.repository.setTournamentStarted(tournament.id, startedAt),
+    () => {
+      tournament.startedAt = startedAt
+    },
+  )
+  if (saved) notify(starting ? 'Tournament started' : 'Tournament reopened')
+}
+
 async function removeParticipantFromTournament(tournament, participant) {
   if (!window.confirm(t('Remove {name} from this tournament?', { name: fullName(participant) }))) return
   await toggleParticipant(tournament, participant.id)
@@ -1058,38 +1171,52 @@ function categoryChoiceProblem(tournament, participant, categoryId) {
   return categoryBlockReason(tournament, participant, category)
 }
 
-async function addExistingArcherToTournament() {
+/**
+ * Empties the add-archer form so a different archer can be found or created. The club stays as it was, because a
+ * club user cannot change it and a manager may have opened the form from a club filter.
+ * @returns {void}
+ */
+function clearArcherForm() {
+  form.value = { ...blankParticipant(), clubId: form.value.clubId }
+  selectedMatchToken.value = ''
+  archerMatches.value = []
+  modalError.value = ''
+}
+
+/**
+ * Adds the archer the user chose from the matches. The database does the adding and the checks (age limits,
+ * category level) and returns only the archer's name.
+ * @returns {Promise<void>}
+ */
+async function addSelectedMatch() {
   const tournament = selectedTournament.value
-  const participant = participantById(existingArcherId.value)
-  if (!participant) {
-    notify('Select an archer')
-    return
-  }
+  const token = selectedMatchToken.value
   const categoryId = tournament.categoryIds.length ? form.value.categoryId : ''
-  const problem = categoryChoiceProblem(tournament, participant, categoryId)
-  if (problem) {
-    notify(problem)
+  if (tournament.categoryIds.length && !categoryFor(categoryId)) {
+    notify('Select a valid category')
     return
   }
-  if (
-    !(await persistChange(
-      () => props.repository.setTournamentParticipant(tournament.id, participant.id, true, categoryId),
-      () => {
-        tournament.participantIds.push(participant.id)
-        if (categoryId) tournament.categoryAssignments[participant.id] = categoryId
-      },
-      'modal',
-    ))
+  let archer = null
+  const saved = await persistChange(
+    async () => {
+      archer = await props.repository.addArcherByToken(tournament.id, token, categoryId)
+    },
+    () => {
+      if (!participantById(archer.id)) data.value.participants.push(archer)
+      tournament.participantIds.push(archer.id)
+      if (categoryId) tournament.categoryAssignments[archer.id] = categoryId
+    },
+    'modal',
   )
-    return
+  if (!saved) return
 
   closeModal()
   notify('Archer added to this tournament')
 }
 
 async function saveParticipant() {
-  if (isPickingExistingArcher.value) {
-    await addExistingArcherToTournament()
+  if (selectedMatch.value) {
+    await addSelectedMatch()
     return
   }
   const isEditing = Boolean(editingParticipantId.value)
@@ -1332,7 +1459,7 @@ async function recordMatchScore(match, side, value) {
       :user-email="userEmail"
       :user-name="userName"
       :role-summary="roleSummary"
-      :can-edit-profile="userRole !== 'archer'"
+      :can-edit-profile="userRole !== 'archer' && (!isClubUser || canManage || clubHasActivePlan)"
       @navigate="activePage = $event"
       @edit-profile="openModal('profile')"
     />
@@ -1375,10 +1502,18 @@ async function recordMatchScore(match, side, value) {
               <h1>{{ greeting }} <span class="wave">✳</span></h1>
               <p class="page-subtitle">{{ t('Here’s what’s happening across your archery community.') }}</p>
             </div>
-            <button v-if="canManage" class="button button-primary" @click="openModal('tournament')">
+            <button v-if="canCreateTournament" class="button button-primary" @click="openModal('tournament')">
               <span>＋</span> {{ t('Create tournament') }}
             </button>
           </div>
+
+          <p v-if="showPlanNotice" class="privacy-note">
+            {{
+              t(
+                'Your club needs an active plan to create tournaments or change anything. Contact a manager to get one.',
+              )
+            }}
+          </p>
 
           <div class="stats-grid">
             <article class="stat-card clickable-card" @click="openUnlessSelecting(() => (activePage = 'tournaments'))">
@@ -1417,7 +1552,7 @@ async function recordMatchScore(match, side, value) {
                 :aria-label="t('Open archers')"
                 @click="activePage = 'participants'"
               >
-                {{ data.participants.length }}
+                {{ directoryParticipants.length }}
               </button>
               <span class="stat-label">{{ t('Archers') }}</span>
               <div class="stat-foot">{{ t('Open archer directory') }}</div>
@@ -1483,7 +1618,7 @@ async function recordMatchScore(match, side, value) {
                 <div class="empty-icon"><NavIcon name="tournaments" /></div>
                 <strong>{{ t('No tournaments yet') }}</strong>
                 <p>{{ canManage ? t('Create an event to get started.') : t('Upcoming events will appear here.') }}</p>
-                <button v-if="canManage" class="button button-outline" @click="openModal('tournament')">
+                <button v-if="canCreateTournament" class="button button-outline" @click="openModal('tournament')">
                   {{ t('Create tournament') }}
                 </button>
               </div>
@@ -1686,7 +1821,7 @@ async function recordMatchScore(match, side, value) {
           </div>
           <div class="section-toolbar">
             <div class="toolbar-count">
-              {{ data.participants.length }} {{ t('archers') }} <span>·</span> {{ t('Saved for future events') }}
+              {{ directoryParticipants.length }} {{ t('archers') }} <span>·</span> {{ t('Saved for future events') }}
             </div>
             <div class="search-box">
               <span>⌕</span><input v-model="search" :placeholder="t('Search last name or affiliation...')" />
@@ -1786,10 +1921,17 @@ async function recordMatchScore(match, side, value) {
               <h1>{{ t('Tournaments') }}</h1>
               <p class="page-subtitle">{{ t('Create events, select archers, and manage event details.') }}</p>
             </div>
-            <button v-if="canManage" class="button button-primary" @click="openModal('tournament')">
+            <button v-if="canCreateTournament" class="button button-primary" @click="openModal('tournament')">
               <span>＋</span> {{ t('Create tournament') }}
             </button>
           </div>
+          <p v-if="showPlanNotice" class="privacy-note">
+            {{
+              t(
+                'Your club needs an active plan to create tournaments or change anything. Contact a manager to get one.',
+              )
+            }}
+          </p>
           <div v-if="canManage" class="type-shortcut">
             <span>{{ t('Need a different event format?') }}</span><button
               class="text-link"
@@ -2027,6 +2169,19 @@ async function recordMatchScore(match, side, value) {
           </p>
         </section>
 
+        <PlansPage
+          v-else-if="activePage === 'plans' && canManage"
+          :plans="data.plans ?? []"
+          :prices="data.planPrices ?? []"
+          :subscriptions="data.subscriptions ?? []"
+          :club-users="clubUserAccounts"
+          :error="databaseError"
+          @save-plan="savePlan"
+          @save-price="savePlanPrice"
+          @save-subscription="saveSubscription"
+          @remove-subscription="removeSubscription"
+        />
+
         <section v-else-if="activePage === 'score-detail'">
           <div class="page-heading heading-row">
             <div>
@@ -2095,7 +2250,28 @@ async function recordMatchScore(match, side, value) {
                 <p class="page-subtitle">
                   {{ formatDate(selectedTournament.date) }} · {{ displayChoice(selectedTournament.discipline) }}
                 </p>
+                <p v-if="selectedTournament.startedAt" class="page-subtitle">
+                  {{
+                    canManage
+                      ? t('This tournament is started.')
+                      : t('This tournament is started and locked. Ask a manager to reopen it.')
+                  }}
+                </p>
               </div>
+              <button
+                v-if="canStartTournament"
+                class="button button-outline"
+                @click="toggleTournamentStarted(selectedTournament)"
+              >
+                {{ t('Start tournament') }}
+              </button>
+              <button
+                v-else-if="canManage && selectedTournament.startedAt"
+                class="button button-outline"
+                @click="toggleTournamentStarted(selectedTournament)"
+              >
+                {{ t('Reopen tournament') }}
+              </button>
             </div>
             <section class="tournament-summary">
               <div>
@@ -2159,7 +2335,11 @@ async function recordMatchScore(match, side, value) {
                   <h2>{{ t('Tournament archers') }}</h2>
                   <p>{{ t('Archers entered in this tournament.') }}</p>
                 </div>
-                <button v-if="canManage" class="button button-small button-outline" @click="addParticipantToTournament">
+                <button
+                  v-if="canEditTournament"
+                  class="button button-small button-outline"
+                  @click="addParticipantToTournament"
+                >
                   {{ t('＋ Add archer') }}
                 </button>
               </div>
@@ -2188,7 +2368,7 @@ async function recordMatchScore(match, side, value) {
                 <div class="roster-row roster-head">
                   <span>{{ t('ARCHER') }}</span>
                   <span>{{ t('CATEGORY') }}</span>
-                  <span v-if="canManage">{{ t('ACTIONS') }}</span>
+                  <span v-if="canEditTournament">{{ t('ACTIONS') }}</span>
                 </div>
                 <div v-for="person in filteredTournamentParticipantsDirectory" :key="person.id" class="roster-row">
                   <span class="roster-person">
@@ -2234,7 +2414,7 @@ async function recordMatchScore(match, side, value) {
                       <span class="roster-category">{{
                         categoryFor(selectedTournament.categoryAssignments[person.id])?.name || '—'
                       }}</span>
-                      <template v-if="canManage">
+                      <template v-if="canEditTournament">
                         <button
                           v-if="categoryChangeOptions(selectedTournament, person).length"
                           class="button button-icon"
@@ -2255,7 +2435,7 @@ async function recordMatchScore(match, side, value) {
                       </template>
                     </template>
                     <select
-                      v-else-if="canManage && selectedTournament.categoryIds.length"
+                      v-else-if="canEditTournament && selectedTournament.categoryIds.length"
                       class="category-select"
                       :title="categoryLimitHint()"
                       :aria-label="t('Choose category of {name}', { name: fullName(person) })"
@@ -2275,7 +2455,7 @@ async function recordMatchScore(match, side, value) {
                     </select>
                     <span v-else class="roster-category">—</span>
                   </span>
-                  <span v-if="canManage" class="roster-actions">
+                  <span v-if="canEditTournament" class="roster-actions">
                     <button
                       class="button button-soft-danger"
                       :aria-label="t('Remove {name} from tournament', { name: fullName(person) })"
@@ -2296,13 +2476,13 @@ async function recordMatchScore(match, side, value) {
                   {{
                     selectedTournament.participantIds.length
                       ? t('Choose another club or clear the search.')
-                      : canManage
+                      : canEditTournament
                         ? t('Add an archer from the database or create a new one.')
                         : t('Archers entered in this tournament will appear here.')
                   }}
                 </p>
                 <button
-                  v-if="canManage && !selectedTournament.participantIds.length"
+                  v-if="canEditTournament && !selectedTournament.participantIds.length"
                   class="button button-primary"
                   @click="addParticipantToTournament"
                 >
@@ -2316,7 +2496,7 @@ async function recordMatchScore(match, side, value) {
                   <h2>{{ t('Tournament categories') }}</h2>
                   <p>
                     {{
-                      canManage
+                      canEditTournament
                         ? t('Choose the divisions available for this event. Assign each archer in Archers.')
                         : t('Divisions available for this event.')
                     }}
@@ -2331,7 +2511,7 @@ async function recordMatchScore(match, side, value) {
                   ><input
                     type="checkbox"
                     :checked="selectedTournament.categoryIds.includes(category.id)"
-                    :disabled="!canManage"
+                    :disabled="!canEditTournament"
                     @change="toggleTournamentCategory(selectedTournament, category.id)"
                   /><span class="category-roster-copy"
                     ><strong>{{ category.name }}</strong
@@ -2367,7 +2547,7 @@ async function recordMatchScore(match, side, value) {
                     <option v-for="round in selectedTournament.rounds" :key="round">{{ round }}</option>
                   </select></label
                 >
-                <form v-if="canManage" class="add-round-form" @submit.prevent="addRound">
+                <form v-if="canEditTournament" class="add-round-form" @submit.prevent="addRound">
                   <input
                     v-model="newRoundName"
                     :placeholder="t('Add a round...')"
@@ -2600,8 +2780,15 @@ async function recordMatchScore(match, side, value) {
           <div class="form-grid">
             <label class="form-field full"
               ><span>{{ t('CLUB NAME') }} <b>*</b></span
-              ><input v-model="form.name" required :placeholder="t('e.g. Northside Archery Club')"
+              ><input
+                v-model="form.name"
+                required
+                :disabled="!canManage"
+                :placeholder="t('e.g. Northside Archery Club')"
             /></label>
+            <p v-if="!canManage" class="privacy-note full">
+              {{ t('Only a manager can change the name and location of a club.') }}
+            </p>
             <label class="form-field"
               ><span>{{ t('REPRESENTATIVE NAME') }} <b>*</b></span
               ><input v-model="form.representative" required :placeholder="t('Full name')"
@@ -2622,12 +2809,16 @@ async function recordMatchScore(match, side, value) {
             /></label>
             <label class="form-field full"
               ><span>{{ t('LOCATION ADDRESS') }} <b>*</b></span
-              ><input v-model="form.address" required :placeholder="t('Street, city, state, ZIP')"
+              ><input
+                v-model="form.address"
+                required
+                :disabled="!canManage"
+                :placeholder="t('Street, city, state, ZIP')"
             /></label>
             <label class="form-field full"
               ><span
                 >{{ t('MAP LOCATION URL') }} <small>{{ t('OPTIONAL') }}</small></span
-              ><input v-model="form.mapUrl" type="url" placeholder="https://maps.google.com/..."
+              ><input v-model="form.mapUrl" type="url" :disabled="!canManage" placeholder="https://maps.google.com/..."
             /></label>
             <label class="form-field full">
               <span
@@ -2687,9 +2878,15 @@ async function recordMatchScore(match, side, value) {
             <div class="form-field full">
               <span>{{ t('HOST CLUB') }}</span>
               <div class="field-with-button">
-                <select v-model="form.clubId" :aria-label="t('Host club')">
-                  <option value="">{{ t('No club / independent event') }}</option>
-                  <option v-for="club in data.clubs" :key="club.id" :value="club.id">{{ club.name }}</option>
+                <select v-model="form.clubId" :disabled="!canManage" :aria-label="t('Host club')">
+                  <option v-if="canManage" value="">{{ t('No club / independent event') }}</option>
+                  <option
+                    v-for="club in canManage ? data.clubs : data.clubs.filter((item) => item.id === userScope.clubId)"
+                    :key="club.id"
+                    :value="club.id"
+                  >
+                    {{ club.name }}
+                  </option>
                 </select>
                 <button
                   v-if="canManage"
@@ -2853,62 +3050,73 @@ async function recordMatchScore(match, side, value) {
         </template>
         <template v-else>
           <div class="form-grid">
-            <div v-if="assignNewParticipant && !editingParticipantId" class="archer-source full" role="group">
-              <button
-                type="button"
-                class="button"
-                :class="archerSource === 'existing' ? 'button-primary' : 'button-outline'"
-                :aria-pressed="archerSource === 'existing'"
-                @click="archerSource = 'existing'"
-              >
-                {{ t('Existing archer') }}
-              </button>
-              <button
-                type="button"
-                class="button"
-                :class="archerSource === 'new' ? 'button-primary' : 'button-outline'"
-                :aria-pressed="archerSource === 'new'"
-                @click="archerSource = 'new'"
-              >
-                {{ t('New archer') }}
-              </button>
+            <label class="form-field"
+              ><span
+                >{{ t('WORLD ARCHERY ID') }} <small>{{ t('OPTIONAL') }}</small></span
+              ><input v-model="form.waId" autocomplete="off" :placeholder="t('Affiliation number')"
+            /></label>
+            <label class="form-field"
+              ><span
+                >{{ t('AETAY ID') }} <small>{{ t('OPTIONAL') }}</small></span
+              ><input v-model="form.aetayId" autocomplete="off" :placeholder="t('Affiliation number')"
+            /></label>
+            <label class="form-field"
+              ><span>{{ t('LAST NAME') }} <b v-if="!selectedMatch">*</b></span
+              ><input
+                v-model="form.lastName"
+                :required="!selectedMatch"
+                autocomplete="family-name"
+                :placeholder="t('Last name')"
+            /></label>
+            <label class="form-field"
+              ><span>{{ t('FIRST NAME') }} <b v-if="!selectedMatch">*</b></span
+              ><input
+                v-model="form.firstName"
+                :required="!selectedMatch"
+                autocomplete="given-name"
+                :placeholder="t('First name')"
+            /></label>
+            <div
+              v-if="archerMatches.length"
+              class="archer-pick-list full"
+              role="radiogroup"
+              :aria-label="t('Archers found')"
+            >
+              <p class="privacy-note">
+                {{
+                  assignNewParticipant
+                    ? t('Archers already in the database. Click one to add them instead of creating a new archer.')
+                    : t('Archers already in the database. Check that you are not creating a duplicate.')
+                }}
+              </p>
+              <label v-for="match in archerMatches" :key="match.token" class="archer-pick">
+                <input
+                  v-model="selectedMatchToken"
+                  type="radio"
+                  name="archer-match"
+                  :value="match.token"
+                  :disabled="!assignNewParticipant"
+                />
+                <span class="roster-name"
+                  ><strong>{{ match.lastName }}, {{ match.firstName }}</strong
+                  ><small>{{ clubFor(match.clubId)?.name || t('No club') }}</small></span
+                >
+              </label>
             </div>
-            <template v-if="isPickingExistingArcher">
-              <label class="form-field full"
-                ><span>{{ t('SEARCH THE ARCHER DATABASE') }}</span
-                ><input
-                  v-model="existingArcherSearch"
-                  :aria-label="t('Search the archer database')"
-                  :placeholder="t('Type a name or ID')"
-              /></label>
-              <div class="archer-pick-list full" role="radiogroup" :aria-label="t('Archers not in this tournament')">
-                <label v-for="person in availableArchers" :key="person.id" class="archer-pick">
-                  <input v-model="existingArcherId" type="radio" name="existing-archer" :value="person.id" />
-                  <span class="roster-name"
-                    ><strong>{{ person.lastName }}, {{ person.firstName }}</strong
-                    ><small
-                      >{{
-                        person.waId ? `World Archery ${person.waId}` : person.aetayId || t('No affiliation number')
-                      }}
-                      · {{ clubFor(person.clubId)?.name || t('No club') }} ·
-                      {{ ageAtTournament(person, selectedTournament) ?? t('Age unknown') }} {{ t('at event') }}</small
-                    ></span
-                  >
-                </label>
-                <p v-if="!availableArchers.length" class="address-preview">
-                  {{ t('No archers match. Create a new archer instead.') }}
-                </p>
-              </div>
-            </template>
-            <template v-else>
-              <label class="form-field"
-                ><span>{{ t('LAST NAME') }} <b>*</b></span
-                ><input v-model="form.lastName" required autocomplete="family-name" :placeholder="t('Last name')"
-              /></label>
-              <label class="form-field"
-                ><span>{{ t('FIRST NAME') }} <b>*</b></span
-                ><input v-model="form.firstName" required autocomplete="given-name" :placeholder="t('First name')"
-              /></label>
+            <div v-if="!editingParticipantId" class="full">
+              <button type="button" class="text-link" @click="clearArcherForm">{{ t('Clear form') }}</button>
+            </div>
+            <p v-if="selectedMatch" class="address-preview full">
+              {{
+                t('Adding {name}. Their record stays private to their own club.', {
+                  name: `${selectedMatch.firstName} ${selectedMatch.lastName}`,
+                })
+              }}
+              <button type="button" class="text-link" @click="selectedMatchToken = ''">
+                {{ t('Create a new archer instead') }}
+              </button>
+            </p>
+            <template v-if="!selectedMatch">
               <label class="form-field full"
                 ><span>{{ t('BIRTH DATE') }} <b>*</b></span
                 ><input v-model="form.birthDate" required type="date"
@@ -2928,16 +3136,6 @@ async function recordMatchScore(match, side, value) {
                   </option>
                 </select>
               </label>
-              <label class="form-field"
-                ><span
-                  >{{ t('WORLD ARCHERY ID') }} <small>{{ t('OPTIONAL') }}</small></span
-                ><input v-model="form.waId" :placeholder="t('Affiliation number')"
-              /></label>
-              <label class="form-field"
-                ><span
-                  >{{ t('AETAY ID') }} <small>{{ t('OPTIONAL') }}</small></span
-                ><input v-model="form.aetayId" :placeholder="t('Affiliation number')"
-              /></label>
             </template>
             <template v-if="assignNewParticipant && !editingParticipantId && selectedTournament?.categoryIds.length">
               <label class="form-field"
@@ -2959,16 +3157,14 @@ async function recordMatchScore(match, side, value) {
                     )"
                     :key="categoryId"
                     :value="categoryId"
-                    :disabled="
-                      Boolean(categoryBlockReason(selectedTournament, categorySubject, categoryFor(categoryId)))
-                    "
+                    :disabled="Boolean(categoryBlockReason(selectedTournament, form, categoryFor(categoryId)))"
                   >
                     {{ categoryFor(categoryId)?.name }}
                   </option>
                 </select></label
               >
             </template>
-            <p v-if="!isPickingExistingArcher" class="privacy-note full">
+            <p v-if="!selectedMatch" class="privacy-note full">
               {{ t('Archer details are stored in the shared manager database.') }}
             </p>
           </div>
@@ -2997,7 +3193,7 @@ async function recordMatchScore(match, side, value) {
                           ? t('Save profile')
                           : editingParticipantId
                             ? t('Save changes')
-                            : isPickingExistingArcher
+                            : selectedMatch
                               ? t('Add to tournament')
                               : t('Save archer')
             }}

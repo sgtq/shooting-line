@@ -27,16 +27,16 @@ It has no level order number, never blocks another category, and is never blocke
   one is chosen or **Cancel** is pressed, and an X icon that removes only the category (the archer stays in
   the tournament and the picker returns). The Actions column has **Remove from tournament**, which asks for
   confirmation and keeps the archer in the archer database.
-- **Add archer** on the Archers tab opens a dialog with two modes. **Existing archer** searches the archer
-  database (name or affiliation number) and lists archers who are not yet in the tournament. **New archer**
-  creates a record. Both then ask for the bow type and the category (limited to that bow type) when the
-  tournament has categories. Only the category is saved with the tournament entry. The bow type just narrows
-  the list.
+- **Add archer** on the Archers tab opens one form (see [Plans](#plans) for how archers are found). When the
+  tournament has categories, the form also asks for the bow type and the category (limited to that bow type).
+  Only the category is saved with the tournament entry. The bow type just narrows the list.
 - An archer who has ever entered a category cannot enter a category of the same bow type with a lower level
   order, in any tournament, and cannot be moved down inside a tournament. Moving up is allowed. Blocked
-  categories are disabled in the pickers. Entries in other bow types do not count.
-- Only managers and admins change an archer's category. Club users cannot. The database also rejects a
-  category that the tournament does not offer, so a direct call cannot assign one from another tournament.
+  categories are disabled in the pickers for archers already in the tournament. For an archer picked from a search match, the
+  database applies the rule and reports the refusal. Entries in other bow types do not count.
+- Managers and admins change an archer's category in any tournament. A club user can do the same only in a tournament
+  hosted by their own club, for archers of their own club, and only with an active plan (see [Plans](#plans)). The
+  database also rejects a category that the tournament does not offer, so a direct call cannot assign one from another tournament.
 - Removing an archer from a tournament, or removing only their category, clears that entry, so it no longer
   counts toward the rule.
 - The database enforces the rule with a trigger on `tournament_participants`, so it holds for any client.
@@ -77,13 +77,54 @@ On the dashboard, the club row's status button shows whether the club user is en
 Manager records are stored in Supabase PostgreSQL tables created and evolved by the migrations in `supabase/migrations/`. A signed-in account needs a Tournament Manager app grant. Database row-level security applies each user's access rules.
 
 - **System admin:** can manage all records, assign or remove manager roles in **User access**, and send password reset emails.
-- **Manager:** can create and manage clubs, tournament types, categories, tournaments, archers, and scores, enable or disable club users on the **Clubs** screen, and view **User access** to resend password reset emails to admin and manager accounts. Managers cannot add or remove roles.
-- **Club:** can view its own club information and related tournaments and archers, edit its own club details, and create or edit archers for its own club only. Club accounts cannot create tournaments, clubs, categories, or tournament types.
+- **Manager:** can create and manage clubs, tournament types, categories, tournaments, archers, and scores, enable or disable club users on the **Clubs** screen, and view **User access** to resend password reset emails to admin and manager accounts. Managers cannot add or remove roles. Managers also run the **Plans** screen (see [Plans](#plans)).
+- **Club:** can read every club, tournament, entry, and score, including those of other clubs, and the full record of its own archers only. Other archers show to it by name, and only once they are entered in a tournament. A club cannot read another club's archers' birth dates or affiliation IDs, and cannot list archers it does not own. It can find one by exact affiliation ID or by name, which shows only the name and club. It can edit its own club's contact details and logo, but never the club's name or location, which only a manager or admin can change. It can create or edit archers for its own club. A club with an active plan can also create tournaments hosted by its own club and change them until they are started (see [Plans](#plans)). Clubs cannot create clubs, categories, or tournament types, delete tournaments, enter scores, or change tournaments of other clubs.
 - **Archer:** read-only access to their own archer record and tournament entries.
 
 Admins manage manager roles from **User access**; the account must already exist in Supabase Auth. Club user access is enabled or disabled directly from the **Clubs** screen using the club's email and name (which grants or revokes the `club` role automatically). Saving a club's details and its access happens in one step, so if the access change fails (for example, no account exists for the email), the details are not saved either. One account can hold the club role for only one club; enabling a second club with the same email is rejected. A club shows as Enabled when at least one account holds its club role, including roles an admin assigned directly. Admins and managers can resend a one-time password reset email from a row in **User access**. Any signed-in user who can open the profile dialog (everyone except archers) can choose **Email me a password reset link** there to reset their own password. Users can also request a reset from the portal sign-in screen. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
 
 The GitHub Pages development preview is served at `/develop/` (or `/<repository>/develop/` on the default project-site domain) and connects to the development Supabase project. Access to manager data is controlled by Supabase Auth, app access, and RLS roles. The static preview bundle itself is public, as required by GitHub Pages; never include private credentials in it.
+
+### Plans
+
+Admins and managers open **Plans** from the sidebar. Only club accounts hold plans in this version. Archers have no
+plans.
+
+- A plan has a name and a duration kind: monthly, yearly, or custom range. A plan can be deactivated, which hides it
+  from new assignments but keeps existing subscriptions.
+- Prices are in Mexican pesos (MXN) only. They are kept as history. Each price has an amount, a start date, and an
+  optional end date. A price
+  with an end date works as a deal. When several prices cover a day, the one with the latest start date applies, so
+  the regular price returns after a deal ends.
+- A manager gives a club account a plan by choosing the plan, a start date, and an end date. Both dates count as
+  covered days, and one account cannot hold two plans that share a day. The app and the database both reject that. The end date is filled
+  in for monthly and yearly plans and can be changed. For a custom range the manager picks it. The price is filled
+  in from the catalogue and can be changed. The price charged is saved with the subscription, so later price changes
+  do not alter it.
+- A club can create tournaments only while a subscription covers today. The tournament is always hosted by the
+  club's own club. Until the tournament is started, the club can edit it, choose the categories it offers, add rounds, and add or remove archers and set
+  their category. Tournaments of other clubs are read-only for it.
+- There is one add-archer form, with the affiliation IDs (World Archery and AETAY) at the top, then the last and
+  first name. While the user types, the app looks for archers already in the database: by exact affiliation ID, or
+  by the start of the last name (at least 3 letters) and optionally the first name. Each match shows only the
+  archer's name and club, never an affiliation ID, birth date, or database ID, and at most 20 are shown. Archers
+  already in the tournament are left out. Clicking a match selects it, and **Add to tournament** adds that archer.
+  If no match is clicked, the form creates a new archer from what was typed. **Clear form** empties the form and any
+  chosen match so a different archer can be found or created. When the form is opened from the
+  Archers directory, matches are listed so the user can avoid a duplicate, but they cannot be picked.
+- Archers are found only by affiliation ID or name, never by database ID. A match is a one-time token that belongs
+  to the user who searched and expires after ten minutes, so the app never sends an archer's database ID to add them.
+- Age-limited categories are checked in the database against the archer's age on the tournament date, so a club can
+  enter an archer without ever seeing their birth date. The error names the category and never the age. An archer
+  with no birth date is not limited. Managers are warned in the app but not blocked by the database.
+- **Start tournament** locks a tournament for its club. A started tournament cannot be changed by a club, and only an
+  admin or manager can reopen it with **Reopen tournament**. Managers can always edit. A club without an active plan, or whose plan has ended, cannot use the app. It sees a screen saying the plan for its
+  club is no longer current, with the date its last plan ended, and nothing else loads. The database enforces this: it
+  shows that club no tournaments, clubs, archers, categories, or tournament types, refuses its changes, and refuses
+  its archer searches. It can still read its own account and subscription so the screen can explain. A manager has
+  to assign a plan before the club can come back in. Password reset emails still work from the portal sign-in screen. Entering scores and deleting tournaments stay with managers. The category-level rule still looks at every tournament the archer entered, not
+  only the club's own.
+- There is no payment step. Managers record the plan by hand.
 
 Target types are shared custom values. Add one with the + button in a tournament type form; no predefined target list is seeded.
 

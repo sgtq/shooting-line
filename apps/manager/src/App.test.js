@@ -80,6 +80,7 @@ function createRepository(overrides = {}) {
     setClubEnabled: vi.fn().mockResolvedValue(undefined),
     assignUserRole: vi.fn().mockResolvedValue('user-manager'),
     saveParticipant: vi.fn().mockResolvedValue(undefined),
+    searchArchers: vi.fn().mockResolvedValue([]),
     saveTargetType: vi.fn().mockResolvedValue(undefined),
     setParticipantClub: vi.fn().mockResolvedValue(undefined),
     setTournamentParticipant: vi.fn().mockResolvedValue(undefined),
@@ -361,13 +362,6 @@ describe('participant and club workflows', () => {
     const openAddDialog = (wrapper) => wrapper.get('.panel-heading .button-outline').trigger('click')
     const bowSelect = (wrapper) => wrapper.get('form.modal select[aria-label="Bow type"]')
     const categorySelect = (wrapper) => wrapper.get('form.modal select[aria-label="Category"]')
-    const option = (wrapper, value) => categorySelect(wrapper).get(`option[value="${value}"]`).element
-
-    async function chooseExistingRecurve(wrapper, archerId = 'participant-club') {
-      await openAddDialog(wrapper)
-      await wrapper.get(`input[name="existing-archer"][value="${archerId}"]`).setValue()
-      await bowSelect(wrapper).setValue('Recurve')
-    }
 
     describe('listing archers', () => {
       it('shows only archers in the tournament, with column headers and no state labels', async () => {
@@ -396,83 +390,152 @@ describe('participant and club workflows', () => {
       })
     })
 
-    describe('adding an existing archer', () => {
-      it('searches the database and adds the archer with the chosen category', async () => {
-        const repository = createRepository()
-        const wrapper = await openArchers(repository, createLevelWorkspace())
+    describe('adding an archer found in the database', () => {
+      const match = { token: 'tok-1', firstName: 'Riley', lastName: 'Shooter', clubId: 'club-north' }
+      const found = {
+        id: 'participant-found',
+        firstName: 'Riley',
+        lastName: 'Shooter',
+        birthDate: '',
+        waId: '',
+        aetayId: '',
+        clubId: 'club-north',
+        nameOnly: true,
+      }
+
+      async function typeLastName(wrapper, value) {
+        await wrapper.get('input[autocomplete="family-name"]').setValue(value)
+        await new Promise((resolve) => setTimeout(resolve, 350))
+        await flushPromises()
+      }
+
+      it('searches as the name is typed and adds the archer clicked with the chosen category', async () => {
+        const searchArchers = vi.fn().mockResolvedValue([match])
+        const addArcherByToken = vi.fn().mockResolvedValue(found)
+        const wrapper = await openArchers(createRepository({ searchArchers, addArcherByToken }), createLevelWorkspace())
         await openAddDialog(wrapper)
+        await typeLastName(wrapper, 'Sho')
 
-        const radios = () => wrapper.findAll('input[name="existing-archer"]').map((radio) => radio.element.value)
-        expect(radios()).toEqual(['participant-club', 'participant-independent'])
-        await wrapper.get('input[aria-label="Search the archer database"]').setValue('shooter')
-        expect(radios()).toEqual(['participant-independent'])
-        await wrapper.get('input[aria-label="Search the archer database"]').setValue('')
-
-        await wrapper.get('input[name="existing-archer"][value="participant-club"]').setValue()
+        expect(searchArchers).toHaveBeenLastCalledWith({
+          affiliationId: '',
+          lastName: 'Sho',
+          firstName: '',
+          tournamentId: 'tournament-open',
+        })
+        await wrapper.get('input[name="archer-match"]').setValue()
+        expect(wrapper.find('input[type="date"]').exists()).toBe(false)
         await bowSelect(wrapper).setValue('Recurve')
         await categorySelect(wrapper).setValue('rec-pro')
         await wrapper.get('form.modal').trigger('submit')
         await flushPromises()
 
-        expect(repository.setTournamentParticipant).toHaveBeenCalledWith(
-          'tournament-open',
-          'participant-club',
-          true,
-          'rec-pro',
-        )
-        expect(repository.saveParticipant).not.toHaveBeenCalled()
-        expect(wrapper.get('.roster-row:not(.roster-head)').text()).toContain('Archer, Alex')
+        expect(addArcherByToken).toHaveBeenCalledWith('tournament-open', 'tok-1', 'rec-pro')
+        expect(wrapper.get('.roster-row:not(.roster-head)').text()).toContain('Shooter, Riley')
         expect(wrapper.get('.roster-category').text()).toBe('Pro')
         expect(wrapper.find('form.modal').exists()).toBe(false)
+        expect(wrapper.vm.$props.repository.saveParticipant).not.toHaveBeenCalled()
       })
 
-      it('does not offer archers who are already in the tournament', async () => {
-        const wrapper = await openArchers(createRepository(), createEnteredWorkspace('rec-open'))
+      it('creates a new archer when no match is clicked', async () => {
+        const searchArchers = vi.fn().mockResolvedValue([match])
+        const addArcherByToken = vi.fn()
+        const repository = createRepository({ searchArchers, addArcherByToken })
+        const wrapper = await openArchers(repository, createLevelWorkspace(''))
         await openAddDialog(wrapper)
-
-        const radios = wrapper.findAll('input[name="existing-archer"]').map((radio) => radio.element.value)
-        expect(radios).toEqual(['participant-independent'])
-      })
-
-      it('asks for an archer before saving', async () => {
-        const repository = createRepository()
-        const wrapper = await openArchers(repository, createLevelWorkspace())
-        await openAddDialog(wrapper)
+        await typeLastName(wrapper, 'Shooter')
+        await wrapper.get('input[autocomplete="given-name"]').setValue('Other')
+        await wrapper.get('input[type="date"]').setValue('2000-05-05')
+        await bowSelect(wrapper).setValue('Recurve')
+        await categorySelect(wrapper).setValue('rec-open')
         await wrapper.get('form.modal').trigger('submit')
         await flushPromises()
 
-        expect(repository.setTournamentParticipant).not.toHaveBeenCalled()
-        expect(wrapper.text()).toContain('Select an archer')
+        expect(addArcherByToken).not.toHaveBeenCalled()
+        expect(repository.saveParticipant).toHaveBeenCalledTimes(1)
+      })
+
+      it('searches by affiliation ID without needing a name', async () => {
+        const searchArchers = vi.fn().mockResolvedValue([match])
+        const wrapper = await openArchers(createRepository({ searchArchers }), createLevelWorkspace())
+        await openAddDialog(wrapper)
+        await wrapper.get('input[placeholder="Affiliation number"]').setValue('WA-77')
+        await new Promise((resolve) => setTimeout(resolve, 350))
+        await flushPromises()
+
+        expect(searchArchers).toHaveBeenLastCalledWith(
+          expect.objectContaining({ affiliationId: 'WA-77', lastName: '' }),
+        )
+        expect(wrapper.findAll('input[name="archer-match"]')).toHaveLength(1)
+      })
+
+      it('does not search before 3 letters of a last name', async () => {
+        const searchArchers = vi.fn().mockResolvedValue([])
+        const wrapper = await openArchers(createRepository({ searchArchers }), createLevelWorkspace())
+        await openAddDialog(wrapper)
+        await typeLastName(wrapper, 'Sh')
+
+        expect(searchArchers).not.toHaveBeenCalled()
+      })
+
+      it('asks for a category before adding a found archer to a tournament that has categories', async () => {
+        const addArcherByToken = vi.fn()
+        const wrapper = await openArchers(
+          createRepository({ searchArchers: vi.fn().mockResolvedValue([match]), addArcherByToken }),
+          createLevelWorkspace(),
+        )
+        await openAddDialog(wrapper)
+        await typeLastName(wrapper, 'Sho')
+        await wrapper.get('input[name="archer-match"]').setValue()
+        await wrapper.get('form.modal').trigger('submit')
+        await flushPromises()
+
+        expect(addArcherByToken).not.toHaveBeenCalled()
+        expect(wrapper.text()).toContain('Select a valid category')
       })
 
       it('adds without a category when the tournament has none', async () => {
-        const repository = createRepository()
+        const addArcherByToken = vi.fn().mockResolvedValue(found)
         const initialData = createLevelWorkspace()
         initialData.tournaments[0].categoryIds = []
-        const wrapper = await openArchers(repository, initialData)
+        const wrapper = await openArchers(
+          createRepository({ searchArchers: vi.fn().mockResolvedValue([match]), addArcherByToken }),
+          initialData,
+        )
         await openAddDialog(wrapper)
-        await wrapper.get('input[name="existing-archer"][value="participant-club"]').setValue()
-
+        await typeLastName(wrapper, 'Sho')
+        await wrapper.get('input[name="archer-match"]').setValue()
         expect(wrapper.find('form.modal select[aria-label="Bow type"]').exists()).toBe(false)
         await wrapper.get('form.modal').trigger('submit')
         await flushPromises()
 
-        expect(repository.setTournamentParticipant).toHaveBeenCalledWith(
-          'tournament-open',
-          'participant-club',
-          true,
-          '',
-        )
+        expect(addArcherByToken).toHaveBeenCalledWith('tournament-open', 'tok-1', '')
       })
 
-      it('opens on the new archer form when every archer is already entered', async () => {
-        const initialData = createEnteredWorkspace('rec-open')
-        initialData.tournaments[0].participantIds = ['participant-club', 'participant-independent']
-        const wrapper = await openArchers(createRepository(), initialData)
+      it('lets the user go back to creating a new archer after clicking a match', async () => {
+        const wrapper = await openArchers(
+          createRepository({ searchArchers: vi.fn().mockResolvedValue([match]) }),
+          createLevelWorkspace(),
+        )
         await openAddDialog(wrapper)
+        await typeLastName(wrapper, 'Sho')
+        await wrapper.get('input[name="archer-match"]').setValue()
+        expect(wrapper.text()).toContain('Adding Riley Shooter')
 
-        expect(wrapper.find('input[name="existing-archer"]').exists()).toBe(false)
-        expect(wrapper.find('input[autocomplete="family-name"]').exists()).toBe(true)
+        await wrapper
+          .findAll('button')
+          .find((button) => button.text() === 'Create a new archer instead')
+          .trigger('click')
+        expect(wrapper.find('input[type="date"]').exists()).toBe(true)
+      })
+
+      it('shows a failed search and leaves the form open', async () => {
+        const searchArchers = vi.fn().mockRejectedValue(new Error('search down'))
+        const wrapper = await openArchers(createRepository({ searchArchers }), createLevelWorkspace())
+        await openAddDialog(wrapper)
+        await typeLastName(wrapper, 'Sho')
+
+        expect(wrapper.text()).toContain('Archer search failed: search down')
+        expect(wrapper.find('form.modal').exists()).toBe(true)
       })
     })
 
@@ -481,7 +544,6 @@ describe('participant and club workflows', () => {
         const repository = createRepository()
         const wrapper = await openArchers(repository, createLevelWorkspace(''))
         await openAddDialog(wrapper)
-        await wrapper.findAll('.archer-source button')[1].trigger('click')
         await wrapper.get('input[autocomplete="family-name"]').setValue('Newman')
         await wrapper.get('input[autocomplete="given-name"]').setValue('Nia')
         await wrapper.get('input[type="date"]').setValue('2000-05-05')
@@ -507,93 +569,12 @@ describe('participant and club workflows', () => {
       })
     })
 
-    describe('the level rule in the add dialog', () => {
-      it('disables lower levels of the same bow type but not other bow types', async () => {
-        const wrapper = await openArchers(createRepository(), createLevelWorkspace('rec-open'))
-        await chooseExistingRecurve(wrapper)
-
-        expect(option(wrapper, 'rec-youth').disabled).toBe(true)
-        expect(option(wrapper, 'rec-open').disabled).toBe(false)
-        expect(option(wrapper, 'rec-pro').disabled).toBe(false)
-        await bowSelect(wrapper).setValue('Compound')
-        expect(option(wrapper, 'comp-youth').disabled).toBe(false)
-      })
-
-      it('blocks every lower level after the highest one', async () => {
-        const wrapper = await openArchers(createRepository(), createLevelWorkspace('rec-pro'))
-        await chooseExistingRecurve(wrapper)
-
-        expect(option(wrapper, 'rec-youth').disabled).toBe(true)
-        expect(option(wrapper, 'rec-open').disabled).toBe(true)
-        expect(option(wrapper, 'rec-pro').disabled).toBe(false)
-      })
-
-      it('does not save when a blocked category is forced', async () => {
-        const repository = createRepository()
-        const wrapper = await openArchers(repository, createLevelWorkspace('rec-open'))
-        await chooseExistingRecurve(wrapper)
-        await categorySelect(wrapper).setValue('rec-youth')
-        await wrapper.get('form.modal').trigger('submit')
-        await flushPromises()
-
-        expect(repository.setTournamentParticipant).not.toHaveBeenCalled()
-        expect(wrapper.text()).toContain('Already entered Open, a higher level')
-      })
-
-      it('lets an exempt category such as Masters be entered after any level', async () => {
-        const initialData = createLevelWorkspace('rec-pro')
-        initialData.categories.push({
-          id: 'rec-master',
-          name: 'Masters',
-          minAge: 50,
-          maxAge: null,
-          bowType: 'Recurve',
-          sortOrder: 0,
-          levelExempt: true,
-        })
-        initialData.participants[0].birthDate = '1960-01-01'
-        initialData.tournaments[0].categoryIds.push('rec-master')
-        const repository = createRepository()
-        const wrapper = await openArchers(repository, initialData)
-        await chooseExistingRecurve(wrapper)
-
-        expect(option(wrapper, 'rec-master').disabled).toBe(false)
-        expect(option(wrapper, 'rec-open').disabled).toBe(true)
-        await categorySelect(wrapper).setValue('rec-master')
-        await wrapper.get('form.modal').trigger('submit')
-        await flushPromises()
-        expect(repository.setTournamentParticipant).toHaveBeenCalledWith(
-          'tournament-open',
-          'participant-club',
-          true,
-          'rec-master',
-        )
-      })
-
-      it('does not let an exempt entry block the levels', async () => {
-        const initialData = createLevelWorkspace('rec-master')
-        initialData.categories.push({
-          id: 'rec-master',
-          name: 'Masters',
-          minAge: null,
-          maxAge: null,
-          bowType: 'Recurve',
-          sortOrder: 0,
-          levelExempt: true,
-        })
-        const wrapper = await openArchers(createRepository(), initialData)
-        await chooseExistingRecurve(wrapper)
-
-        expect(option(wrapper, 'rec-youth').disabled).toBe(false)
-        expect(option(wrapper, 'rec-pro').disabled).toBe(false)
-      })
-
-      it('explains on the category dropdowns that they are limited by age and known categories', async () => {
+    describe('the category dropdown in the add dialog', () => {
+      it('explains that categories are limited by age and known categories', async () => {
         const wrapper = await openArchers(createRepository(), createEnteredWorkspace(''))
         expect(wrapper.get('.roster-category-cell select').attributes('title')).toBe(hint)
 
         await openAddDialog(wrapper)
-        await wrapper.get('input[name="existing-archer"][value="participant-independent"]').setValue()
         expect(categorySelect(wrapper).attributes('title')).toBe(hint)
       })
     })
@@ -678,9 +659,6 @@ describe('participant and club workflows', () => {
         expect(repository.setTournamentParticipant).toHaveBeenCalledWith('tournament-open', 'participant-club', false)
         expect(wrapper.text()).not.toContain('Archer, Alex')
         expect(repository.saveParticipant).not.toHaveBeenCalled()
-
-        await openAddDialog(wrapper)
-        expect(wrapper.find('input[name="existing-archer"][value="participant-club"]').exists()).toBe(true)
       })
 
       it('keeps the archer when the removal is not confirmed', async () => {
@@ -840,7 +818,7 @@ describe('participant and club workflows', () => {
     expect(wrapper.get('form.modal').exists()).toBe(true)
   })
 
-  it('lets club users create and edit archers for their own club only without creating tournaments or clubs', async () => {
+  it('lets club users with a plan create and edit archers for their own club only, and create tournaments but not clubs', async () => {
     const initialData = createWorkspace()
     initialData.clubs.push({
       id: 'club-south',
@@ -864,17 +842,21 @@ describe('participant and club workflows', () => {
       clubId: 'club-south',
     })
 
+    initialData.subscriptions = [
+      { id: 's1', userId: 'club-user', planId: 'p1', startsOn: '2000-01-01', endsOn: '2999-01-01' },
+    ]
     const repository = createRepository()
     const wrapper = mountApp(repository, {
       initialData,
       userRole: 'club',
       userRoles: ['club'],
+      userId: 'club-user',
       userScope: { clubId: 'club-north' },
     })
 
     expect(wrapper.find('button[aria-label="User access"]').exists()).toBe(false)
     await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
-    expect(wrapper.find('.page-heading .button-primary').exists()).toBe(false)
+    expect(wrapper.find('.page-heading .button-primary').exists()).toBe(true)
     await wrapper.get('button[aria-label="Tournament types"]').trigger('click')
     expect(wrapper.find('.page-heading .button-primary').exists()).toBe(false)
     await wrapper.get('button[aria-label="Categories"]').trigger('click')
@@ -913,5 +895,509 @@ describe('participant and club workflows', () => {
 
     expect(wrapper.find('button[aria-label="User access"]').exists()).toBe(false)
     expect(wrapper.get('.profile-button').element.disabled).toBe(true)
+  })
+})
+
+describe('plans and club tournament creation', () => {
+  const today = new Date().toISOString().slice(0, 10)
+  const clubProps = { userRole: 'club', userRoles: ['club'], userId: 'club-user', userScope: { clubId: 'club-north' } }
+
+  function clubWorkspace(subscriptions) {
+    return { ...createWorkspace(), plans: [], planPrices: [], subscriptions }
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn(), clear: vi.fn() })
+    vi.stubGlobal('crypto', { randomUUID: () => 'new-id' })
+  })
+
+  afterEach(() => {
+    setLanguage('en')
+    vi.unstubAllGlobals()
+  })
+
+  it('hides tournament creation and explains why for a club without an active plan', () => {
+    const expired = { id: 's1', userId: 'club-user', planId: 'p1', startsOn: '2000-01-01', endsOn: '2000-02-01' }
+    const wrapper = mountApp(createRepository(), { ...clubProps, initialData: clubWorkspace([expired]) })
+
+    expect(wrapper.text()).not.toContain('Create tournament')
+    expect(wrapper.text()).toContain('Your club needs an active plan to create tournaments')
+  })
+
+  it('does not count another user plan toward the club', () => {
+    const other = { id: 's1', userId: 'someone-else', planId: 'p1', startsOn: '2000-01-01', endsOn: '2999-01-01' }
+    const wrapper = mountApp(createRepository(), { ...clubProps, initialData: clubWorkspace([other]) })
+
+    expect(wrapper.text()).not.toContain('Create tournament')
+  })
+
+  it('lets a club with an active plan create a tournament for its own club only', async () => {
+    const active = { id: 's1', userId: 'club-user', planId: 'p1', startsOn: '2000-01-01', endsOn: '2999-01-01' }
+    const repository = createRepository({ saveTournament: vi.fn().mockResolvedValue(undefined) })
+    const wrapper = mountApp(repository, { ...clubProps, initialData: clubWorkspace([active]) })
+
+    expect(wrapper.text()).not.toContain('Your club needs an active plan')
+    await wrapper.get('.page-heading .button-primary').trigger('click')
+    const hostClub = wrapper.get('select[aria-label="Host club"]')
+    expect(hostClub.element.disabled).toBe(true)
+    expect(hostClub.element.value).toBe('club-north')
+
+    await wrapper.get('input[required]').setValue('Club Cup')
+    await wrapper.get('input[type="date"]').setValue('2099-05-05')
+    await wrapper.get('select[aria-label="Tournament type"]').setValue('type-outdoor')
+    await wrapper.get('form.modal').trigger('submit')
+    await flushPromises()
+
+    expect(repository.saveTournament).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Club Cup', clubId: 'club-north' }),
+    )
+  })
+
+  it('keeps the Plans page for managers', () => {
+    const wrapper = mountApp(createRepository(), { initialData: clubWorkspace([]) })
+    expect(wrapper.find('button[aria-label="Plans"]').exists()).toBe(true)
+
+    const club = mountApp(createRepository(), { ...clubProps, initialData: clubWorkspace([]) })
+    expect(club.find('button[aria-label="Plans"]').exists()).toBe(false)
+  })
+
+  it('assigns a plan with the dates the manager picks and reports a failed save', async () => {
+    const initialData = {
+      ...createWorkspace(),
+      userRoles: [{ userId: 'club-user', email: 'club@example.test', role: 'club' }],
+      plans: [{ id: 'plan-custom', name: 'Season', userRole: 'club', durationKind: 'custom', isActive: true }],
+      planPrices: [
+        { id: 'price-1', planId: 'plan-custom', amount: 50, currency: 'MXN', startsAt: '2000-01-01', endsAt: '' },
+      ],
+      subscriptions: [],
+    }
+    const saveSubscription = vi.fn().mockRejectedValueOnce(new Error('denied')).mockResolvedValue(undefined)
+    const wrapper = mountApp(createRepository({ saveSubscription }), { initialData })
+    await wrapper.get('button[aria-label="Plans"]').trigger('click')
+
+    const form = wrapper.findAll('form.plan-form')[2]
+    const [account, plan] = form.findAll('select')
+    await account.setValue('club-user')
+    await plan.setValue('plan-custom')
+    const [starts, ends] = form.findAll('input[type="date"]')
+    await starts.setValue(today)
+    await ends.setValue('2999-12-31')
+    expect(form.get('input[type="number"]').element.value).toBe('50')
+
+    await form.trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Save failed: denied')
+    expect(wrapper.text()).toContain('No club has a plan yet.')
+
+    await form.trigger('submit')
+    await flushPromises()
+    expect(saveSubscription).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userId: 'club-user',
+        planId: 'plan-custom',
+        startsOn: today,
+        endsOn: '2999-12-31',
+        pricePaid: 50,
+        currency: 'MXN',
+      }),
+    )
+    expect(wrapper.text()).toContain('club@example.test')
+  })
+
+  it('blocks a plan that overlaps another one for the same club account', async () => {
+    const initialData = {
+      ...createWorkspace(),
+      userRoles: [{ userId: 'club-user', email: 'club@example.test', role: 'club' }],
+      plans: [{ id: 'plan-custom', name: 'Season', userRole: 'club', durationKind: 'custom', isActive: true }],
+      planPrices: [],
+      subscriptions: [
+        { id: 's1', userId: 'club-user', planId: 'plan-custom', startsOn: '2030-01-01', endsOn: '2030-01-31' },
+      ],
+    }
+    const saveSubscription = vi.fn().mockResolvedValue(undefined)
+    const wrapper = mountApp(createRepository({ saveSubscription }), { initialData })
+    await wrapper.get('button[aria-label="Plans"]').trigger('click')
+
+    const form = wrapper.findAll('form.plan-form')[2]
+    const [account, plan] = form.findAll('select')
+    await account.setValue('club-user')
+    await plan.setValue('plan-custom')
+    const [starts, ends] = form.findAll('input[type="date"]')
+    await form.get('input[type="number"]').setValue('10')
+    await starts.setValue('2030-01-31')
+    await ends.setValue('2030-02-15')
+    await form.trigger('submit')
+    await flushPromises()
+    expect(saveSubscription).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('This club account already has a plan during these dates')
+
+    await starts.setValue('2030-02-01')
+    await form.trigger('submit')
+    await flushPromises()
+    expect(saveSubscription).toHaveBeenCalledTimes(1)
+  })
+
+  describe('club roster access', () => {
+    const active = { id: 's1', userId: 'club-user', planId: 'p1', startsOn: '2000-01-01', endsOn: '2999-01-01' }
+
+    function rosterWorkspace(subscriptions, tournamentClubId = 'club-north') {
+      const workspace = clubWorkspace(subscriptions)
+      workspace.tournaments[0].clubId = tournamentClubId
+      return workspace
+    }
+
+    async function openTournament(wrapper) {
+      await wrapper.get('button[aria-label="Tournaments"]').trigger('click')
+      await wrapper.get('.tournament-card').trigger('click')
+      await flushPromises()
+    }
+
+    it('shows the add archer button for a club with a plan on its own tournament', async () => {
+      const wrapper = mountApp(createRepository(), { ...clubProps, initialData: rosterWorkspace([active]) })
+      await openTournament(wrapper)
+
+      expect(wrapper.text()).toContain('Add archer')
+    })
+
+    it('hides it without an active plan', async () => {
+      const wrapper = mountApp(createRepository(), { ...clubProps, initialData: rosterWorkspace([]) })
+      await openTournament(wrapper)
+
+      expect(wrapper.text()).not.toContain('Add archer')
+    })
+
+    function withCategory(workspace, startedAt = '') {
+      workspace.categories = [{ id: 'cat-1', name: 'Open', minAge: null, maxAge: null, bowType: '', sortOrder: 0 }]
+      workspace.tournaments[0].startedAt = startedAt
+      return workspace
+    }
+
+    async function openCategories(wrapper) {
+      await openTournament(wrapper)
+      const tab = wrapper.findAll('.tournament-tabs button').find((button) => button.text() === 'Categories')
+      await tab.trigger('click')
+    }
+
+    it('lets a club change categories and start its own unstarted tournament', async () => {
+      const setTournamentStarted = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
+      const wrapper = mountApp(createRepository({ setTournamentStarted }), {
+        ...clubProps,
+        initialData: withCategory(rosterWorkspace([active])),
+      })
+      await openCategories(wrapper)
+      expect(wrapper.get('.category-roster-row input').element.disabled).toBe(false)
+
+      const start = wrapper.findAll('button').find((button) => button.text() === 'Start tournament')
+      await start.trigger('click')
+      await flushPromises()
+
+      expect(setTournamentStarted).toHaveBeenCalledWith('tournament-open', expect.stringMatching(/^\d{4}-\d\d-\d\dT/))
+      expect(wrapper.text()).toContain('started and locked')
+      expect(wrapper.get('.category-roster-row input').element.disabled).toBe(true)
+      expect(wrapper.text()).not.toContain('Add archer')
+      expect(wrapper.text()).not.toContain('Reopen tournament')
+    })
+
+    it('does not start the tournament when the club cancels the confirmation', async () => {
+      const setTournamentStarted = vi.fn()
+      vi.stubGlobal('confirm', vi.fn().mockReturnValue(false))
+      const wrapper = mountApp(createRepository({ setTournamentStarted }), {
+        ...clubProps,
+        initialData: rosterWorkspace([active]),
+      })
+      await openTournament(wrapper)
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text() === 'Start tournament')
+        .trigger('click')
+
+      expect(setTournamentStarted).not.toHaveBeenCalled()
+    })
+
+    it('locks an already started tournament for its club', async () => {
+      const wrapper = mountApp(createRepository(), {
+        ...clubProps,
+        initialData: withCategory(rosterWorkspace([active]), '2030-01-01T00:00:00Z'),
+      })
+      await openCategories(wrapper)
+
+      expect(wrapper.get('.category-roster-row input').element.disabled).toBe(true)
+      expect(wrapper.text()).not.toContain('Start tournament')
+      expect(wrapper.text()).not.toContain('Reopen tournament')
+    })
+
+    it('shows another club the tournament info without any edit or start controls', async () => {
+      const wrapper = mountApp(createRepository(), {
+        ...clubProps,
+        initialData: withCategory(rosterWorkspace([active], 'club-other')),
+      })
+      await openCategories(wrapper)
+
+      expect(wrapper.text()).toContain('Open Tournament')
+      expect(wrapper.get('.category-roster-row input').element.disabled).toBe(true)
+      expect(wrapper.text()).not.toContain('Start tournament')
+    })
+
+    it('lets a manager reopen a started tournament', async () => {
+      const setTournamentStarted = vi.fn().mockResolvedValue(undefined)
+      const wrapper = mountApp(createRepository({ setTournamentStarted }), {
+        initialData: withCategory(rosterWorkspace([]), '2030-01-01T00:00:00Z'),
+      })
+      await openTournament(wrapper)
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text() === 'Reopen tournament')
+        .trigger('click')
+      await flushPromises()
+
+      expect(setTournamentStarted).toHaveBeenCalledWith('tournament-open', '')
+      expect(wrapper.text()).toContain('Start tournament')
+    })
+
+    function withOtherClubArcher(workspace) {
+      workspace.participants.push({
+        id: 'participant-other',
+        firstName: 'Morgan',
+        lastName: 'Elsewhere',
+        birthDate: '',
+        waId: '',
+        aetayId: '',
+        clubId: 'club-other',
+        nameOnly: true,
+      })
+      workspace.tournaments[0].participantIds = ['participant-other']
+      return workspace
+    }
+
+    it('shows an archer of another club by name in a roster but not in the directory', async () => {
+      const wrapper = mountApp(createRepository(), {
+        ...clubProps,
+        initialData: withOtherClubArcher(rosterWorkspace([active])),
+      })
+      await openTournament(wrapper)
+      expect(wrapper.text()).toContain('Elsewhere')
+
+      await wrapper.get('button[aria-label="Archers"]').trigger('click')
+      expect(wrapper.text()).not.toContain('Elsewhere')
+      expect(wrapper.text()).toContain('Archer')
+    })
+
+    function foundArcher(overrides = {}) {
+      return {
+        id: 'participant-found',
+        firstName: 'Riley',
+        lastName: 'Found',
+        birthDate: '',
+        waId: '',
+        aetayId: '',
+        clubId: 'club-other',
+        nameOnly: true,
+        ...overrides,
+      }
+    }
+    const matchFor = (overrides = {}) => ({
+      token: 'tok-1',
+      firstName: 'Riley',
+      lastName: 'Found',
+      clubId: 'club-other',
+      ...overrides,
+    })
+
+    async function openAddArcher(wrapper) {
+      await openTournament(wrapper)
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text().includes('Add archer'))
+        .trigger('click')
+    }
+
+    async function typeAndWait(wrapper, selector, value) {
+      await wrapper.get(selector).setValue(value)
+      await new Promise((resolve) => setTimeout(resolve, 350))
+      await flushPromises()
+    }
+
+    it('has one add-archer form that starts with the affiliation ID', async () => {
+      const wrapper = mountApp(createRepository(), { ...clubProps, initialData: rosterWorkspace([active]) })
+      await openAddArcher(wrapper)
+
+      for (const label of ['Existing archer', 'New archer', 'By affiliation ID', 'Search by name']) {
+        expect(wrapper.get('form.modal').text()).not.toContain(label)
+      }
+      expect(wrapper.get('form.modal input').attributes('placeholder')).toBe('Affiliation number')
+    })
+
+    it('finds an archer of another club by affiliation ID and adds them without revealing their record', async () => {
+      const searchArchers = vi.fn().mockResolvedValue([matchFor()])
+      const addArcherByToken = vi.fn().mockResolvedValue(foundArcher())
+      const wrapper = mountApp(createRepository({ searchArchers, addArcherByToken }), {
+        ...clubProps,
+        initialData: rosterWorkspace([active]),
+      })
+      await openAddArcher(wrapper)
+      await typeAndWait(wrapper, 'input[placeholder="Affiliation number"]', 'WA-99')
+
+      expect(searchArchers).toHaveBeenLastCalledWith({
+        affiliationId: 'WA-99',
+        lastName: '',
+        firstName: '',
+        tournamentId: 'tournament-open',
+      })
+      const result = wrapper.get('.archer-pick')
+      expect(result.text()).toContain('Found, Riley')
+      expect(result.text()).not.toMatch(/WA|AETAY|\d{4}/)
+
+      await wrapper.get('input[name="archer-match"]').setValue()
+      await wrapper.get('form.modal').trigger('submit')
+      await flushPromises()
+
+      expect(addArcherByToken).toHaveBeenCalledWith('tournament-open', 'tok-1', '')
+      expect(wrapper.text()).toContain('Found')
+      await wrapper.get('button[aria-label="Archers"]').trigger('click')
+      expect(wrapper.text()).not.toContain('Riley')
+    })
+
+    it('creates a new archer when no match is clicked', async () => {
+      const saveParticipant = vi.fn().mockResolvedValue(undefined)
+      const addArcherByToken = vi.fn()
+      const wrapper = mountApp(
+        createRepository({ searchArchers: vi.fn().mockResolvedValue([matchFor()]), saveParticipant, addArcherByToken }),
+        { ...clubProps, initialData: rosterWorkspace([active]) },
+      )
+      await openAddArcher(wrapper)
+      await typeAndWait(wrapper, 'input[autocomplete="family-name"]', 'Found')
+      await wrapper.get('input[autocomplete="given-name"]').setValue('Different')
+      await wrapper.get('input[type="date"]').setValue('2001-01-01')
+      await wrapper.get('form.modal').trigger('submit')
+      await flushPromises()
+
+      expect(addArcherByToken).not.toHaveBeenCalled()
+      expect(saveParticipant).toHaveBeenCalledTimes(1)
+    })
+
+    it('shows the refusal and keeps the form when the database rejects the archer', async () => {
+      const addArcherByToken = vi
+        .fn()
+        .mockRejectedValue(new Error('This archer is below the minimum age for the category Masters'))
+      const wrapper = mountApp(
+        createRepository({ searchArchers: vi.fn().mockResolvedValue([matchFor()]), addArcherByToken }),
+        { ...clubProps, initialData: rosterWorkspace([active]) },
+      )
+      await openAddArcher(wrapper)
+      await typeAndWait(wrapper, 'input[autocomplete="family-name"]', 'Fou')
+      await wrapper.get('input[name="archer-match"]').setValue()
+      await wrapper.get('form.modal').trigger('submit')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('below the minimum age for the category Masters')
+      expect(wrapper.find('form.modal').exists()).toBe(true)
+    })
+
+    it('lists matches but does not let them be picked when adding from the archers directory', async () => {
+      const saveParticipant = vi.fn().mockResolvedValue(undefined)
+      const wrapper = mountApp(
+        createRepository({ searchArchers: vi.fn().mockResolvedValue([matchFor()]), saveParticipant }),
+        { ...clubProps, initialData: rosterWorkspace([active]) },
+      )
+      await wrapper.get('button[aria-label="Archers"]').trigger('click')
+      await wrapper.get('.page-heading .button-primary').trigger('click')
+      await typeAndWait(wrapper, 'input[autocomplete="family-name"]', 'Found')
+
+      expect(wrapper.get('input[name="archer-match"]').element.disabled).toBe(true)
+      await wrapper.get('input[autocomplete="given-name"]').setValue('Riley')
+      await wrapper.get('input[type="date"]').setValue('2001-01-01')
+      await wrapper.get('form.modal').trigger('submit')
+      await flushPromises()
+      expect(saveParticipant).toHaveBeenCalledTimes(1)
+    })
+
+    it('clears the form and the chosen match so a different archer can be saved', async () => {
+      const searchArchers = vi.fn().mockResolvedValue([matchFor()])
+      const wrapper = mountApp(createRepository({ searchArchers }), {
+        ...clubProps,
+        initialData: rosterWorkspace([active]),
+      })
+      await openAddArcher(wrapper)
+      await typeAndWait(wrapper, 'input[autocomplete="family-name"]', 'Found')
+      await wrapper.get('input[autocomplete="given-name"]').setValue('Riley')
+      await wrapper.get('input[name="archer-match"]').setValue()
+      expect(wrapper.text()).toContain('Adding Riley Found')
+
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text() === 'Clear form')
+        .trigger('click')
+      await flushPromises()
+
+      expect(wrapper.get('input[autocomplete="family-name"]').element.value).toBe('')
+      expect(wrapper.get('input[autocomplete="given-name"]').element.value).toBe('')
+      expect(wrapper.get('input[placeholder="Affiliation number"]').element.value).toBe('')
+      expect(wrapper.find('.archer-pick').exists()).toBe(false)
+      expect(wrapper.text()).not.toContain('Adding Riley Found')
+      expect(wrapper.find('input[type="date"]').exists()).toBe(true)
+      expect(wrapper.find('form.modal').exists()).toBe(true)
+    })
+
+    it('keeps a club name and location fixed for club users but not for managers', async () => {
+      const club = mountApp(createRepository(), { ...clubProps, initialData: rosterWorkspace([active]) })
+      await club.get('button[aria-label="Clubs"]').trigger('click')
+      await club.get('button[aria-label="Edit club"]').trigger('click')
+
+      expect(club.get('input[placeholder="e.g. Northside Archery Club"]').element.disabled).toBe(true)
+      expect(club.get('input[placeholder="Street, city, state, ZIP"]').element.disabled).toBe(true)
+      expect(club.get('input[placeholder="https://maps.google.com/..."]').element.disabled).toBe(true)
+      expect(club.get('input[placeholder="Full name"]').element.disabled).toBe(false)
+      expect(club.text()).toContain('Only a manager can change the name and location of a club.')
+
+      const manager = mountApp(createRepository(), { initialData: rosterWorkspace([]) })
+      await manager.get('button[aria-label="Clubs"]').trigger('click')
+      await manager.get('button[aria-label="Edit club"]').trigger('click')
+      expect(manager.get('input[placeholder="e.g. Northside Archery Club"]').element.disabled).toBe(false)
+      expect(manager.get('input[placeholder="Street, city, state, ZIP"]').element.disabled).toBe(false)
+      expect(manager.text()).not.toContain('Only a manager can change the name')
+    })
+
+    describe('a club whose plan lapses while the app is open', () => {
+      const expired = { id: 's1', userId: 'club-user', planId: 'p1', startsOn: '2000-01-01', endsOn: '2000-02-01' }
+
+      function lockedWrapper(searchArchers = vi.fn()) {
+        return mountApp(createRepository({ searchArchers }), {
+          ...clubProps,
+          initialData: rosterWorkspace([expired]),
+        })
+      }
+
+      it('has no add or edit buttons for archers or its club, and no account editing', async () => {
+        const wrapper = lockedWrapper()
+
+        expect(wrapper.get('.profile-button').element.disabled).toBe(true)
+        await wrapper.get('button[aria-label="Archers"]').trigger('click')
+        expect(wrapper.find('.page-heading .button-primary').exists()).toBe(false)
+        expect(wrapper.find('button[aria-label="Edit Alex Archer"]').exists()).toBe(false)
+        await wrapper.get('button[aria-label="Clubs"]').trigger('click')
+        expect(wrapper.find('button[aria-label="Edit club"]').exists()).toBe(false)
+        expect(wrapper.find('form.modal').exists()).toBe(false)
+      })
+
+      it('never searches the archer database', async () => {
+        const searchArchers = vi.fn()
+        const wrapper = lockedWrapper(searchArchers)
+        await openTournament(wrapper)
+
+        expect(wrapper.find('form.modal').exists()).toBe(false)
+        expect(searchArchers).not.toHaveBeenCalled()
+      })
+    })
+
+    it('hides it on a tournament hosted by another club', async () => {
+      const wrapper = mountApp(createRepository(), {
+        ...clubProps,
+        initialData: rosterWorkspace([active], 'club-other'),
+      })
+      await openTournament(wrapper)
+
+      expect(wrapper.text()).not.toContain('Add archer')
+    })
   })
 })

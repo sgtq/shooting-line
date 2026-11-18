@@ -51,6 +51,66 @@ function mapTargetType(row) {
   }
 }
 
+/**
+ * An archer known only by name. Other clubs' archers reach a club this way, so birth date and affiliation IDs
+ * stay empty and the row is left out of the archer directory and its pickers.
+ * @returns {object}
+ */
+function mapNameOnlyParticipant(row) {
+  return {
+    id: row.id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    birthDate: '',
+    waId: '',
+    aetayId: '',
+    clubId: row.club_id || '',
+    nameOnly: true,
+  }
+}
+
+/**
+ * @returns {object}
+ */
+function mapPlan(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    userRole: row.user_role,
+    durationKind: row.duration_kind,
+    isActive: row.is_active,
+  }
+}
+
+/**
+ * @returns {object}
+ */
+function mapPlanPrice(row) {
+  return {
+    id: row.id,
+    planId: row.plan_id,
+    amount: Number(row.amount),
+    currency: row.currency,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at || '',
+  }
+}
+
+/**
+ * @returns {object}
+ */
+function mapSubscription(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    planId: row.plan_id,
+    startsOn: row.starts_on,
+    endsOn: row.ends_on,
+    pricePaid: Number(row.price_paid),
+    currency: row.currency,
+  }
+}
+
 function mapUserRole(row) {
   return {
     userId: row.user_id,
@@ -129,9 +189,16 @@ export function createManagerRepository(client) {
       'tournament_participants',
       'round_scores',
       'matches',
+      'plans',
+      'plan_prices',
+      'user_subscriptions',
     ]
     if (includeUserRoles) tableNames.push('user_roles')
-    const results = await Promise.all(tableNames.map((table) => client.from(table).select('*')))
+    const [namesResult, ...results] = await Promise.all([
+      client.rpc('visible_participant_names'),
+      ...tableNames.map((table) => client.from(table).select('*')),
+    ])
+    throwOnError(namesResult)
     results.forEach(throwOnError)
     const [
       clubsResult,
@@ -145,6 +212,9 @@ export function createManagerRepository(client) {
       tournamentParticipantsResult,
       scoresResult,
       matchesResult,
+      plansResult,
+      planPricesResult,
+      subscriptionsResult,
       userRolesResult,
     ] = results
 
@@ -180,7 +250,13 @@ export function createManagerRepository(client) {
 
     return {
       clubs: clubsResult.data.map(mapClub),
-      participants: participantsResult.data.map(mapParticipant),
+      // Full records win. Name-only rows fill in archers the user may not read in full.
+      participants: [
+        ...participantsResult.data.map(mapParticipant),
+        ...(namesResult.data ?? [])
+          .filter((row) => !participantsResult.data.some((full) => full.id === row.id))
+          .map(mapNameOnlyParticipant),
+      ],
       tournamentTypes: typesResult.data.map(mapTournamentType),
       targetTypes: targetTypesResult.data.map(mapTargetType),
       categories: categoriesResult.data.map(mapCategory),
@@ -193,6 +269,7 @@ export function createManagerRepository(client) {
         clubId: row.club_id || '',
         venueMode: row.venue_mode,
         customAddress: row.custom_address,
+        startedAt: row.started_at || '',
         rounds: (roundsByTournament.get(row.id) || [])
           .sort((a, b) => a.position - b.position)
           .map((round) => round.name),
@@ -220,6 +297,9 @@ export function createManagerRepository(client) {
         score1: row.score1 === null ? '' : Number(row.score1),
         score2: row.score2 === null ? '' : Number(row.score2),
       })),
+      plans: plansResult.data.map(mapPlan),
+      planPrices: planPricesResult.data.map(mapPlanPrice),
+      subscriptions: subscriptionsResult.data.map(mapSubscription),
       userRoles: userRolesResult ? userRolesResult.data.map(mapUserRole) : [],
     }
   }
@@ -429,6 +509,92 @@ export function createManagerRepository(client) {
       p_user_id: userId,
       p_role: role,
     })
+    if (error) throw error
+  }
+
+  /** @returns {Promise<void>} */
+  async function savePlan(plan) {
+    const { error } = await client.from('plans').upsert({
+      id: plan.id,
+      name: plan.name,
+      user_role: plan.userRole,
+      duration_kind: plan.durationKind,
+      is_active: plan.isActive,
+    })
+    if (error) throw error
+  }
+
+  /** @returns {Promise<void>} */
+  async function savePlanPrice(price) {
+    const { error } = await client.from('plan_prices').insert({
+      id: price.id,
+      plan_id: price.planId,
+      amount: price.amount,
+      currency: price.currency,
+      starts_at: price.startsAt,
+      ends_at: price.endsAt || null,
+    })
+    if (error) throw error
+  }
+
+  /** @returns {Promise<void>} */
+  async function saveSubscription(subscription) {
+    const { error } = await client.from('user_subscriptions').insert({
+      id: subscription.id,
+      user_id: subscription.userId,
+      plan_id: subscription.planId,
+      starts_on: subscription.startsOn,
+      ends_on: subscription.endsOn,
+      price_paid: subscription.pricePaid,
+      currency: subscription.currency,
+    })
+    if (error) throw error
+  }
+
+  /**
+   * Finds archers while the user types in the add-archer form. Each match carries a one-time token and no
+   * database ID. Matches are name and club only.
+   * @returns {Promise<Array<{ token: string, firstName: string, lastName: string, clubId: string }>>}
+   */
+  async function searchArchers({ affiliationId = '', lastName = '', firstName = '', tournamentId = '' } = {}) {
+    const { data, error } = await client.rpc('search_archers', {
+      p_affiliation_id: affiliationId || null,
+      p_last_name: lastName || null,
+      p_first_name: firstName || null,
+      p_tournament_id: tournamentId || null,
+    })
+    if (error) throw error
+    return data.map((row) => ({
+      token: row.token,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      clubId: row.club_id || '',
+    }))
+  }
+
+  /** @returns {Promise<object>} The archer as a name-only record. */
+  async function addArcherByToken(tournamentId, token, categoryId = '') {
+    const { data, error } = await client.rpc('add_archer_by_token', {
+      p_tournament_id: tournamentId,
+      p_token: token,
+      p_category_id: categoryId || null,
+    })
+    if (error) throw error
+    return mapNameOnlyParticipant(data[0])
+  }
+
+  /** @returns {Promise<void>} */
+  async function setTournamentStarted(tournamentId, startedAt) {
+    const { error } = await client
+      .from('tournaments')
+      .update({ started_at: startedAt || null })
+      .eq('id', tournamentId)
+    if (error) throw error
+  }
+
+  /** @returns {Promise<void>} */
+  async function removeSubscription(subscriptionId) {
+    const { error } = await client.from('user_subscriptions').delete().eq('id', subscriptionId)
     if (error) throw error
   }
 
@@ -686,6 +852,13 @@ export function createManagerRepository(client) {
     uploadClubLogo,
     assignUserRole,
     removeUserRole,
+    savePlan,
+    savePlanPrice,
+    saveSubscription,
+    removeSubscription,
+    setTournamentStarted,
+    searchArchers,
+    addArcherByToken,
     saveUserProfile,
     sendAdminPasswordReset,
     sendOwnPasswordReset,

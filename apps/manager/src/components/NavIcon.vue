@@ -53,6 +53,10 @@ defineProps({
       <circle cx="12" cy="8" r="4" fill="currentColor" stroke="none" />
       <path d="M4 21a8 8 0 0 1 16 0z" fill="currentColor" stroke="none" />
     </template>
+    <template v-else-if="name === 'plans'">
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <path d="M3 10h18M7 15h3" />
+    </template>
     <template v-else-if="name === 'close'">
       <path d="M6 6l12 12M18 6L6 18" />
     </template>
