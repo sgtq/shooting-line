@@ -1,5 +1,5 @@
 <script setup>
-import { language, t } from '@shooting-line/i18n'
+import { t } from '@shooting-line/i18n'
 import LanguageSwitcher from '@shooting-line/i18n/LanguageSwitcher.vue'
 import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
@@ -8,17 +8,20 @@ import PlansPage from './components/PlansPage.vue'
 import { useTheme } from './composables/useTheme'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
 import { summarizeDecision } from './services/archerRequests'
-import { dayOfMonth, formatMonth as formatMonthName } from './services/dateFormat'
+import { dayOfMonth } from './services/dateFormat'
+import {
+  ageAtTournament,
+  categoryDescription,
+  displayChoice,
+  formatDate,
+  formatDates,
+  formatMonth,
+  fullName,
+  today,
+} from './services/display'
 import { findBlockingCategory } from './services/categoryRules'
 import { activeSubscription, findOverlappingSubscription, todayString } from './services/planRules'
-import {
-  firstDay,
-  lastDay,
-  MAX_TOURNAMENT_DAYS,
-  datesToForm,
-  isConsecutive,
-  resolveDays,
-} from './services/tournamentDates'
+import { firstDay, lastDay, MAX_TOURNAMENT_DAYS, datesToForm, resolveDays } from './services/tournamentDates'
 
 const props = defineProps({
   initialData: { type: Object, required: true },
@@ -443,56 +446,6 @@ function scheduleArcherSearch() {
   }, 300)
 }
 
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function formatDate(value) {
-  if (!value) return t('Date to be confirmed')
-  return new Intl.DateTimeFormat(language.value, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${value}T00:00:00Z`))
-}
-
-/**
- * @param {{ dates: string[] }} tournament Tournament with its days oldest first.
- * @returns {string} One day, a start to end range for consecutive days, or the first day with a day count.
- */
-function formatDates(tournament) {
-  const days = tournament.dates
-  if (days.length < 2) return formatDate(days[0])
-  return isConsecutive(days)
-    ? t('{start} to {end}', { start: formatDate(firstDay(tournament)), end: formatDate(lastDay(tournament)) })
-    : t('{start} ({count} days)', { start: formatDate(firstDay(tournament)), count: days.length })
-}
-
-function formatMonth(value) {
-  return formatMonthName(value, language.value)
-}
-
-function displayChoice(value) {
-  return [
-    'Outdoor target',
-    'Indoor target',
-    'Field',
-    'Other',
-    'Recurve',
-    'Compound',
-    'Barebow',
-    'Longbow',
-    'Traditional',
-  ].includes(value)
-    ? t(value)
-    : value
-}
-
-function fullName(person) {
-  return `${person.firstName} ${person.lastName}`
-}
-
 function clubFor(id) {
   return data.value.clubs.find((club) => club.id === id)
 }
@@ -503,30 +456,6 @@ function tournamentTypeFor(id) {
 
 function categoryFor(id) {
   return data.value.categories.find((category) => category.id === id)
-}
-
-function categoryDescription(category) {
-  const ageRange =
-    category.minAge !== null && category.minAge !== ''
-      ? t('Age {age}', {
-          age: `${category.minAge}${category.maxAge !== null && category.maxAge !== '' ? `–${category.maxAge}` : '+'}`,
-        })
-      : category.maxAge !== null && category.maxAge !== ''
-        ? t('Up to age {age}', { age: category.maxAge })
-        : t('All ages')
-  return [ageRange, category.bowType ? displayChoice(category.bowType) : t('Any bow type')].join(' · ')
-}
-
-function ageAtTournament(participant, tournament) {
-  const startDay = firstDay(tournament)
-  if (!participant.birthDate || !startDay) return null
-  const birthDate = new Date(`${participant.birthDate}T00:00:00Z`)
-  const eventDate = new Date(`${startDay}T00:00:00Z`)
-  const years = eventDate.getUTCFullYear() - birthDate.getUTCFullYear()
-  const birthdayHasPassed =
-    eventDate.getUTCMonth() > birthDate.getUTCMonth() ||
-    (eventDate.getUTCMonth() === birthDate.getUTCMonth() && eventDate.getUTCDate() >= birthDate.getUTCDate())
-  return years - (birthdayHasPassed ? 0 : 1)
 }
 
 function venueFor(tournament) {
