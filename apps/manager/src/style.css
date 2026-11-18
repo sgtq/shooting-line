@@ -300,6 +300,11 @@ a {
   align-items: end;
   gap: 24px;
 }
+.heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 .eyebrow {
   margin: 0 0 9px;
   color: #8a9686;

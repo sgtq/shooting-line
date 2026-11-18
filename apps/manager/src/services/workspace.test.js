@@ -416,6 +416,59 @@ describe('tournament dates', () => {
     )
   })
 
+  describe('saveTournamentDates', () => {
+    function datesClient({ failStep = '' } = {}) {
+      const upsert = vi.fn().mockResolvedValue({ error: failStep === 'upsert' ? new Error('upsert failed') : null })
+      const not = vi.fn().mockResolvedValue({ error: failStep === 'delete' ? new Error('delete failed') : null })
+      const eq = vi.fn(() => ({ not }))
+      const client = { from: vi.fn(() => ({ upsert, delete: () => ({ eq }) })) }
+      return { client, upsert, eq, not }
+    }
+
+    it('adds the new days, then removes the days no longer listed', async () => {
+      const { client, upsert, eq, not } = datesClient()
+      await createManagerRepository(client).saveTournamentDates('t1', ['2026-05-02', '2026-05-01', '2026-05-02'])
+
+      expect(client.from).toHaveBeenCalledWith('tournament_dates')
+      expect(upsert).toHaveBeenCalledWith(
+        [
+          { tournament_id: 't1', day: '2026-05-01' },
+          { tournament_id: 't1', day: '2026-05-02' },
+        ],
+        { onConflict: 'tournament_id,day', ignoreDuplicates: true },
+      )
+      expect(eq).toHaveBeenCalledWith('tournament_id', 't1')
+      expect(not).toHaveBeenCalledWith('day', 'in', '(2026-05-01,2026-05-02)')
+      expect(upsert.mock.invocationCallOrder[0]).toBeLessThan(not.mock.invocationCallOrder[0])
+    })
+
+    it('does not remove anything when adding the days fails', async () => {
+      const { client, not } = datesClient({ failStep: 'upsert' })
+
+      await expect(createManagerRepository(client).saveTournamentDates('t1', ['2026-05-01'])).rejects.toThrow(
+        'upsert failed',
+      )
+      expect(not).not.toHaveBeenCalled()
+    })
+
+    it('reports a failure to remove the old days', async () => {
+      const { client } = datesClient({ failStep: 'delete' })
+
+      await expect(createManagerRepository(client).saveTournamentDates('t1', ['2026-05-01'])).rejects.toThrow(
+        'delete failed',
+      )
+    })
+
+    it('refuses an empty list so the tournament keeps its days', async () => {
+      const { client } = datesClient()
+
+      await expect(createManagerRepository(client).saveTournamentDates('t1', ['', ''])).rejects.toThrow(
+        'at least one day',
+      )
+      expect(client.from).not.toHaveBeenCalled()
+    })
+  })
+
   describe('browser data import', () => {
     const emptyWorkspace = {
       clubs: [],

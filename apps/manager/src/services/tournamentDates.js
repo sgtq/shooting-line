@@ -81,3 +81,38 @@ export function firstDay(tournament) {
 export function lastDay(tournament) {
   return tournament.dates[tournament.dates.length - 1] || ''
 }
+
+/**
+ * @param {string[]} days Days oldest first.
+ * @returns {boolean} True when the days run one after another with no gap.
+ */
+export function isConsecutive(days) {
+  return days.length < 2 || expandRange(days[0], days[days.length - 1]).length === days.length
+}
+
+/**
+ * Fills the date fields of a form from the saved days. Consecutive days open as a range, others as a list.
+ * @param {string[]} days Days oldest first.
+ * @returns {{ dateMode: string, startDate: string, endDate: string, days: string[] }} Date form fields.
+ */
+export function datesToForm(days) {
+  const isRange = days.length > 0 && isConsecutive(days)
+  return {
+    dateMode: isRange ? 'range' : 'days',
+    startDate: days[0] || '',
+    endDate: days[days.length - 1] || '',
+    days: days.length ? [...days] : [''],
+  }
+}
+
+/**
+ * Checks the date fields of a form and turns them into the days to save.
+ * @param {{ dateMode: string, startDate: string, endDate: string, days: string[] }} fields Date form fields.
+ * @returns {{ dates: string[], error: string }} The days oldest first, and an English message key when invalid.
+ */
+export function resolveDays({ dateMode, startDate, endDate, days }) {
+  const isRange = dateMode === 'range'
+  const error = isRange ? validateRange(startDate, endDate) : validateDays(days)
+  if (error) return { dates: [], error }
+  return { dates: isRange ? expandRange(startDate, endDate) : normalizeDays(days), error: '' }
+}
