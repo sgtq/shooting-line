@@ -946,8 +946,29 @@ export function createManagerRepository(client) {
     if (error) throw error
   }
 
+  /**
+   * The tournament calendar for an archer, from a database function so no table policy is widened.
+   * @returns {Promise<object[]>}
+   */
+  async function loadUpcomingTournaments() {
+    const { data, error } = await client.rpc('upcoming_tournaments')
+    if (error) throw error
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      days: row.days ?? [],
+      discipline: row.discipline || '',
+      tournamentType: row.tournament_type || '',
+      hostClub: row.host_club || '',
+      address: row.address || '',
+      categories: row.categories ?? [],
+      isEntered: Boolean(row.is_entered),
+    }))
+  }
+
   return {
     load,
+    loadUpcomingTournaments,
     importLegacyWorkspace,
     saveClub,
     uploadClubLogo,

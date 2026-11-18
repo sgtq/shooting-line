@@ -98,11 +98,30 @@ Manager records are stored in Supabase PostgreSQL tables created and evolved by 
 - **System admin:** can manage all records, assign or remove manager roles in **User access**, and send password reset emails.
 - **Manager:** can create and manage clubs, tournament types, categories, tournaments, archers, and scores, enable or disable club users on the **Clubs** screen, and view **User access** to resend password reset emails to admin and manager accounts. Managers cannot add or remove roles. Managers also run the **Plans** screen (see [Plans](#plans)) and decide archer login requests (see [Archer login requests](#archer-login-requests)).
 - **Club:** can read every club, tournament, entry, and score, including those of other clubs, and the full record of its own archers only. Other archers show to it by name, and only once they are entered in a tournament. A club cannot read another club's archers' birth dates or affiliation IDs, and cannot list archers it does not own. It can find one by exact affiliation ID or by name, which shows only the name and club. It can edit its own club's contact details and logo, but never the club's name or location, which only a manager or admin can change. It can create or edit archers for its own club. A club with an active plan can also create tournaments hosted by its own club and change them until they are started (see [Plans](#plans)). Clubs cannot create clubs, categories, or tournament types, delete tournaments, enter scores, or change tournaments of other clubs.
-- **Archer:** read-only access to their own archer record and tournament entries, while the archer is enabled (see [Plans](#plans)). A disabled archer sees only a screen saying their user is not enabled.
+- **Archer:** read-only access to their own archer record, tournament entries, and scores, while the archer is enabled (see [Plans](#plans)). An enabled archer sees their own screen instead of the club screens (see [Archer view](#archer-view)). A disabled archer sees only a screen saying their user is not enabled.
 
 Admins manage manager roles from **User access**; the account must already exist in Supabase Auth. Club user access is enabled or disabled directly from the **Clubs** screen using the club's email and name (which grants or revokes the `club` role automatically). Saving a club's details and its access happens in one step, so if the access change fails (for example, no account exists for the email), the details are not saved either. One account can hold the club role for only one club; enabling a second club with the same email is rejected, even when two requests arrive at the same time. Enabling uses the club's saved login email, and falls back to its contact email when none is saved. A club shows as Enabled when at least one account holds its club role, including roles an admin assigned directly. Admins and managers can resend a one-time password reset email from a row in **User access**. Any signed-in user who can open the profile dialog (everyone except archers) can choose **Email me a password reset link** there to reset their own password. Users can also request a reset from the portal sign-in screen. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
 
 The GitHub Pages development preview is served at `/develop/` (or `/<repository>/develop/` on the default project-site domain) and connects to the development Supabase project. Access to manager data is controlled by Supabase Auth, app access, and RLS roles. The static preview bundle itself is public, as required by GitHub Pages; never include private credentials in it.
+
+### Archer view
+
+After sign-in the app reads the role. An enabled archer sees a separate screen, not the club screens, with two tabs.
+A disabled archer sees the not-enabled screen from [Plans](#plans) and nothing else.
+
+- **Upcoming tournaments** is a read-only calendar of every tournament that has not started yet, including ones
+  hosted by other clubs, with its dates, type, hosting club, location, and categories. A tournament that is already
+  under way is listed only for archers entered in it, and shows **You are entered**. The calendar cannot be used to
+  sign up for anything.
+- **Scores** lists the tournaments the archer is entered in, starting from their first day, newest first. Each row
+  shows the dates, the archer's category, the score of each round, the archer's own score in each knockout match,
+  and the total. Other archers' names and scores are never shown. **From** and **Until** filter by the first day of
+  the tournament. Above the table, the average round score is shown for each number of ends, because rounds of
+  different lengths are not comparable. Knockout matches have no average, since the number of ends of a match
+  round is not stored yet.
+- The calendar comes from the `upcoming_tournaments()` database function, which returns only calendar fields and
+  nothing from the club's contact details or the entries of other archers. No table policy is widened for it, so an
+  archer still reads only their own entries, scores, and matches.
 
 ### Archer login requests
 

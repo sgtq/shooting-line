@@ -5,6 +5,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { APP_IDS, createSupabaseClient, hasAppAccess } from '@shooting-line/auth'
 import { createManagerRepository, readLegacyWorkspace } from './services/workspace.js'
 import App from './App.vue'
+import ArcherView from './components/ArcherView.vue'
 
 const client = ref(null)
 const repository = ref(null)
@@ -26,6 +27,8 @@ const hasAccess = ref(false)
 const isImportPrompt = ref(false)
 const isPlanLapsed = ref(false)
 const isArcherDisabled = ref(false)
+const isArcherView = ref(false)
+const upcomingTournaments = ref([])
 const lastPlanEndedOn = ref('')
 const isImporting = ref(false)
 let authSubscription
@@ -130,6 +133,19 @@ async function checkAppAccess(userId) {
   }
 
   repository.value = managerRepository
+  // An archer gets their own view, not the club screens.
+  if (currentRole === 'archer') {
+    try {
+      upcomingTournaments.value = await managerRepository.loadUpcomingTournaments()
+    } catch (upcomingError) {
+      errorMessage.value = `${t('Unable to load the tournament calendar')}: ${upcomingError.message}`
+      isChecking.value = false
+      return
+    }
+    isArcherView.value = true
+    isChecking.value = false
+    return
+  }
   const hasManagerData = Object.entries(workspace.value).some(([key, rows]) => key !== 'userRoles' && rows.length > 0)
   const databaseIsEmpty = !hasManagerData
   if (databaseIsEmpty && ['admin', 'manager'].includes(currentRole)) {
@@ -208,8 +224,16 @@ onUnmounted(() => authSubscription?.unsubscribe())
 </script>
 
 <template>
+  <ArcherView
+    v-if="isArcherView"
+    :data="workspace"
+    :upcoming="upcomingTournaments"
+    :participant-id="userScope.participantId"
+    :user-name="userName"
+  />
+
   <App
-    v-if="isAuthorized"
+    v-else-if="isAuthorized"
     :initial-data="workspace"
     :repository="repository"
     :user-id="userId"
