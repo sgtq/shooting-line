@@ -1068,6 +1068,205 @@ describe('plans and club tournament creation', () => {
     expect(club.find('button[aria-label="Plans"]').exists()).toBe(false)
   })
 
+  describe('archer login requests', () => {
+    const activePlan = [{ id: 's1', userId: 'club-user', planId: 'p', startsOn: '2000-01-01', endsOn: '2999-12-31' }]
+
+    function requestWorkspace({ subscriptions = activePlan, archerRequests = [] } = {}) {
+      const workspace = clubWorkspace(subscriptions)
+      workspace.participants = [
+        { ...workspace.participants[0], email: 'alex@example.test' },
+        { ...workspace.participants[1], clubId: 'club-north', email: '' },
+      ]
+      return { ...workspace, archerRequests }
+    }
+
+    const request = (id, status = 'pending') => ({
+      id,
+      participantId: 'participant-club',
+      clubId: 'club-north',
+      status,
+      createdAt: '2026-01-01T00:00:00Z',
+    })
+
+    async function openRequests(wrapper) {
+      await wrapper.get('button[aria-label="Requests"]').trigger('click')
+    }
+
+    function buttonNamed(wrapper, name) {
+      return wrapper.findAll('button').find((button) => button.text() === name)
+    }
+
+    it('shows the Requests item to managers and clubs only', () => {
+      const archerProps = { userRole: 'archer', userRoles: ['archer'], userId: 'archer-user' }
+      const manager = mountApp(createRepository(), { initialData: requestWorkspace() })
+      expect(manager.find('[aria-label="Requests"]').exists()).toBe(true)
+      const club = mountApp(createRepository(), { ...clubProps, initialData: requestWorkspace() })
+      expect(club.find('[aria-label="Requests"]').exists()).toBe(true)
+      const archer = mountApp(createRepository(), { ...archerProps, initialData: requestWorkspace() })
+      expect(archer.find('[aria-label="Requests"]').exists()).toBe(false)
+    })
+
+    it('lets a club request a login only for an archer that has an email', async () => {
+      const createArcherRequest = vi.fn().mockResolvedValue(undefined)
+      const wrapper = mountApp(createRepository({ createArcherRequest }), {
+        ...clubProps,
+        initialData: requestWorkspace(),
+      })
+      await openRequests(wrapper)
+
+      const options = wrapper.findAll('form.plan-form option').map((option) => option.text())
+      expect(options.join(' ')).toContain('Archer, Alex (alex@example.test)')
+      expect(options.join(' ')).not.toContain('Shooter')
+
+      await wrapper.get('form.plan-form select').setValue('participant-club')
+      await wrapper.get('form.plan-form').trigger('submit')
+      await flushPromises()
+
+      expect(createArcherRequest).toHaveBeenCalledWith({
+        id: 'new-id',
+        participantId: 'participant-club',
+        clubId: 'club-north',
+        status: 'pending',
+        createdAt: expect.any(String),
+      })
+      expect(wrapper.text()).toContain('Pending')
+      expect(wrapper.text()).toContain('No archer can be requested')
+    })
+
+    it('shows a failed request and keeps the archer available', async () => {
+      const createArcherRequest = vi.fn().mockRejectedValue(new Error('denied'))
+      const wrapper = mountApp(createRepository({ createArcherRequest }), {
+        ...clubProps,
+        initialData: requestWorkspace(),
+      })
+      await openRequests(wrapper)
+      await wrapper.get('form.plan-form select').setValue('participant-club')
+      await wrapper.get('form.plan-form').trigger('submit')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Save failed: denied')
+      expect(wrapper.text()).toContain('No requests yet.')
+      expect(wrapper.find('form.plan-form select').exists()).toBe(true)
+    })
+
+    it('stops a club without an active plan from making requests', async () => {
+      const initialData = requestWorkspace({ subscriptions: [] })
+      const wrapper = mountApp(createRepository(), { ...clubProps, initialData })
+      await openRequests(wrapper)
+
+      expect(wrapper.text()).toContain('Your club needs an active plan to make requests.')
+      expect(wrapper.find('form.plan-form select').exists()).toBe(false)
+      expect(wrapper.get('form.plan-form button[type="submit"]').attributes('disabled')).toBeDefined()
+    })
+
+    it('shows a club only its own requests with their status', async () => {
+      const other = { ...request('r-other', 'approved'), clubId: 'club-other' }
+      const wrapper = mountApp(createRepository(), {
+        ...clubProps,
+        initialData: requestWorkspace({ archerRequests: [request('r1', 'rejected'), other] }),
+      })
+      await openRequests(wrapper)
+
+      expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+      expect(wrapper.text()).toContain('Rejected')
+    })
+
+    it('lets a manager approve one pending request and moves it to the decided list', async () => {
+      const decideArcherRequests = vi.fn().mockResolvedValue([{ id: 'r1', ok: true }])
+      const wrapper = mountApp(createRepository({ decideArcherRequests }), {
+        initialData: requestWorkspace({ archerRequests: [request('r1')] }),
+      })
+      await openRequests(wrapper)
+      expect(wrapper.text()).toContain('North Archery Club')
+
+      await buttonNamed(wrapper, 'Approve').trigger('click')
+      await flushPromises()
+
+      expect(decideArcherRequests).toHaveBeenCalledWith('approve', ['r1'])
+      expect(wrapper.text()).toContain('No pending requests.')
+      expect(wrapper.text()).toContain('Approved')
+    })
+
+    it('approves every pending request of a club in one call', async () => {
+      const second = { ...request('r2'), participantId: 'participant-independent' }
+      const decideArcherRequests = vi.fn().mockResolvedValue([
+        { id: 'r1', ok: true },
+        { id: 'r2', ok: true },
+      ])
+      const wrapper = mountApp(createRepository({ decideArcherRequests }), {
+        initialData: requestWorkspace({ archerRequests: [request('r1'), second] }),
+      })
+      await openRequests(wrapper)
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text().startsWith('Approve all pending'))
+        .trigger('click')
+      await flushPromises()
+
+      expect(decideArcherRequests).toHaveBeenCalledWith('approve', ['r1', 'r2'])
+    })
+
+    it('rejects a request', async () => {
+      const decideArcherRequests = vi.fn().mockResolvedValue([{ id: 'r1', ok: true }])
+      const wrapper = mountApp(createRepository({ decideArcherRequests }), {
+        initialData: requestWorkspace({ archerRequests: [request('r1')] }),
+      })
+      await openRequests(wrapper)
+      await buttonNamed(wrapper, 'Reject').trigger('click')
+      await flushPromises()
+
+      expect(decideArcherRequests).toHaveBeenCalledWith('reject', ['r1'])
+      expect(wrapper.text()).toContain('Rejected')
+    })
+
+    it('keeps a request pending and shows why when approving it failed', async () => {
+      const decideArcherRequests = vi.fn().mockResolvedValue([{ id: 'r1', ok: false, error: 'Unable to invite' }])
+      const wrapper = mountApp(createRepository({ decideArcherRequests }), {
+        initialData: requestWorkspace({ archerRequests: [request('r1')] }),
+      })
+      await openRequests(wrapper)
+      await buttonNamed(wrapper, 'Approve').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.get('[role="alert"]').text()).toContain('Unable to invite')
+      expect(wrapper.text()).not.toContain('No pending requests.')
+    })
+
+    it('shows an error when the decision call fails', async () => {
+      const decideArcherRequests = vi.fn().mockRejectedValue(new Error('Manager access is required'))
+      const wrapper = mountApp(createRepository({ decideArcherRequests }), {
+        initialData: requestWorkspace({ archerRequests: [request('r1')] }),
+      })
+      await openRequests(wrapper)
+      await buttonNamed(wrapper, 'Reject').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.get('[role="alert"]').text()).toContain('Manager access is required')
+    })
+
+    it('saves the email typed on the archer form', async () => {
+      const saveParticipant = vi.fn().mockResolvedValue(undefined)
+      const wrapper = mountApp(createRepository({ saveParticipant }), { initialData: requestWorkspace() })
+      await wrapper.get('button[aria-label="Archers"]').trigger('click')
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text().includes('Add archer'))
+        .trigger('click')
+      await wrapper.get('input[autocomplete="family-name"]').setValue('Newman')
+      await wrapper.get('input[autocomplete="given-name"]').setValue('Nia')
+      await wrapper.get('input[type="email"]').setValue('nia@example.test')
+      await wrapper.get('form').trigger('submit')
+      await flushPromises()
+
+      expect(saveParticipant).toHaveBeenCalledWith(
+        expect.objectContaining({ lastName: 'Newman', email: 'nia@example.test' }),
+        '',
+        false,
+        '',
+      )
+    })
+  })
+
   it('assigns a plan with the dates the manager picks and reports a failed save', async () => {
     const initialData = {
       ...createWorkspace(),

@@ -29,6 +29,7 @@ function mapParticipant(row) {
     birthDate: row.birth_date || '',
     waId: row.wa_id,
     aetayId: row.aetay_id,
+    email: row.email || '',
     clubId: row.club_id || '',
   }
 }
@@ -109,6 +110,19 @@ function mapSubscription(row) {
     endsOn: row.ends_on || '',
     pricePaid: Number(row.price_paid),
     currency: row.currency,
+  }
+}
+
+/**
+ * @returns {object}
+ */
+function mapArcherRequest(row) {
+  return {
+    id: row.id,
+    participantId: row.participant_id,
+    clubId: row.club_id,
+    status: row.status,
+    createdAt: row.created_at,
   }
 }
 
@@ -194,6 +208,7 @@ export function createManagerRepository(client) {
       'plans',
       'plan_prices',
       'user_subscriptions',
+      'archer_requests',
     ]
     if (includeUserRoles) tableNames.push('user_roles')
     const [namesResult, ...results] = await Promise.all([
@@ -218,6 +233,7 @@ export function createManagerRepository(client) {
       plansResult,
       planPricesResult,
       subscriptionsResult,
+      archerRequestsResult,
       userRolesResult,
     ] = results
 
@@ -310,6 +326,7 @@ export function createManagerRepository(client) {
       plans: plansResult.data.map(mapPlan),
       planPrices: planPricesResult.data.map(mapPlanPrice),
       subscriptions: subscriptionsResult.data.map(mapSubscription),
+      archerRequests: archerRequestsResult.data.map(mapArcherRequest),
       userRoles: userRolesResult ? userRolesResult.data.map(mapUserRole) : [],
     }
   }
@@ -650,6 +667,34 @@ export function createManagerRepository(client) {
     throw error
   }
 
+  /** @returns {Promise<void>} */
+  async function createArcherRequest(request) {
+    const { error } = await client.from('archer_requests').insert({
+      id: request.id,
+      participant_id: request.participantId,
+      club_id: request.clubId,
+    })
+    if (error) throw error
+  }
+
+  /**
+   * Approves or rejects requests in the edge function, which creates the logins.
+   * @returns {Promise<Array<{ id: string, ok: boolean, error?: string }>>} One result per request.
+   */
+  async function decideArcherRequests(action, requestIds) {
+    const { data, error } = await client.functions.invoke('decide-archer-requests', {
+      body: { action, requestIds },
+    })
+    if (error) {
+      if (error.context instanceof Response) {
+        const payload = await error.context.json()
+        if (payload.error) throw new Error(payload.error)
+      }
+      throw error
+    }
+    return data.results
+  }
+
   async function saveTournamentType(type) {
     const { error } = await client.from('tournament_types').upsert({
       id: type.id,
@@ -751,6 +796,7 @@ export function createManagerRepository(client) {
       birth_date: participant.birthDate || null,
       wa_id: participant.waId,
       aetay_id: participant.aetayId,
+      email: (participant.email || '').trim(),
       club_id: participant.clubId || null,
     }
     if (isEditing) {
@@ -917,6 +963,8 @@ export function createManagerRepository(client) {
     addArcherByToken,
     saveUserProfile,
     sendAdminPasswordReset,
+    createArcherRequest,
+    decideArcherRequests,
     sendOwnPasswordReset,
     saveTournamentType,
     saveTargetType,
