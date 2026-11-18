@@ -40,6 +40,8 @@ from the code, ask the user before planning.
 - If a plain fetch fails with an SSL certificate error on Windows, retry with
   `git -c http.sslBackend=schannel fetch origin`.
 
+Once on the branch, flip the ticket to `[~]` now (see step 7).
+
 ## 4. Plan, then confirm
 
 Give the user a short plan before writing code:
@@ -80,9 +82,15 @@ user at the end instead of fixing it.
 
 ## 7. Update the ticket status
 
-In `docs/planning/tickets.md`, set the ticket status to `[~]` when work starts and to `[x]` when the
-work is finished and verified. Keep the table aligned. Run Prettier on the file after editing. If the
-ticket came from a URL and is not in the file, skip this step and do not add a row.
+Keep the status in `docs/planning/tickets.md` current as the work moves, not only at the end:
+
+- Set `[~]` as soon as the branch is ready (end of step 3), before planning or coding.
+- Set `[x]` only when the work is finished and verified (step 6 passed).
+- If the work stops half way or is handed back, leave it at `[~]` and say what remains.
+
+Keep the table aligned. Run Prettier on the file after editing. The file is gitignored, so the change is
+not part of the commit. If the ticket came from a URL and is not in the file, skip this step and do not
+add a row.
 
 ## 8. Commit
 
