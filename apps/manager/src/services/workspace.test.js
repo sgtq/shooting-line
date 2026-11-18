@@ -324,6 +324,135 @@ describe('manager repository', () => {
   })
 })
 
+describe('tournament dates', () => {
+  const tournament = {
+    id: 't1',
+    name: 'Cup',
+    dates: ['2026-05-02', '2026-05-01', '2026-05-02', ''],
+    discipline: 'Field',
+    tournamentTypeId: '',
+    clubId: '',
+    venueMode: 'club',
+    customAddress: '',
+  }
+
+  function insertClient({ failTable = '', deleteError = null } = {}) {
+    const inserts = []
+    const deleteEq = vi.fn().mockResolvedValue({ error: deleteError })
+    const client = {
+      from: vi.fn((table) => ({
+        insert: vi.fn((row) => {
+          inserts.push({ table, row })
+          return Promise.resolve({ error: table === failTable ? new Error(`${table} failed`) : null })
+        }),
+        delete: () => ({ eq: deleteEq }),
+      })),
+    }
+    return { client, inserts, deleteEq }
+  }
+
+  it('loads the days of each tournament oldest first', async () => {
+    const client = {
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+      from: vi.fn((table) => ({
+        select: vi.fn().mockResolvedValue({
+          data:
+            table === 'tournaments'
+              ? [{ id: 't1', name: 'Cup', club_id: null }]
+              : table === 'tournament_dates'
+                ? [
+                    { tournament_id: 't1', day: '2026-05-03' },
+                    { tournament_id: 't1', day: '2026-05-01' },
+                  ]
+                : [],
+          error: null,
+        }),
+      })),
+    }
+    const workspace = await createManagerRepository(client).load()
+
+    expect(workspace.tournaments[0].dates).toEqual(['2026-05-01', '2026-05-03'])
+  })
+
+  it('loads a tournament with no days as an empty list', async () => {
+    const client = {
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+      from: vi.fn((table) => ({
+        select: vi
+          .fn()
+          .mockResolvedValue({ data: table === 'tournaments' ? [{ id: 't1', name: 'Cup' }] : [], error: null }),
+      })),
+    }
+    const workspace = await createManagerRepository(client).load()
+
+    expect(workspace.tournaments[0].dates).toEqual([])
+  })
+
+  it('saves each day once, in order, without blanks', async () => {
+    const { client, inserts } = insertClient()
+    await createManagerRepository(client).saveTournament(tournament)
+
+    const dates = inserts.find((call) => call.table === 'tournament_dates')
+    expect(dates.row).toEqual([
+      { tournament_id: 't1', day: '2026-05-01' },
+      { tournament_id: 't1', day: '2026-05-02' },
+    ])
+    expect(inserts.find((call) => call.table === 'tournaments').row).not.toHaveProperty('date')
+  })
+
+  it('removes the tournament when its days cannot be saved', async () => {
+    const { client, inserts, deleteEq } = insertClient({ failTable: 'tournament_dates' })
+
+    await expect(createManagerRepository(client).saveTournament(tournament)).rejects.toThrow('tournament_dates failed')
+    expect(deleteEq).toHaveBeenCalledWith('id', 't1')
+    expect(inserts.some((call) => call.table === 'tournament_rounds')).toBe(false)
+  })
+
+  it('reports both errors when the cleanup also fails', async () => {
+    const { client } = insertClient({ failTable: 'tournament_dates', deleteError: new Error('no delete') })
+
+    await expect(createManagerRepository(client).saveTournament(tournament)).rejects.toThrow(
+      'tournament_dates failed; cleanup also failed: no delete',
+    )
+  })
+
+  describe('browser data import', () => {
+    const emptyWorkspace = {
+      clubs: [],
+      participants: [],
+      tournamentTypes: [],
+      categories: [],
+      scores: [],
+      matches: [],
+    }
+    const base = { name: 'Cup', discipline: '', rounds: [], categoryIds: [], participantIds: [] }
+
+    it('turns the single date of older browser data into one day', async () => {
+      const rpc = vi.fn().mockResolvedValue({ error: null })
+      await createManagerRepository({ rpc }).importLegacyWorkspace({
+        ...emptyWorkspace,
+        tournaments: [{ ...base, id: 'old', date: '2025-01-01', categoryAssignments: {} }],
+      })
+
+      const payload = rpc.mock.calls[0][1].p_workspace
+      expect(payload.tournament_dates).toHaveLength(1)
+      expect(payload.tournament_dates[0].day).toBe('2025-01-01')
+      expect(payload.tournaments[0]).not.toHaveProperty('date')
+    })
+
+    it('keeps every day of data that already has several', async () => {
+      const rpc = vi.fn().mockResolvedValue({ error: null })
+      await createManagerRepository({ rpc }).importLegacyWorkspace({
+        ...emptyWorkspace,
+        tournaments: [{ ...base, id: 'new', dates: ['2025-01-02', '2025-01-01'], categoryAssignments: {} }],
+      })
+
+      const days = rpc.mock.calls[0][1].p_workspace.tournament_dates.map((row) => row.day)
+      expect(days).toEqual(['2025-01-01', '2025-01-02'])
+    })
+  })
+})
+
 describe('plans repository', () => {
   function planClient(result = { error: null }) {
     const insert = vi.fn().mockResolvedValue(result)
@@ -486,7 +615,7 @@ describe('tournament start lock', () => {
       from: vi.fn(() => ({
         update,
         select: vi.fn().mockResolvedValue({
-          data: [{ id: 't1', name: 'Cup', date: '2026-05-05', club_id: null, started_at: '2026-05-05T10:00:00Z' }],
+          data: [{ id: 't1', name: 'Cup', dates: ['2026-05-05'], club_id: null, started_at: '2026-05-05T10:00:00Z' }],
           error: null,
         }),
       })),

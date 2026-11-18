@@ -56,7 +56,7 @@ function createWorkspace() {
       {
         id: 'tournament-open',
         name: 'Open Tournament',
-        date: '2099-01-01',
+        dates: ['2099-01-01'],
         discipline: 'Outdoor target',
         tournamentTypeId: 'type-outdoor',
         clubId: 'club-north',
@@ -333,7 +333,7 @@ describe('participant and club workflows', () => {
         ...initialData.tournaments[0],
         id: 'tournament-past',
         name: 'Past Tournament',
-        date: '2098-01-01',
+        dates: ['2098-01-01'],
         participantIds: ['participant-club'],
         categoryIds: ['rec-open'],
         categoryAssignments: pastCategoryId ? { 'participant-club': pastCategoryId } : {},
@@ -943,14 +943,121 @@ describe('plans and club tournament creation', () => {
     expect(hostClub.element.value).toBe('club-north')
 
     await wrapper.get('input[required]').setValue('Club Cup')
-    await wrapper.get('input[type="date"]').setValue('2099-05-05')
+    const [start, end] = wrapper.findAll('input[type="date"]')
+    await start.setValue('2099-05-05')
+    await end.setValue('2099-05-05')
     await wrapper.get('select[aria-label="Tournament type"]').setValue('type-outdoor')
     await wrapper.get('form.modal').trigger('submit')
     await flushPromises()
 
     expect(repository.saveTournament).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Club Cup', clubId: 'club-north' }),
+      expect.objectContaining({ name: 'Club Cup', clubId: 'club-north', dates: ['2099-05-05'] }),
     )
+  })
+
+  describe('tournament dates', () => {
+    const active = { id: 's1', userId: 'club-user', planId: 'p1', startsOn: '2000-01-01', endsOn: '2999-01-01' }
+
+    async function openTournamentForm(saveTournament = vi.fn().mockResolvedValue(undefined)) {
+      const repository = createRepository({ saveTournament })
+      const wrapper = mountApp(repository, { ...clubProps, initialData: clubWorkspace([active]) })
+      await wrapper.get('.page-heading .button-primary').trigger('click')
+      await wrapper.get('input[required]').setValue('Multi Cup')
+      await wrapper.get('select[aria-label="Tournament type"]').setValue('type-outdoor')
+      return { repository, wrapper }
+    }
+
+    async function submit(wrapper) {
+      await wrapper.get('form.modal').trigger('submit')
+      await flushPromises()
+    }
+
+    it('saves one day for each day of a date range', async () => {
+      const { repository, wrapper } = await openTournamentForm()
+      const [start, end] = wrapper.findAll('input[type="date"]')
+      await start.setValue('2099-05-30')
+      await end.setValue('2099-06-01')
+      await submit(wrapper)
+
+      expect(repository.saveTournament.mock.calls[0][0].dates).toEqual(['2099-05-30', '2099-05-31', '2099-06-01'])
+      expect(repository.saveTournament.mock.calls[0][0]).not.toHaveProperty('startDate')
+    })
+
+    it('adds and removes date rows and saves them sorted without repeats of blanks', async () => {
+      const { repository, wrapper } = await openTournamentForm()
+      await wrapper.get('select[aria-label="How to enter the dates"]').setValue('days')
+      expect(wrapper.findAll('input[type="date"]')).toHaveLength(1)
+      expect(wrapper.text()).not.toContain('Remove date')
+
+      const addButton = () => wrapper.findAll('button').find((button) => button.text() === 'Add date')
+      await addButton().trigger('click')
+      await addButton().trigger('click')
+      expect(wrapper.findAll('input[type="date"]')).toHaveLength(3)
+
+      const inputs = wrapper.findAll('input[type="date"]')
+      await inputs[0].setValue('2099-08-10')
+      await inputs[2].setValue('2099-08-03')
+      const removeButtons = wrapper.findAll('button').filter((button) => button.text() === 'Remove date')
+      await removeButtons[1].trigger('click')
+      expect(wrapper.findAll('input[type="date"]')).toHaveLength(2)
+      await submit(wrapper)
+
+      expect(repository.saveTournament.mock.calls[0][0].dates).toEqual(['2099-08-03', '2099-08-10'])
+    })
+
+    it('shows a tournament with consecutive days as a range', () => {
+      const initialData = clubWorkspace([active])
+      initialData.tournaments[0].dates = ['2099-01-01', '2099-01-02', '2099-01-03']
+      const wrapper = mountApp(createRepository(), { ...clubProps, initialData })
+
+      expect(wrapper.text()).toContain('Jan 1, 2099 to Jan 3, 2099')
+    })
+
+    it('shows a tournament with separate days as its first day and a count', () => {
+      const initialData = clubWorkspace([active])
+      initialData.tournaments[0].dates = ['2099-01-01', '2099-01-05']
+      const wrapper = mountApp(createRepository(), { ...clubProps, initialData })
+
+      expect(wrapper.text()).toContain('Jan 1, 2099 (2 days)')
+    })
+
+    it('refuses an end date before the start date and keeps the form open', async () => {
+      const { repository, wrapper } = await openTournamentForm()
+      const [start, end] = wrapper.findAll('input[type="date"]')
+      await start.setValue('2099-05-05')
+      await end.setValue('2099-05-01')
+      await submit(wrapper)
+
+      expect(repository.saveTournament).not.toHaveBeenCalled()
+      expect(wrapper.get('.modal-error').text()).toContain('The end date cannot be before the start date')
+    })
+
+    it('refuses a range longer than 31 days', async () => {
+      const { repository, wrapper } = await openTournamentForm()
+      const [start, end] = wrapper.findAll('input[type="date"]')
+      await start.setValue('2099-01-01')
+      await end.setValue('2099-03-01')
+      await submit(wrapper)
+
+      expect(repository.saveTournament).not.toHaveBeenCalled()
+      expect(wrapper.get('.modal-error').text()).toContain('A tournament can last at most 31 days')
+    })
+
+    it('refuses repeated separate days', async () => {
+      const { repository, wrapper } = await openTournamentForm()
+      await wrapper.get('select[aria-label="How to enter the dates"]').setValue('days')
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text() === 'Add date')
+        .trigger('click')
+      const inputs = wrapper.findAll('input[type="date"]')
+      await inputs[0].setValue('2099-05-05')
+      await inputs[1].setValue('2099-05-05')
+      await submit(wrapper)
+
+      expect(repository.saveTournament).not.toHaveBeenCalled()
+      expect(wrapper.get('.modal-error').text()).toContain('Tournament dates cannot repeat')
+    })
   })
 
   it('keeps the Plans page for managers', () => {

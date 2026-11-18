@@ -13,10 +13,9 @@ const recurve = (id, name, sortOrder) => ({
   level_exempt: false,
 })
 
-const tournament = (id, name, date) => ({
+const tournament = (id, name) => ({
   id,
   name,
-  date,
   discipline: 'Outdoor target',
   tournament_type_id: null,
   club_id: 'club-1',
@@ -42,7 +41,11 @@ const tables = {
   clubs: [{ id: 'club-1', name: 'Test Club', logo_url: '' }],
   participants: [archer('archer-alex', 'Alex', 'Archer'), archer('archer-sam', 'Sam', 'Shooter')],
   categories: [recurve('rec-youth', 'Youth', 0), recurve('rec-open', 'Open', 1), recurve('rec-pro', 'Pro', 2)],
-  tournaments: [tournament('spring', 'Spring Open', '2099-05-01'), tournament('winter', 'Winter Open', '2098-01-01')],
+  tournaments: [tournament('spring', 'Spring Open'), tournament('winter', 'Winter Open')],
+  tournament_dates: [
+    { tournament_id: 'spring', day: '2099-05-01' },
+    { tournament_id: 'winter', day: '2098-01-01' },
+  ],
   tournament_rounds: [
     { id: 'round-spring', tournament_id: 'spring', name: 'Qualification', position: 0 },
     { id: 'round-winter', tournament_id: 'winter', name: 'Qualification', position: 0 },
