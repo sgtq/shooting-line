@@ -1,11 +1,13 @@
 <script setup>
 import { t } from '@shooting-line/i18n'
 import LanguageSwitcher from '@shooting-line/i18n/LanguageSwitcher.vue'
+import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import NavIcon from './components/NavIcon.vue'
 import PlansPage from './components/PlansPage.vue'
 import { useTheme } from './composables/useTheme'
+import { useManagerStore } from './stores/managerStore'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
 import { summarizeDecision } from './services/archerRequests'
 import { dayOfMonth } from './services/dateFormat'
@@ -36,29 +38,13 @@ const props = defineProps({
 
 const isDevelopmentPreview = import.meta.env.VITE_APP_ENV === 'development'
 const { theme, toggleTheme } = useTheme()
-const data = ref(props.initialData)
-const databaseError = ref('')
-const modalError = ref('')
+const store = useManagerStore()
+store.load(props.initialData)
+const { data, databaseError, modalError, targetTypeError } = storeToRefs(store)
+const { persistChange, clubFor, tournamentTypeFor, categoryFor, participantById } = store
 
 function makeId() {
   return crypto.randomUUID()
-}
-
-async function persistChange(operation, updateLocalState, errorTarget = 'page') {
-  try {
-    await operation()
-    updateLocalState()
-    databaseError.value = ''
-    modalError.value = ''
-    targetTypeError.value = ''
-    return true
-  } catch (error) {
-    const message = `${t('Save failed')}: ${error.message}`
-    if (errorTarget === 'modal') modalError.value = message
-    else if (errorTarget === 'targetType') targetTypeError.value = message
-    else databaseError.value = message
-    return false
-  }
 }
 
 const allNavItems = [
@@ -144,7 +130,6 @@ const showModal = ref(false)
 const modalType = ref('')
 const showTargetTypeModal = ref(false)
 const targetTypeName = ref('')
-const targetTypeError = ref('')
 const assignNewParticipant = ref(false)
 const changingCategoryKey = ref('')
 // Matches for what the user types in the add-archer form. Each has a one-time token and never a database ID.
@@ -444,18 +429,6 @@ function scheduleArcherSearch() {
       modalError.value = `${t('Archer search failed')}: ${error.message}`
     }
   }, 300)
-}
-
-function clubFor(id) {
-  return data.value.clubs.find((club) => club.id === id)
-}
-
-function tournamentTypeFor(id) {
-  return data.value.tournamentTypes.find((type) => type.id === id)
-}
-
-function categoryFor(id) {
-  return data.value.categories.find((category) => category.id === id)
 }
 
 function venueFor(tournament) {
@@ -1465,10 +1438,6 @@ async function generateMatches() {
     return
 
   notify('{count} first-round matches seeded', { count: newMatches.length })
-}
-
-function participantById(id) {
-  return data.value.participants.find((person) => person.id === id)
 }
 
 async function recordMatchScore(match, side, value) {

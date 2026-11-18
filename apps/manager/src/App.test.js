@@ -1,4 +1,5 @@
 import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLanguage } from '@shooting-line/i18n'
 import App from './App.vue'
@@ -91,6 +92,7 @@ function createRepository(overrides = {}) {
 
 function mountApp(repository = createRepository(), overrides = {}) {
   return mount(App, {
+    global: { plugins: [createPinia()] },
     props: {
       initialData: overrides.initialData || createWorkspace(),
       repository,
