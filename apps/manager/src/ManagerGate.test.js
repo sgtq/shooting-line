@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLanguage } from '@shooting-line/i18n'
 import ManagerGate from './ManagerGate.vue'
 
-const holder = vi.hoisted(() => ({ client: null, load: null }))
+const holder = vi.hoisted(() => ({ client: null, load: null, loadUpcoming: null }))
 
 vi.mock('@shooting-line/auth', () => ({
   APP_IDS: { manager: 'manager' },
@@ -12,7 +12,7 @@ vi.mock('@shooting-line/auth', () => ({
 }))
 
 vi.mock('./services/workspace.js', () => ({
-  createManagerRepository: () => ({ load: holder.load }),
+  createManagerRepository: () => ({ load: holder.load, loadUpcomingTournaments: holder.loadUpcoming }),
   readLegacyWorkspace: () => null,
 }))
 
@@ -71,6 +71,7 @@ describe('manager gate and club plans', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn(), clear: vi.fn() })
     holder.load = vi.fn().mockResolvedValue({ clubs: [], tournaments: [] })
+    holder.loadUpcoming = vi.fn().mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -133,13 +134,43 @@ describe('manager gate and club plans', () => {
       expect(wrapper.find('.app-stub').exists()).toBe(false)
       expect(holder.client.rpc).toHaveBeenCalledWith('user_without_plan')
       expect(holder.load).not.toHaveBeenCalled()
+      expect(holder.loadUpcoming).not.toHaveBeenCalled()
     })
 
-    it('opens the app for an enabled archer', async () => {
+    it('opens the archer view, not the app, for an enabled archer', async () => {
+      holder.loadUpcoming.mockResolvedValue([
+        {
+          id: 't1',
+          name: 'Spring Open',
+          days: ['2026-12-01'],
+          tournamentType: '',
+          hostClub: 'Club A',
+          address: '',
+          categories: [],
+          isEntered: false,
+        },
+      ])
       const wrapper = await openGate({ role: 'archer', archerLocked: false })
 
-      expect(wrapper.find('.app-stub').exists()).toBe(true)
+      expect(wrapper.find('.app-stub').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="upcoming-list"]').text()).toContain('Spring Open')
       expect(holder.load).toHaveBeenCalledTimes(1)
+      expect(holder.loadUpcoming).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not open the archer view when the calendar cannot be loaded', async () => {
+      holder.loadUpcoming.mockRejectedValue(new Error('rpc down'))
+      const wrapper = await openGate({ role: 'archer', archerLocked: false })
+
+      expect(wrapper.text()).toContain('Unable to load the tournament calendar: rpc down')
+      expect(wrapper.find('[data-testid="upcoming-list"]').exists()).toBe(false)
+    })
+
+    it('does not load the calendar for clubs or managers', async () => {
+      await openGate({ role: 'club', hasPlan: true })
+      await openGate({ role: 'manager' })
+
+      expect(holder.loadUpcoming).not.toHaveBeenCalled()
     })
 
     it('does not open the app when the archer check fails', async () => {
@@ -148,6 +179,7 @@ describe('manager gate and club plans', () => {
       expect(wrapper.text()).toContain('Unable to check your access: rpc down')
       expect(wrapper.find('.app-stub').exists()).toBe(false)
       expect(holder.load).not.toHaveBeenCalled()
+      expect(holder.loadUpcoming).not.toHaveBeenCalled()
     })
 
     it('shows the not-enabled screen in Spanish', async () => {
