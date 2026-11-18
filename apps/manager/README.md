@@ -96,13 +96,37 @@ On the dashboard, the club row's status button shows whether the club user is en
 Manager records are stored in Supabase PostgreSQL tables created and evolved by the migrations in `supabase/migrations/`. A signed-in account needs a Tournament Manager app grant. Database row-level security applies each user's access rules.
 
 - **System admin:** can manage all records, assign or remove manager roles in **User access**, and send password reset emails.
-- **Manager:** can create and manage clubs, tournament types, categories, tournaments, archers, and scores, enable or disable club users on the **Clubs** screen, and view **User access** to resend password reset emails to admin and manager accounts. Managers cannot add or remove roles. Managers also run the **Plans** screen (see [Plans](#plans)).
+- **Manager:** can create and manage clubs, tournament types, categories, tournaments, archers, and scores, enable or disable club users on the **Clubs** screen, and view **User access** to resend password reset emails to admin and manager accounts. Managers cannot add or remove roles. Managers also run the **Plans** screen (see [Plans](#plans)) and decide archer login requests (see [Archer login requests](#archer-login-requests)).
 - **Club:** can read every club, tournament, entry, and score, including those of other clubs, and the full record of its own archers only. Other archers show to it by name, and only once they are entered in a tournament. A club cannot read another club's archers' birth dates or affiliation IDs, and cannot list archers it does not own. It can find one by exact affiliation ID or by name, which shows only the name and club. It can edit its own club's contact details and logo, but never the club's name or location, which only a manager or admin can change. It can create or edit archers for its own club. A club with an active plan can also create tournaments hosted by its own club and change them until they are started (see [Plans](#plans)). Clubs cannot create clubs, categories, or tournament types, delete tournaments, enter scores, or change tournaments of other clubs.
 - **Archer:** read-only access to their own archer record and tournament entries, while the archer is enabled (see [Plans](#plans)). A disabled archer sees only a screen saying their user is not enabled.
 
 Admins manage manager roles from **User access**; the account must already exist in Supabase Auth. Club user access is enabled or disabled directly from the **Clubs** screen using the club's email and name (which grants or revokes the `club` role automatically). Saving a club's details and its access happens in one step, so if the access change fails (for example, no account exists for the email), the details are not saved either. One account can hold the club role for only one club; enabling a second club with the same email is rejected, even when two requests arrive at the same time. Enabling uses the club's saved login email, and falls back to its contact email when none is saved. A club shows as Enabled when at least one account holds its club role, including roles an admin assigned directly. Admins and managers can resend a one-time password reset email from a row in **User access**. Any signed-in user who can open the profile dialog (everyone except archers) can choose **Email me a password reset link** there to reset their own password. Users can also request a reset from the portal sign-in screen. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
 
 The GitHub Pages development preview is served at `/develop/` (or `/<repository>/develop/` on the default project-site domain) and connects to the development Supabase project. Access to manager data is controlled by Supabase Auth, app access, and RLS roles. The static preview bundle itself is public, as required by GitHub Pages; never include private credentials in it.
+
+### Archer login requests
+
+An archer has an optional **Email** on the archer form. An archer with no email has no login. Only a manager can
+turn a request into a login. Club users and managers (admins included) see **Requests** in the sidebar.
+
+- A club with an active plan picks one of its own archers that has an email and sends a request. The list leaves out
+  archers with no email and archers that already have a pending or approved request. A rejected archer can be
+  requested again. The club sees the status of its own requests: pending, approved, or rejected. A club without an
+  active plan can read its requests but cannot send new ones.
+- A manager or admin sees the pending requests grouped by club, and can approve or reject one, or approve all the
+  pending requests of a club. Decided requests are listed below.
+- Approving runs the `decide-archer-requests` Edge Function. It checks that the caller is an admin or manager, then
+  for each request sends a Supabase invite email (with a link to set a password), creates the login with the archer
+  role linked to the archer record, gives it app access, and gives it the free **Archer basic** plan. If any step
+  fails, the login is removed and the request stays pending, with the reason shown. If the email already has a
+  login with no role, that login is linked to the archer instead, with no email, because the person can already
+  sign in. If the existing login holds any role (club, manager, or admin), the request stays pending and says so,
+  so an archer approval never adds a role to another kind of account.
+- Rejecting only marks the request rejected. Only the Edge Function changes a request's status, so the status
+  cannot be changed from the browser.
+- The invite email uses the project's Auth **Site URL** and email settings, the same as password resets.
+- An archer's email is stored on the archer record. A club reads full records only for its own archers, so the email
+  is not shown to other clubs.
 
 ### Plans
 
@@ -121,7 +145,8 @@ role, and an account can only be given a plan made for its own role.
   ends, its archers on a free plan are disabled too, and archers with a paid plan stay enabled. The database enforces
   this. A disabled archer reads no tournaments, entries, scores, matches, clubs, categories, or tournament types, and
   the app shows only a screen saying their user is not enabled. They can still read their own account and
-  subscriptions. Nothing grants an archer a plan automatically: a manager assigns it on this screen.
+  subscriptions. An archer gets **Archer basic** automatically when a request for them is approved (see
+  [Archer login requests](#archer-login-requests)). Any other plan is assigned by a manager on this screen.
 - Prices are in Mexican pesos (MXN) only. They are kept as history. Each price has an amount, a start date, and an
   optional end date. A price
   with an end date works as a deal. When several prices cover a day, the one with the latest start date applies, so
@@ -177,7 +202,7 @@ Use the development project's values in the `development` environment and the pr
 
 The migration workflow applies schema changes and then runs the idempotent administrator bootstrap through `SUPABASE_DB_URL`. The Auth user named by `SYSTEM_ADMIN_EMAIL` must already exist in the target Supabase project. Configure production environment approval rules in GitHub if production migrations require review.
 
-The separate `.github/workflows/supabase-functions.yml` deploys the password-reset Edge Function when its source changes. Its Supabase access token needs project access and both `edge_functions_read` and `edge_functions_write` scopes; the CLI lists existing functions before deploying. It uses `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_ID` from the same GitHub environment. The database migration workflow uses the password inside `SUPABASE_DB_URL`, so it does not need a database write token scope. Supabase supplies the function's URL and API keys. Set each project's Auth **Site URL** to the correct app origin, configure allowed redirect URLs, and configure email delivery (preferably custom SMTP); the recovery email uses that Site URL.
+The separate `.github/workflows/supabase-functions.yml` deploys the password-reset and archer-request Edge Functions when their source changes. Its Supabase access token needs project access and both `edge_functions_read` and `edge_functions_write` scopes; the CLI lists existing functions before deploying. It uses `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_ID` from the same GitHub environment. The database migration workflow uses the password inside `SUPABASE_DB_URL`, so it does not need a database write token scope. Supabase supplies the function's URL and API keys. Set each project's Auth **Site URL** to the correct app origin, configure allowed redirect URLs, and configure email delivery (preferably custom SMTP); the recovery email uses that Site URL.
 
 Configure these repository Actions variables for the Pages workflow: `PAGES_PRD_SUPABASE_URL` and `PAGES_PRD_SUPABASE_PUBLISHABLE_KEY` for production; `PAGES_DEV_SUPABASE_URL` and `PAGES_DEV_SUPABASE_PUBLISHABLE_KEY` for the development preview. Optional `PAGES_PRD_BASE_PATH` and `PAGES_DEV_BASE_PATH` override the default site paths. Grant Manager app access in the development Supabase project only to accounts that should use the preview.
 

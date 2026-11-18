@@ -57,6 +57,10 @@ defineProps({
       <rect x="3" y="6" width="18" height="12" rx="2" />
       <path d="M3 10h18M7 15h3" />
     </template>
+    <template v-else-if="name === 'requests'">
+      <path d="M4 5.5h16v10H9.5L5 19.5v-4H4z" />
+      <path d="M8 9.5h8M8 12.5h5" />
+    </template>
     <template v-else-if="name === 'close'">
       <path d="M6 6l12 12M18 6L6 18" />
     </template>

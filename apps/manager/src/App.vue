@@ -5,6 +5,8 @@ import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import NavIcon from './components/NavIcon.vue'
 import PlansPage from './components/PlansPage.vue'
+import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
+import { summarizeDecision } from './services/archerRequests'
 import { findBlockingCategory } from './services/categoryRules'
 import { activeSubscription, findOverlappingSubscription, todayString } from './services/planRules'
 import {
@@ -75,6 +77,7 @@ const allNavItems = [
   { id: 'categories', label: 'Categories', icon: 'categories' },
   { id: 'clubs', label: 'Clubs', icon: 'clubs' },
   { id: 'participants', label: 'Archers', icon: 'archers' },
+  { id: 'requests', label: 'Requests', icon: 'requests' },
   { id: 'user-access', label: 'User access', icon: 'user-access' },
   { id: 'plans', label: 'Plans', icon: 'plans' },
 ]
@@ -125,6 +128,7 @@ function canEditParticipant(person) {
 const visibleNavItems = computed(() =>
   allNavItems
     .filter((item) => !['user-access', 'plans'].includes(item.id) || canManage.value)
+    .filter((item) => item.id !== 'requests' || canManage.value || isClubUser.value)
     .map((item) => ({
       ...item,
       label: t(item.label),
@@ -405,6 +409,7 @@ const blankParticipant = () => ({
   birthDate: '',
   waId: '',
   aetayId: '',
+  email: '',
   clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : '',
   // Only used when the archer is created from a tournament roster. They are not saved on the archer.
   bowType: '',
@@ -865,6 +870,47 @@ async function removeSubscription(subscription) {
       data.value.subscriptions = data.value.subscriptions.filter((item) => item.id !== subscription.id)
     },
   )
+}
+
+/** @returns {Promise<void>} */
+async function createArcherRequest(participantId) {
+  const request = {
+    id: makeId(),
+    participantId,
+    clubId: props.userScope.clubId || '',
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  }
+  const wasSaved = await persistChange(
+    () => props.repository.createArcherRequest(request),
+    () => {
+      data.value.archerRequests ??= []
+      data.value.archerRequests.push(request)
+    },
+  )
+  if (wasSaved) notify('Request sent')
+}
+
+/** @returns {Promise<void>} */
+async function decideArcherRequests({ action, requestIds }) {
+  const status = action === 'approve' ? 'approved' : 'rejected'
+  let results
+  try {
+    results = await props.repository.decideArcherRequests(action, requestIds)
+  } catch (error) {
+    databaseError.value = `${t('Save failed')}: ${error.message}`
+    return
+  }
+  const { succeededIds, failures } = summarizeDecision(results)
+  for (const request of data.value.archerRequests ?? []) {
+    if (succeededIds.includes(request.id)) request.status = status
+  }
+  if (failures.length) {
+    databaseError.value = `${t('Some requests could not be decided')}: ${failures.join('; ')}`
+    return
+  }
+  databaseError.value = ''
+  notify(action === 'approve' ? 'Requests approved' : 'Requests rejected')
 }
 
 async function saveTournamentType() {
@@ -2244,6 +2290,19 @@ async function recordMatchScore(match, side, value) {
           </p>
         </section>
 
+        <ArcherRequestsPage
+          v-else-if="activePage === 'requests' && (canManage || isClubUser)"
+          :requests="data.archerRequests ?? []"
+          :participants="data.participants"
+          :clubs="data.clubs"
+          :can-decide="canManage"
+          :club-id="props.userScope.clubId || ''"
+          :can-request="canClubEdit && Boolean(props.userScope.clubId)"
+          :error="databaseError"
+          @create-request="createArcherRequest"
+          @decide="decideArcherRequests"
+        />
+
         <PlansPage
           v-else-if="activePage === 'plans' && canManage"
           :plans="data.plans ?? []"
@@ -3191,6 +3250,15 @@ async function recordMatchScore(match, side, value) {
               ><span
                 >{{ t('AETAY ID') }} <small>{{ t('OPTIONAL') }}</small></span
               ><input v-model="form.aetayId" autocomplete="off" :placeholder="t('Affiliation number')"
+            /></label>
+            <label class="form-field full"
+              ><span
+                >{{ t('EMAIL') }} <small>{{ t('OPTIONAL') }}</small></span
+              ><input
+                v-model="form.email"
+                type="email"
+                autocomplete="off"
+                :placeholder="t('Needed to request a login')"
             /></label>
             <label class="form-field"
               ><span>{{ t('LAST NAME') }} <b v-if="!selectedMatch">*</b></span

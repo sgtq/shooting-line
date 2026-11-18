@@ -306,6 +306,7 @@ describe('manager repository', () => {
         birthDate: '2000-01-01',
         waId: 'WA-1',
         aetayId: '',
+        email: ' alex@example.test ',
         clubId: 'club-1',
       },
       '',
@@ -318,6 +319,7 @@ describe('manager repository', () => {
       birth_date: '2000-01-01',
       wa_id: 'WA-1',
       aetay_id: '',
+      email: 'alex@example.test',
       club_id: 'club-1',
     })
     expect(eq).toHaveBeenCalledWith('id', 'archer-1')
@@ -793,5 +795,92 @@ describe('searching archers', () => {
       rpc: vi.fn().mockResolvedValue({ data: null, error: new Error('That search result has expired. Search again') }),
     }
     await expect(createManagerRepository(client).addArcherByToken('t1', 'old')).rejects.toThrow('expired')
+  })
+})
+
+describe('archer emails and login requests', () => {
+  function tableClient(tables) {
+    return {
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+      from: vi.fn((table) => ({
+        select: vi.fn().mockResolvedValue({ data: tables[table] || [], error: null }),
+      })),
+    }
+  }
+
+  it('loads the archer email, using an empty text when none is saved', async () => {
+    const client = tableClient({
+      participants: [
+        { id: 'a1', first_name: 'A', last_name: 'One', email: 'a@example.test', club_id: 'c1' },
+        { id: 'a2', first_name: 'B', last_name: 'Two', email: null, club_id: null },
+      ],
+    })
+    const data = await createManagerRepository(client).load()
+
+    expect(data.participants.map((person) => person.email)).toEqual(['a@example.test', ''])
+  })
+
+  it('loads login requests', async () => {
+    const client = tableClient({
+      archer_requests: [
+        { id: 'r1', participant_id: 'a1', club_id: 'c1', status: 'pending', created_at: '2026-01-01T00:00:00Z' },
+      ],
+    })
+    const data = await createManagerRepository(client).load()
+
+    expect(data.archerRequests).toEqual([
+      { id: 'r1', participantId: 'a1', clubId: 'c1', status: 'pending', createdAt: '2026-01-01T00:00:00Z' },
+    ])
+  })
+
+  it('saves a new archer with an empty email when none is given', async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null })
+    const client = { from: vi.fn().mockReturnValue({ insert }) }
+    await createManagerRepository(client).saveParticipant({ id: 'a1', firstName: 'A', lastName: 'One' })
+
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1', email: '' }))
+  })
+
+  it('creates a request with database column names and leaves the status to the database', async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null })
+    const client = { from: vi.fn().mockReturnValue({ insert }) }
+    await createManagerRepository(client).createArcherRequest({ id: 'r1', participantId: 'a1', clubId: 'c1' })
+
+    expect(client.from).toHaveBeenCalledWith('archer_requests')
+    expect(insert).toHaveBeenCalledWith({ id: 'r1', participant_id: 'a1', club_id: 'c1' })
+  })
+
+  it('throws when the request cannot be created', async () => {
+    const failure = new Error('row-level security')
+    const client = { from: vi.fn().mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: failure }) }) }
+
+    await expect(
+      createManagerRepository(client).createArcherRequest({ id: 'r1', participantId: 'a1', clubId: 'c1' }),
+    ).rejects.toBe(failure)
+  })
+
+  it('sends the decision to the edge function and returns its results', async () => {
+    const results = [{ id: 'r1', ok: true }]
+    const invoke = vi.fn().mockResolvedValue({ data: { results }, error: null })
+    const client = { functions: { invoke } }
+
+    await expect(createManagerRepository(client).decideArcherRequests('approve', ['r1'])).resolves.toEqual(results)
+    expect(invoke).toHaveBeenCalledWith('decide-archer-requests', { body: { action: 'approve', requestIds: ['r1'] } })
+  })
+
+  it('throws the message the edge function returned', async () => {
+    const error = { context: new Response(JSON.stringify({ error: 'Manager access is required' }), { status: 403 }) }
+    const client = { functions: { invoke: vi.fn().mockResolvedValue({ data: null, error }) } }
+
+    await expect(createManagerRepository(client).decideArcherRequests('reject', ['r1'])).rejects.toThrow(
+      'Manager access is required',
+    )
+  })
+
+  it('throws the original error when the edge function gave no message', async () => {
+    const error = new Error('Failed to fetch')
+    const client = { functions: { invoke: vi.fn().mockResolvedValue({ data: null, error }) } }
+
+    await expect(createManagerRepository(client).decideArcherRequests('approve', ['r1'])).rejects.toBe(error)
   })
 })
