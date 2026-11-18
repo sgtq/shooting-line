@@ -38,9 +38,9 @@ npm run test:all
 `npm run dev` starts the portal and manager together, with the manager available at `/manager/` on the portal's origin. `npm run dev:portal` starts only the portal; `npm run dev:manager` starts the manager's local Vite server on port 5174. The production build publishes the portal at the site root and manager at `/manager/`. The two placeholder apps are not built or deployed.
 
 Unit tests cover manager workflows and shared authentication access queries using mocked Supabase calls.
-End-to-end tests in `tests/e2e/` fake the Supabase REST API and sign-in, so they need no real project. They reuse
-a dev server that is already running on port 5174. Stop it first, or the specs hit its real Supabase URL and land
-on the sign-in page.
+End-to-end tests in `tests/e2e/` fake the Supabase REST API and sign-in, so they need no real project. They start
+their own dev server and never reuse one. If a dev server is already running on port 5173 or 5174, stop it first;
+otherwise Playwright stops with an "already used" error.
 The quality workflow runs ESLint, Prettier, `vue-tsc`, unit and end-to-end tests, and builds on pull requests and pushes to `develop` and `main`. The active Vue workspaces use JavaScript; `vue-tsc` checks Vue components and templates while `checkJs` remains disabled.
 
 ## Shared access and database
