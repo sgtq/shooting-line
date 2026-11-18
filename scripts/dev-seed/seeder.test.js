@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
-import { SEED_ACCOUNTS, SEED_CLUBS, SEED_EMAIL_DOMAIN, SEED_PLANS, emailFor } from './cases.js'
+import { SEED_ACCOUNTS, SEED_CLUBS, SEED_EMAIL_DOMAIN, SEED_PLANS, emailFor, seedTournaments } from './cases.js'
 import { removeDevData, seedDevData } from './seeder.js'
 
 const TODAY = new Date(Date.UTC(2026, 10, 18))
@@ -114,6 +114,46 @@ describe('seedDevData', () => {
   })
 })
 
+describe('seed tournaments', () => {
+  it('writes the type and category before the tournaments that use them', async () => {
+    const client = makeClient()
+    await seedDevData(client, { password: 'pw', today: TODAY })
+
+    const tables = client.calls.map((call) => call.table)
+    expect(tables.indexOf('tournament_types')).toBeLessThan(tables.indexOf('tournaments'))
+    expect(tables.indexOf('categories')).toBeLessThan(tables.indexOf('tournament_categories'))
+    expect(tables.indexOf('participants')).toBeLessThan(tables.indexOf('tournament_participants'))
+  })
+
+  it('saves every tournament with its dates, entries, and scores linked to a saved round', async () => {
+    const client = makeClient()
+    await seedDevData(client, { password: 'pw', today: TODAY })
+
+    const planned = seedTournaments(TODAY)
+    expect(upsertedRows(client, 'tournaments').map((row) => row.name)).toEqual(planned.map((item) => item.name))
+    const rounds = upsertedRows(client, 'tournament_rounds')
+    const scores = upsertedRows(client, 'round_scores').flat()
+    expect(scores).toHaveLength(planned.reduce((sum, item) => sum + item.scores.length, 0))
+    const roundIds = rounds.flat().map((round) => round.id)
+    expect(scores.every((score) => roundIds.includes(score.round_id))).toBe(true)
+    expect(upsertedRows(client, 'matches').flat()).toHaveLength(1)
+  })
+
+  it('stores a started tournament as started and a future one as not started', async () => {
+    const client = makeClient()
+    await seedDevData(client, { password: 'pw', today: TODAY })
+
+    const rows = upsertedRows(client, 'tournaments')
+    expect(rows.find((row) => row.name === 'Seed Winter Indoor').started_at).toBe(TODAY.toISOString())
+    expect(rows.find((row) => row.name === 'Seed Spring Open').started_at).toBeNull()
+  })
+
+  it('stops and names the step when a tournament write fails', async () => {
+    const client = makeClient({ failTable: 'tournaments' })
+    await expect(seedDevData(client, { password: 'pw', today: TODAY })).rejects.toThrow('Save Seed Autumn Indoor: boom')
+  })
+})
+
 describe('removeDevData', () => {
   it('deletes only the tagged accounts and the seed rows', async () => {
     const real = { id: 'real', email: 'someone@club.org' }
@@ -125,8 +165,8 @@ describe('removeDevData', () => {
     expect(client.auth.admin.deleteUser).toHaveBeenCalledWith('seeded')
 
     const deletedFrom = client.calls.map((call) => call.table)
-    expect(deletedFrom).toEqual(['participants', 'clubs', 'plans'])
-    const planIds = client.calls[2].ops.find(([op]) => op === 'in')[2]
+    expect(deletedFrom).toEqual(['tournaments', 'tournament_types', 'categories', 'participants', 'clubs', 'plans'])
+    const planIds = client.calls[5].ops.find(([op]) => op === 'in')[2]
     expect(planIds).toEqual(SEED_PLANS.map((plan) => plan.id))
   })
 
