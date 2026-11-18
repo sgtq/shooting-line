@@ -331,7 +331,7 @@ onUnmounted(() => authSubscription?.unsubscribe())
 
 .manager-access-eyebrow {
   color: #9a7223;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 750;
   letter-spacing: 0.12em;
   text-transform: uppercase;

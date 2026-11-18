@@ -72,7 +72,7 @@ function clearRange() {
 </script>
 
 <template>
-  <div class="app-shell archer-shell">
+  <div class="app-shell">
     <AppSidebar
       :active-page="activePage"
       :nav-items="navItems"
@@ -261,104 +261,6 @@ function clearRange() {
 </template>
 
 <style scoped>
-/* The shared styles are sized for dense manager screens. Archers read this on a phone, so text is larger. */
-.archer-shell :deep(.workspace-label) {
-  font-size: 12px;
-}
-.archer-shell :deep(.nav-link) {
-  min-height: 44px;
-  font-size: 15px;
-}
-.archer-shell :deep(.profile-copy strong) {
-  font-size: 14px;
-}
-.archer-shell :deep(.profile-copy small) {
-  font-size: 12px;
-}
-.archer-shell :deep(.breadcrumbs) {
-  font-size: 14px;
-}
-.archer-shell :deep(.portal-link),
-.archer-shell :deep(.theme-toggle) {
-  font-size: 13px;
-}
-.archer-shell .eyebrow {
-  font-size: 12px;
-}
-.archer-shell .page-subtitle {
-  font-size: 15px;
-}
-.archer-shell .event-row {
-  min-height: 68px;
-  gap: 14px;
-}
-.archer-shell .date-tile {
-  width: 46px;
-  height: 50px;
-}
-.archer-shell .date-tile span {
-  font-size: 11px;
-}
-.archer-shell .date-tile strong {
-  font-size: 19px;
-}
-.archer-shell .event-info {
-  gap: 4px;
-}
-.archer-shell .event-info strong {
-  font-size: 16px;
-}
-.archer-shell .event-info span {
-  font-size: 14px;
-}
-.archer-shell .event-attendees {
-  font-size: 13px;
-}
-.archer-shell .row-arrow {
-  font-size: 18px;
-}
-.archer-shell .archer-details dt {
-  font-size: 12px;
-}
-.archer-shell .archer-details dd {
-  font-size: 15px;
-}
-.archer-shell th {
-  font-size: 12px;
-}
-.archer-shell td {
-  font-size: 15px;
-}
-.archer-shell .table-empty,
-.archer-shell .empty-state strong {
-  font-size: 15px;
-}
-.archer-shell .form-field > span {
-  font-size: 12px;
-}
-.archer-shell .form-field input {
-  min-height: 40px;
-  font-size: 15px;
-}
-.archer-shell .text-link,
-.archer-shell .archer-details a {
-  font-size: 14px;
-}
-.archer-shell .archer-averages {
-  flex-basis: 100%;
-}
-
-.archer-averages h2 {
-  margin: 0 0 6px;
-  font-size: 15px;
-}
-
-.archer-averages ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
 .archer-tournament-toggle {
   width: 100%;
   padding: 0;
@@ -380,7 +282,7 @@ function clearRange() {
 
 .archer-details dt {
   color: var(--muted, #647184);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -405,6 +307,14 @@ function clearRange() {
 
 .archer-averages {
   flex-basis: 100%;
+}
+
+.archer-averages h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.archer-averages ul {
   margin: 0;
   padding: 0;
   list-style: none;

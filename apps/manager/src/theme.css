@@ -91,7 +91,7 @@ h3 {
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   background: var(--bg-surface);
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -102,7 +102,7 @@ h3 {
 
 .theme-toggle > span:first-child {
   color: var(--brand-accent);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .brand-logo-dark,
