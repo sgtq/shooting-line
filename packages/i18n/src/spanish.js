@@ -631,7 +631,16 @@ export const spanish = {
   'no scores yet.': 'Aún no hay puntuaciones.',
   'score per round': 'Puntuación por ronda',
   'knockout matches': 'Enfrentamientos eliminatorios',
-  'average round score, {ends} ends': 'Promedio por ronda, {ends} tandas',
+  'average round score by category': 'Promedio por ronda según categoría',
+  '{ends} ends': '{ends} tandas',
+  'no category': 'Sin categoría',
   '{count} rounds': '{count} rondas',
   'unable to load the tournament calendar': 'No se pudo cargar el calendario de torneos',
+  'my archery': 'Mi tiro con arco',
+  'tournaments that have not started, and the ones you are entered in.':
+    'Torneos que no han comenzado y aquellos en los que estás inscrito.',
+  'your own scores in the tournaments you are entered in.':
+    'Tus propias puntuaciones en los torneos en los que estás inscrito.',
+  '{distance} {unit}, {target}, {ends} ends of {arrows} arrows':
+    '{distance} {unit}, {target}, {ends} tandas de {arrows} flechas',
 }

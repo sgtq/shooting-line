@@ -5,8 +5,10 @@ import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import NavIcon from './components/NavIcon.vue'
 import PlansPage from './components/PlansPage.vue'
+import { useTheme } from './composables/useTheme'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
 import { summarizeDecision } from './services/archerRequests'
+import { dayOfMonth, formatMonth as formatMonthName } from './services/dateFormat'
 import { findBlockingCategory } from './services/categoryRules'
 import { activeSubscription, findOverlappingSubscription, todayString } from './services/planRules'
 import {
@@ -30,24 +32,10 @@ const props = defineProps({
 })
 
 const isDevelopmentPreview = import.meta.env.VITE_APP_ENV === 'development'
-const THEME_STORAGE_KEY = 'shooting-line-theme'
-const theme = ref(localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light')
+const { theme, toggleTheme } = useTheme()
 const data = ref(props.initialData)
 const databaseError = ref('')
 const modalError = ref('')
-
-watch(
-  theme,
-  (value) => {
-    document.documentElement.dataset.theme = value
-    localStorage.setItem(THEME_STORAGE_KEY, value)
-  },
-  { immediate: true },
-)
-
-function toggleTheme() {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark'
-}
 
 function makeId() {
   return crypto.randomUUID()
@@ -481,15 +469,8 @@ function formatDates(tournament) {
     : t('{start} ({count} days)', { start: formatDate(firstDay(tournament)), count: days.length })
 }
 
-function dayOfMonth(value) {
-  return value ? new Date(`${value}T00:00:00Z`).getUTCDate() : ''
-}
-
 function formatMonth(value) {
-  if (!value) return ''
-  return new Intl.DateTimeFormat(language.value, { month: 'short', timeZone: 'UTC' }).format(
-    new Date(`${value}T00:00:00Z`),
-  )
+  return formatMonthName(value, language.value)
 }
 
 function displayChoice(value) {

@@ -67,7 +67,13 @@ const upcoming = [
     tournament_type: 'Indoor 18m',
     host_club: 'Other Club',
     address: 'Range road 5',
-    categories: ['Open'],
+    type_distance: 18,
+    type_distance_unit: 'm',
+    type_target: '40 cm',
+    type_ends: 10,
+    type_arrows_per_end: 3,
+    map_url: 'https://maps.example.com/other-club',
+    categories: [{ name: 'Open', bow_type: 'Recurve' }],
     is_entered: false,
   },
 ]
@@ -106,10 +112,17 @@ test('shows an enabled archer the calendar and their own scores, not the club sc
   await openAsArcher(page)
 
   await expect(page.getByTestId('upcoming-list')).toContainText('Autumn Cup')
+  await expect(page.getByTestId('upcoming-list')).not.toContainText('Other Club')
+  await page.getByRole('button', { name: 'Autumn Cup' }).click()
   await expect(page.getByTestId('upcoming-list')).toContainText('Other Club')
+  await expect(page.getByRole('link', { name: 'Open map' })).toHaveAttribute(
+    'href',
+    'https://maps.example.com/other-club',
+  )
   await expect(page.getByRole('button', { name: 'Tournaments', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Archers', exact: true })).toHaveCount(0)
 
-  await page.getByRole('tab', { name: 'Scores' }).click()
+  await page.getByRole('button', { name: 'Scores', exact: true }).click()
   await expect(page.getByTestId('scores')).toContainText('Winter Open')
   await expect(page.getByTestId('scores')).toContainText('Qualification: 580')
   await expect(page.getByTestId('averages')).toContainText('580')

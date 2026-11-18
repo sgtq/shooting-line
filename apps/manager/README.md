@@ -106,19 +106,23 @@ The GitHub Pages development preview is served at `/develop/` (or `/<repository>
 
 ### Archer view
 
-After sign-in the app reads the role. An enabled archer sees a separate screen, not the club screens, with two tabs.
+After sign-in the app reads the role. An enabled archer sees a separate view, not the club screens. It uses the same
+left sidebar, top bar, and light and dark themes as the rest of the app, with two pages. On a narrow screen the
+sidebar shrinks to an icon rail.
 A disabled archer sees the not-enabled screen from [Plans](#plans) and nothing else.
 
 - **Upcoming tournaments** is a read-only calendar of every tournament that has not started yet, including ones
-  hosted by other clubs, with its dates, type, hosting club, location, and categories. A tournament that is already
-  under way is listed only for archers entered in it, and shows **You are entered**. The calendar cannot be used to
-  sign up for anything.
+  hosted by other clubs. The list shows the name, dates, and type. Selecting a tournament opens its host, location
+  with a map link (when the host club has one), format (distance, target, ends, and arrows), and categories grouped
+  by bow type. Only `http` and `https` map addresses become links. A tournament that is already under way is listed
+  only for archers entered in it, and shows **You are entered**. The calendar cannot be used to sign up for anything.
 - **Scores** lists the tournaments the archer is entered in, starting from their first day, newest first. Each row
   shows the dates, the archer's category, the score of each round, the archer's own score in each knockout match,
   and the total. Other archers' names and scores are never shown. **From** and **Until** filter by the first day of
-  the tournament. Above the table, the average round score is shown for each number of ends, because rounds of
-  different lengths are not comparable. Knockout matches have no average, since the number of ends of a match
-  round is not stored yet.
+  the tournament. Above the table, the average round score is shown for each category the archer has scores in,
+  with the number of rounds, because scores of different categories are not comparable. If one category has rounds
+  with a different number of ends, it is split by ends, so those averages stay comparable. Knockout matches have no
+  average, since the number of ends of a match round is not stored yet.
 - The calendar comes from the `upcoming_tournaments()` database function, which returns only calendar fields and
   nothing from the club's contact details or the entries of other archers. No table policy is widened for it, so an
   archer still reads only their own entries, scores, and matches.

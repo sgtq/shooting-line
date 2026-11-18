@@ -61,6 +61,10 @@ defineProps({
       <path d="M4 5.5h16v10H9.5L5 19.5v-4H4z" />
       <path d="M8 9.5h8M8 12.5h5" />
     </template>
+    <template v-else-if="name === 'scores'">
+      <path d="M6 4.5h12v15H6z" />
+      <path d="M9 9h6M9 12.5h6M9 16h3.5" />
+    </template>
     <template v-else-if="name === 'close'">
       <path d="M6 6l12 12M18 6L6 18" />
     </template>
