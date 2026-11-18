@@ -959,9 +959,19 @@ export function createManagerRepository(client) {
       days: row.days ?? [],
       discipline: row.discipline || '',
       tournamentType: row.tournament_type || '',
+      typeDetails: row.tournament_type
+        ? {
+            distance: Number(row.type_distance),
+            distanceUnit: row.type_distance_unit,
+            target: row.type_target,
+            ends: row.type_ends,
+            arrowsPerEnd: row.type_arrows_per_end,
+          }
+        : null,
       hostClub: row.host_club || '',
       address: row.address || '',
-      categories: row.categories ?? [],
+      mapUrl: row.map_url || '',
+      categories: (row.categories ?? []).map((category) => ({ name: category.name, bowType: category.bow_type || '' })),
       isEntered: Boolean(row.is_entered),
     }))
   }

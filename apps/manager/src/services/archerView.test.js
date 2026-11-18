@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { averageByEnds, buildScoreRows, formatDays, isInRange } from './archerView'
+import {
+  averageByCategory,
+  buildScoreRows,
+  formatDays,
+  groupCategoriesByBow,
+  isInRange,
+  safeMapUrl,
+} from './archerView'
 
 const ME = 'me'
 const OTHER = 'other'
@@ -127,23 +134,48 @@ describe('buildScoreRows', () => {
   })
 })
 
-describe('averageByEnds', () => {
-  it('averages round scores separately for each ends count', () => {
-    const rows = buildScoreRows({ data: makeData(), ...args })
-    expect(averageByEnds(rows)).toEqual([
-      { ends: 6, rounds: 1, average: 300 },
-      { ends: 10, rounds: 2, average: 620 },
+describe('averageByCategory', () => {
+  const round = (score, ends = 10) => ({ name: 'q', score, ends })
+
+  it('gives one average for each category', () => {
+    const rows = [
+      { category: 'Recurve Open', rounds: [round(600), round(640)] },
+      { category: 'Compound Open', rounds: [round(700)] },
+      { category: 'Recurve Open', rounds: [round(620)] },
+    ]
+    expect(averageByCategory(rows)).toEqual([
+      { category: 'Compound Open', ends: 10, showEnds: false, rounds: 1, average: 700 },
+      { category: 'Recurve Open', ends: 10, showEnds: false, rounds: 3, average: 620 },
     ])
   })
 
-  it('rounds to two decimals', () => {
-    const rows = [{ rounds: [1, 1, 2].map((score) => ({ name: 'q', score, ends: 10 })) }]
-    expect(averageByEnds(rows)).toEqual([{ ends: 10, rounds: 3, average: 1.33 }])
+  it('splits a category by ends when its rounds have a different number of ends', () => {
+    const rows = buildScoreRows({ data: makeData(), ...args })
+    expect(averageByCategory(rows)).toEqual([
+      { category: 'Recurve Open', ends: 6, showEnds: true, rounds: 1, average: 300 },
+      { category: 'Recurve Open', ends: 10, showEnds: true, rounds: 2, average: 620 },
+    ])
   })
 
-  it('ignores rounds with unknown ends and returns nothing when there are no rounds', () => {
-    expect(averageByEnds([{ rounds: [{ name: 'q', score: 5, ends: null }] }])).toEqual([])
-    expect(averageByEnds([])).toEqual([])
+  it('lists rows with no category last', () => {
+    const rows = [
+      { category: '', rounds: [round(500)] },
+      { category: 'Recurve Open', rounds: [round(600)] },
+    ]
+    expect(averageByCategory(rows).map((line) => line.category)).toEqual(['Recurve Open', ''])
+  })
+
+  it('keeps rounds with unknown ends and does not label them', () => {
+    const rows = [{ category: 'Recurve Open', rounds: [{ name: 'q', score: 5, ends: null }] }]
+    expect(averageByCategory(rows)).toEqual([
+      { category: 'Recurve Open', ends: null, showEnds: false, rounds: 1, average: 5 },
+    ])
+  })
+
+  it('rounds to two decimals and returns nothing when there are no rounds', () => {
+    expect(averageByCategory([{ category: 'A', rounds: [1, 1, 2].map((score) => round(score)) }])[0].average).toBe(1.33)
+    expect(averageByCategory([])).toEqual([])
+    expect(averageByCategory([{ category: 'A', rounds: [] }])).toEqual([])
   })
 })
 
@@ -153,5 +185,40 @@ describe('formatDays', () => {
     expect(formatDays(['2026-06-10', '2026-06-11', '2026-06-12'])).toBe('2026-06-10 - 2026-06-12')
     expect(formatDays(['2026-06-10', '2026-06-12'])).toBe('2026-06-10, 2026-06-12')
     expect(formatDays([])).toBe('')
+  })
+})
+
+describe('safeMapUrl', () => {
+  it('keeps web links', () => {
+    expect(safeMapUrl('https://maps.example.com/place?q=1')).toBe('https://maps.example.com/place?q=1')
+    expect(safeMapUrl('  http://maps.example.com  ')).toBe('http://maps.example.com/')
+  })
+
+  it('drops other schemes, plain text, and empty values', () => {
+    expect(safeMapUrl('javascript:alert(1)')).toBe('')
+    expect(safeMapUrl('data:text/html,hi')).toBe('')
+    expect(safeMapUrl('Main street 1')).toBe('')
+    expect(safeMapUrl('')).toBe('')
+    expect(safeMapUrl(null)).toBe('')
+  })
+})
+
+describe('groupCategoriesByBow', () => {
+  it('groups by bow type and orders both the groups and the names', () => {
+    expect(
+      groupCategoriesByBow([
+        { name: 'Open', bowType: 'Recurve' },
+        { name: 'Youth', bowType: 'Recurve' },
+        { name: 'Open', bowType: 'Compound' },
+        { name: 'Master', bowType: 'Recurve' },
+      ]),
+    ).toEqual([
+      { bowType: 'Compound', names: ['Open'] },
+      { bowType: 'Recurve', names: ['Master', 'Open', 'Youth'] },
+    ])
+  })
+
+  it('returns nothing for no categories', () => {
+    expect(groupCategoriesByBow([])).toEqual([])
   })
 })

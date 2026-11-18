@@ -884,3 +884,58 @@ describe('archer emails and login requests', () => {
     await expect(createManagerRepository(client).decideArcherRequests('approve', ['r1'])).rejects.toBe(error)
   })
 })
+
+describe('loadUpcomingTournaments', () => {
+  it('maps the calendar rows and tolerates missing optional values', async () => {
+    const client = {
+      rpc: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'u1',
+            name: 'Winter',
+            days: ['2099-01-01'],
+            discipline: 'Indoor',
+            tournament_type: 'Indoor 18m',
+            type_distance: '18',
+            type_distance_unit: 'm',
+            type_target: '40 cm',
+            type_ends: 10,
+            type_arrows_per_end: 3,
+            host_club: 'Club A',
+            address: 'Main street 1',
+            map_url: 'https://maps.example.com/a',
+            categories: [{ name: 'Open', bow_type: 'Recurve' }],
+            is_entered: true,
+          },
+          { id: 'u2', name: 'Bare', days: null, tournament_type: null, categories: null },
+        ],
+        error: null,
+      }),
+    }
+    const upcoming = await createManagerRepository(client).loadUpcomingTournaments()
+
+    expect(client.rpc).toHaveBeenCalledWith('upcoming_tournaments')
+    expect(upcoming[0]).toEqual({
+      id: 'u1',
+      name: 'Winter',
+      days: ['2099-01-01'],
+      discipline: 'Indoor',
+      tournamentType: 'Indoor 18m',
+      typeDetails: { distance: 18, distanceUnit: 'm', target: '40 cm', ends: 10, arrowsPerEnd: 3 },
+      hostClub: 'Club A',
+      address: 'Main street 1',
+      mapUrl: 'https://maps.example.com/a',
+      categories: [{ name: 'Open', bowType: 'Recurve' }],
+      isEntered: true,
+    })
+    expect(upcoming[1]).toMatchObject({ days: [], typeDetails: null, hostClub: '', mapUrl: '', categories: [] })
+  })
+
+  it('returns an empty list for no rows and throws the database error', async () => {
+    const empty = { rpc: vi.fn().mockResolvedValue({ data: null, error: null }) }
+    expect(await createManagerRepository(empty).loadUpcomingTournaments()).toEqual([])
+
+    const failing = { rpc: vi.fn().mockResolvedValue({ data: null, error: new Error('no access') }) }
+    await expect(createManagerRepository(failing).loadUpcomingTournaments()).rejects.toThrow('no access')
+  })
+})

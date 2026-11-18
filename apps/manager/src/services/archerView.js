@@ -65,24 +65,38 @@ export function buildScoreRows({ data, participantId, today, from = '', to = '' 
 }
 
 /**
- * Average round score for each ends count. Rounds with a different number of ends are never mixed, because
- * their scores are not comparable. Rounds whose ends are unknown, such as knockout matches, are left out.
- * @returns {Array<{ ends: number, rounds: number, average: number }>} Fewest ends first.
+ * Average round score for each category the archer has scores in. Scores of different categories and bow types are
+ * not comparable, so they are never mixed. Inside one category, rounds with a different number of ends are not
+ * comparable either, so that category is split by ends and `showEnds` is true on its lines.
+ * @returns {Array<{ category: string, ends: number|null, showEnds: boolean, rounds: number, average: number }>}
+ * Named categories first by name, then rows with no category. The category is an empty string when there is none.
  */
-export function averageByEnds(rows) {
+export function averageByCategory(rows) {
   const groups = new Map()
+  const endsByCategory = new Map()
   for (const row of rows) {
     for (const round of row.rounds) {
-      if (!round.ends) continue
-      const group = groups.get(round.ends) || { ends: round.ends, rounds: 0, sum: 0 }
+      const ends = round.ends ?? null
+      const key = `${row.category}|${ends}`
+      const group = groups.get(key) || { category: row.category, ends, rounds: 0, sum: 0 }
       group.rounds += 1
       group.sum += round.score
-      groups.set(round.ends, group)
+      groups.set(key, group)
+      endsByCategory.set(row.category, new Set(endsByCategory.get(row.category)).add(ends))
     }
   }
   return [...groups.values()]
-    .sort((a, b) => a.ends - b.ends)
-    .map(({ ends, rounds, sum }) => ({ ends, rounds, average: Math.round((sum / rounds) * 100) / 100 }))
+    .sort((a, b) => {
+      if (Boolean(a.category) !== Boolean(b.category)) return a.category ? -1 : 1
+      return a.category.localeCompare(b.category) || (a.ends ?? 0) - (b.ends ?? 0)
+    })
+    .map(({ category, ends, rounds, sum }) => ({
+      category,
+      ends,
+      showEnds: endsByCategory.get(category).size > 1 && ends !== null,
+      rounds,
+      average: Math.round((sum / rounds) * 100) / 100,
+    }))
 }
 
 /**
@@ -94,4 +108,35 @@ export function formatDays(days) {
   if (days.length === 1) return days[0]
   if (isConsecutive(days)) return `${days[0]} - ${days[days.length - 1]}`
   return days.join(', ')
+}
+
+/**
+ * A map link is stored as free text, so only web links are made clickable. Anything else, such as a
+ * `javascript:` link, is dropped.
+ * @param {string} value
+ * @returns {string} The link when it is a web address, or an empty string.
+ */
+export function safeMapUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim())
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * @param {Array<{ name: string, bowType: string }>} categories
+ * @returns {Array<{ bowType: string, names: string[] }>} Categories grouped by bow type, ordered by name.
+ */
+export function groupCategoriesByBow(categories) {
+  const groups = new Map()
+  for (const category of categories) {
+    const names = groups.get(category.bowType) || []
+    names.push(category.name)
+    groups.set(category.bowType, names)
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([bowType, names]) => ({ bowType, names: names.sort((a, b) => a.localeCompare(b)) }))
 }

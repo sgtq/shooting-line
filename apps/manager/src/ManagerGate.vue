@@ -230,6 +230,7 @@ onUnmounted(() => authSubscription?.unsubscribe())
     :upcoming="upcomingTournaments"
     :participant-id="userScope.participantId"
     :user-name="userName"
+    :user-email="userEmail"
   />
 
   <App
