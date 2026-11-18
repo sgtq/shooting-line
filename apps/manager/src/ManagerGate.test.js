@@ -21,7 +21,13 @@ vi.mock('./App.vue', async () => {
   return { default: { render: () => h('div', { class: 'app-stub' }) } }
 })
 
-function makeClient({ role = 'club', hasPlan = false, lastEnd = '2026-03-31', planError = null } = {}) {
+function makeClient({
+  role = 'club',
+  hasPlan = false,
+  lastEnd = '2026-03-31',
+  planError = null,
+  archerLocked = false,
+} = {}) {
   const query = (result) => {
     const chain = {
       select: () => chain,
@@ -41,7 +47,9 @@ function makeClient({ role = 'club', hasPlan = false, lastEnd = '2026-03-31', pl
       }),
       onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
     },
-    rpc: vi.fn().mockResolvedValue({ data: hasPlan, error: planError }),
+    rpc: vi.fn((name) =>
+      Promise.resolve({ data: name === 'user_without_plan' ? archerLocked : hasPlan, error: planError }),
+    ),
     from: vi.fn((table) => {
       if (table === 'user_roles') {
         return query({ data: [{ role, club_id: 'club-1', participant_id: null }], error: null })
@@ -114,5 +122,39 @@ describe('manager gate and club plans', () => {
     const wrapper = await openGate({ role: 'club', hasPlan: false, lastEnd: '2026-03-31' })
 
     expect(wrapper.text()).toContain('El plan de tu club ya no está vigente')
+  })
+
+  describe('archers', () => {
+    it('shows only the not-enabled screen and loads nothing for a disabled archer', async () => {
+      const wrapper = await openGate({ role: 'archer', archerLocked: true })
+
+      expect(wrapper.text()).toContain('Your user is not enabled')
+      expect(wrapper.text()).toContain('Ask your club or a manager to enable it.')
+      expect(wrapper.find('.app-stub').exists()).toBe(false)
+      expect(holder.client.rpc).toHaveBeenCalledWith('user_without_plan')
+      expect(holder.load).not.toHaveBeenCalled()
+    })
+
+    it('opens the app for an enabled archer', async () => {
+      const wrapper = await openGate({ role: 'archer', archerLocked: false })
+
+      expect(wrapper.find('.app-stub').exists()).toBe(true)
+      expect(holder.load).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not open the app when the archer check fails', async () => {
+      const wrapper = await openGate({ role: 'archer', planError: new Error('rpc down') })
+
+      expect(wrapper.text()).toContain('Unable to check your access: rpc down')
+      expect(wrapper.find('.app-stub').exists()).toBe(false)
+      expect(holder.load).not.toHaveBeenCalled()
+    })
+
+    it('shows the not-enabled screen in Spanish', async () => {
+      setLanguage('es-419')
+      const wrapper = await openGate({ role: 'archer', archerLocked: true })
+
+      expect(wrapper.text()).toContain('Tu usuario no está habilitado')
+    })
   })
 })

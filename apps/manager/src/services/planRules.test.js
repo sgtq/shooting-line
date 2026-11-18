@@ -86,3 +86,37 @@ describe('findOverlappingSubscription', () => {
     expect(findOverlappingSubscription(subscriptions, range('2026-03-10', '2026-03-20', 'u2'))).toBeNull()
   })
 })
+
+describe('subscriptions with no end date', () => {
+  const open = [{ userId: 'u1', startsOn: '2026-01-01', endsOn: '' }]
+
+  it('stays active on any day from its start', () => {
+    expect(activeSubscription(open, 'u1', '2026-01-01')).not.toBeNull()
+    expect(activeSubscription(open, 'u1', '2099-12-31')).not.toBeNull()
+  })
+
+  it('is not active before its start', () => {
+    expect(activeSubscription(open, 'u1', '2025-12-31')).toBeNull()
+  })
+
+  it('overlaps any later range for the same user', () => {
+    expect(
+      findOverlappingSubscription(open, { userId: 'u1', startsOn: '2050-01-01', endsOn: '2050-01-31' }),
+    ).not.toBeNull()
+    expect(findOverlappingSubscription(open, { userId: 'u1', startsOn: '2025-01-01', endsOn: '2025-12-31' })).toBeNull()
+  })
+
+  it('overlaps another open-ended range', () => {
+    expect(findOverlappingSubscription(open, { userId: 'u1', startsOn: '2030-01-01', endsOn: '' })).not.toBeNull()
+  })
+
+  it('is blocked by an existing range when the new one has no end date', () => {
+    const dated = [{ userId: 'u1', startsOn: '2030-01-01', endsOn: '2030-01-31' }]
+    expect(findOverlappingSubscription(dated, { userId: 'u1', startsOn: '2029-01-01', endsOn: '' })).not.toBeNull()
+    expect(findOverlappingSubscription(dated, { userId: 'u1', startsOn: '2030-02-01', endsOn: '' })).toBeNull()
+  })
+
+  it('gives no end date suggestion for unlimited plans', () => {
+    expect(suggestedEndDate('unlimited', '2026-01-15')).toBe('')
+  })
+})

@@ -105,7 +105,7 @@ function mapSubscription(row) {
     userId: row.user_id,
     planId: row.plan_id,
     startsOn: row.starts_on,
-    endsOn: row.ends_on,
+    endsOn: row.ends_on || '',
     pricePaid: Number(row.price_paid),
     currency: row.currency,
   }
@@ -544,7 +544,7 @@ export function createManagerRepository(client) {
       user_id: subscription.userId,
       plan_id: subscription.planId,
       starts_on: subscription.startsOn,
-      ends_on: subscription.endsOn,
+      ends_on: subscription.endsOn || null,
       price_paid: subscription.pricePaid,
       currency: subscription.currency,
     })
@@ -589,6 +589,15 @@ export function createManagerRepository(client) {
       .from('tournaments')
       .update({ started_at: startedAt || null })
       .eq('id', tournamentId)
+    if (error) throw error
+  }
+
+  /**
+   * Sets the last day of a subscription, for example to end one that had no end date.
+   * @returns {Promise<void>}
+   */
+  async function updateSubscriptionEnd(subscriptionId, endsOn) {
+    const { error } = await client.from('user_subscriptions').update({ ends_on: endsOn }).eq('id', subscriptionId)
     if (error) throw error
   }
 
@@ -855,6 +864,7 @@ export function createManagerRepository(client) {
     savePlan,
     savePlanPrice,
     saveSubscription,
+    updateSubscriptionEnd,
     removeSubscription,
     setTournamentStarted,
     searchArchers,

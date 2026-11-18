@@ -987,7 +987,7 @@ describe('plans and club tournament creation', () => {
     await form.trigger('submit')
     await flushPromises()
     expect(wrapper.text()).toContain('Save failed: denied')
-    expect(wrapper.text()).toContain('No club has a plan yet.')
+    expect(wrapper.text()).toContain('No account has a plan yet.')
 
     await form.trigger('submit')
     await flushPromises()
@@ -1004,7 +1004,7 @@ describe('plans and club tournament creation', () => {
     expect(wrapper.text()).toContain('club@example.test')
   })
 
-  it('blocks a plan that overlaps another one for the same club account', async () => {
+  it('blocks a plan that overlaps another one for the same account', async () => {
     const initialData = {
       ...createWorkspace(),
       userRoles: [{ userId: 'club-user', email: 'club@example.test', role: 'club' }],
@@ -1029,12 +1029,162 @@ describe('plans and club tournament creation', () => {
     await form.trigger('submit')
     await flushPromises()
     expect(saveSubscription).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('This club account already has a plan during these dates')
+    expect(wrapper.text()).toContain('This account already has a plan during these dates')
 
     await starts.setValue('2030-02-01')
     await form.trigger('submit')
     await flushPromises()
     expect(saveSubscription).toHaveBeenCalledTimes(1)
+  })
+
+  describe('archer plans', () => {
+    const archerPlan = {
+      id: 'plan-archer',
+      name: 'Archer basic',
+      userRole: 'archer',
+      durationKind: 'unlimited',
+      isActive: true,
+    }
+    const clubPlan = { id: 'plan-club', name: 'Club yearly', userRole: 'club', durationKind: 'yearly', isActive: true }
+
+    function archerWorkspace(subscriptions = []) {
+      return {
+        ...createWorkspace(),
+        userRoles: [
+          { userId: 'club-user', email: 'club@example.test', role: 'club' },
+          { userId: 'archer-user', email: 'archer@example.test', role: 'archer' },
+        ],
+        plans: [archerPlan, clubPlan],
+        planPrices: [
+          { id: 'price-1', planId: 'plan-archer', amount: 0, currency: 'MXN', startsAt: '2000-01-01', endsAt: '' },
+        ],
+        subscriptions,
+      }
+    }
+
+    async function openAssignForm(repository, subscriptions) {
+      const wrapper = mountApp(repository, { initialData: archerWorkspace(subscriptions) })
+      await wrapper.get('button[aria-label="Plans"]').trigger('click')
+      return { wrapper, form: wrapper.findAll('form.plan-form')[2] }
+    }
+
+    it('lists archer accounts and offers them only archer plans', async () => {
+      const { form } = await openAssignForm(createRepository())
+      const [account, plan] = form.findAll('select')
+
+      expect(account.text()).toContain('archer@example.test (Archer)')
+      await account.setValue('archer-user')
+      expect(plan.findAll('option').map((option) => option.text())).toEqual(['Select a plan', 'Archer basic'])
+
+      await account.setValue('club-user')
+      expect(plan.findAll('option').map((option) => option.text())).toEqual(['Select a plan', 'Club yearly'])
+    })
+
+    it('clears a chosen plan that does not fit the next account', async () => {
+      const { form } = await openAssignForm(createRepository())
+      const [account, plan] = form.findAll('select')
+      await account.setValue('archer-user')
+      await plan.setValue('plan-archer')
+
+      await account.setValue('club-user')
+
+      expect(plan.element.value).toBe('')
+    })
+
+    it('assigns the free plan with no end date and a price of zero', async () => {
+      const saveSubscription = vi.fn().mockResolvedValue(undefined)
+      const { wrapper, form } = await openAssignForm(createRepository({ saveSubscription }))
+      const [account, plan] = form.findAll('select')
+      await account.setValue('archer-user')
+      await plan.setValue('plan-archer')
+      const [starts, ends] = form.findAll('input[type="date"]')
+      await starts.setValue(today)
+
+      expect(ends.element.value).toBe('')
+      expect(ends.element.required).toBe(false)
+      expect(form.get('input[type="number"]').element.value).toBe('0')
+
+      await form.trigger('submit')
+      await flushPromises()
+
+      expect(saveSubscription).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'archer-user', planId: 'plan-archer', endsOn: '', pricePaid: 0 }),
+      )
+      expect(wrapper.text()).toContain('No end date')
+    })
+
+    it('requires an end date for plans that end', async () => {
+      const { form } = await openAssignForm(createRepository())
+      const [account, plan] = form.findAll('select')
+      await account.setValue('club-user')
+      await plan.setValue('plan-club')
+
+      expect(form.findAll('input[type="date"]')[1].element.required).toBe(true)
+    })
+
+    it('blocks a second plan for an archer who already has one with no end date', async () => {
+      const open = { id: 's1', userId: 'archer-user', planId: 'plan-archer', startsOn: '2000-01-01', endsOn: '' }
+      const saveSubscription = vi.fn().mockResolvedValue(undefined)
+      const { wrapper, form } = await openAssignForm(createRepository({ saveSubscription }), [open])
+      const [account, plan] = form.findAll('select')
+      await account.setValue('archer-user')
+      await plan.setValue('plan-archer')
+      await form.findAll('input[type="date"]')[0].setValue('2040-01-01')
+
+      await form.trigger('submit')
+      await flushPromises()
+
+      expect(saveSubscription).not.toHaveBeenCalled()
+      expect(wrapper.text()).toContain('This account already has a plan during these dates')
+    })
+
+    it('sets an end date on a subscription that has none', async () => {
+      const open = { id: 's1', userId: 'archer-user', planId: 'plan-archer', startsOn: '2000-01-01', endsOn: '' }
+      const updateSubscriptionEnd = vi.fn().mockResolvedValue(undefined)
+      const { wrapper } = await openAssignForm(createRepository({ updateSubscriptionEnd }), [open])
+      const setButton = () => wrapper.findAll('button').find((button) => button.text() === 'Set end date')
+
+      expect(setButton().element.disabled).toBe(true)
+      await wrapper.get('input[aria-label="End date"]').setValue('2031-06-30')
+      await setButton().trigger('click')
+      await flushPromises()
+
+      expect(updateSubscriptionEnd).toHaveBeenCalledWith('s1', '2031-06-30')
+      expect(wrapper.text()).toContain('2000-01-01 – 2031-06-30')
+      expect(wrapper.find('input[aria-label="End date"]').exists()).toBe(false)
+    })
+
+    it('reports a failed end date change and keeps the subscription open', async () => {
+      const open = { id: 's1', userId: 'archer-user', planId: 'plan-archer', startsOn: '2000-01-01', endsOn: '' }
+      const updateSubscriptionEnd = vi.fn().mockRejectedValue(new Error('denied'))
+      const { wrapper } = await openAssignForm(createRepository({ updateSubscriptionEnd }), [open])
+
+      await wrapper.get('input[aria-label="End date"]').setValue('2031-06-30')
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text() === 'Set end date')
+        .trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Save failed: denied')
+      expect(wrapper.text()).toContain('No end date')
+    })
+
+    it('creates a plan for the chosen role', async () => {
+      const savePlan = vi.fn().mockResolvedValue(undefined)
+      const { wrapper } = await openAssignForm(createRepository({ savePlan }))
+      const form = wrapper.findAll('form.plan-form')[0]
+
+      await form.get('input').setValue('Archer paid')
+      await form.findAll('select')[0].setValue('archer')
+      await form.findAll('select')[1].setValue('unlimited')
+      await form.trigger('submit')
+      await flushPromises()
+
+      expect(savePlan).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Archer paid', userRole: 'archer', durationKind: 'unlimited' }),
+      )
+    })
   })
 
   describe('club roster access', () => {

@@ -94,8 +94,10 @@ const canEditTournament = computed(
 )
 const canStartTournament = computed(() => !selectedTournament.value?.startedAt && canEditTournament.value)
 const showPlanNotice = computed(() => isClubUser.value && !canManage.value && !clubHasActivePlan.value)
-const clubUserAccounts = computed(() =>
-  (data.value.userRoles ?? []).filter((item) => item.role === 'club').map(({ userId, email }) => ({ userId, email })),
+const planAccounts = computed(() =>
+  (data.value.userRoles ?? [])
+    .filter((item) => ['club', 'archer'].includes(item.role))
+    .map(({ userId, email, role }) => ({ userId, email, role })),
 )
 // A club without an active plan can read but cannot change anything.
 const canClubEdit = computed(() => isClubUser.value && clubHasActivePlan.value)
@@ -739,7 +741,7 @@ async function saveTournament() {
 }
 
 async function savePlan(plan) {
-  const saved = { ...plan, id: plan.id || makeId(), userRole: 'club', isActive: plan.isActive ?? true }
+  const saved = { ...plan, id: plan.id || makeId(), userRole: plan.userRole ?? 'club', isActive: plan.isActive ?? true }
   await persistChange(
     () => props.repository.savePlan(saved),
     () => {
@@ -765,7 +767,7 @@ async function savePlanPrice(price) {
 
 async function saveSubscription(subscription) {
   if (findOverlappingSubscription(data.value.subscriptions ?? [], subscription)) {
-    notify('This club account already has a plan during these dates')
+    notify('This account already has a plan during these dates')
     return
   }
   const saved = { ...subscription, id: makeId() }
@@ -777,6 +779,17 @@ async function saveSubscription(subscription) {
     },
   )
   if (wasSaved) notify('Plan assigned')
+}
+
+async function setSubscriptionEnd({ subscription, endsOn }) {
+  const wasSaved = await persistChange(
+    () => props.repository.updateSubscriptionEnd(subscription.id, endsOn),
+    () => {
+      const saved = data.value.subscriptions.find((item) => item.id === subscription.id)
+      if (saved) saved.endsOn = endsOn
+    },
+  )
+  if (wasSaved) notify('End date saved')
 }
 
 async function removeSubscription(subscription) {
@@ -2174,11 +2187,12 @@ async function recordMatchScore(match, side, value) {
           :plans="data.plans ?? []"
           :prices="data.planPrices ?? []"
           :subscriptions="data.subscriptions ?? []"
-          :club-users="clubUserAccounts"
+          :accounts="planAccounts"
           :error="databaseError"
           @save-plan="savePlan"
           @save-price="savePlanPrice"
           @save-subscription="saveSubscription"
+          @set-subscription-end="setSubscriptionEnd"
           @remove-subscription="removeSubscription"
         />
 
