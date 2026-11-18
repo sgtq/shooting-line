@@ -10,6 +10,7 @@ export default defineConfig({
     include: [
       'apps/**/*.{test,spec}.{js,ts}',
       'packages/**/*.{test,spec}.{js,ts}',
+      'scripts/**/*.{test,spec}.{js,ts}',
       'supabase/functions/**/*.{test,spec}.{js,ts}',
     ],
     restoreMocks: true,

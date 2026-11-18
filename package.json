@@ -23,7 +23,9 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:all": "npm run test:unit && npm run test:e2e"
+    "test:all": "npm run test:unit && npm run test:e2e",
+    "seed:dev": "node --env-file-if-exists=.env scripts/dev-seed/cli.js seed",
+    "seed:dev:remove": "node --env-file-if-exists=.env scripts/dev-seed/cli.js remove"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

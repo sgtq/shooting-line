@@ -70,6 +70,14 @@ Use `develop` as the integration branch: branch feature work from `develop` and 
 
 Supabase migration and Edge Function workflows target `develop` with the GitHub `development` environment and `main` with `production`. Configure each environment with its own Supabase project credentials before merging changes that trigger those workflows. The migration workflow needs the project's Session pooler connection URI in `SUPABASE_DB_URL` for GitHub Actions' IPv4 network. Functions deployments require `edge_functions_read` and `edge_functions_write` token scopes.
 
+## Dev test users
+
+`npm run seed:dev` creates test accounts in the **development** Supabase project: an admin, a manager, a club with an active plan, a club with a lapsed plan, and five archers (paid plan, free plan with an active club, free plan with a disabled club, free plan with no club, and no plan), plus the clubs and plans they need. Emails look like `seed-club-active@seed.example.com`, and all accounts share the password in `SEED_USER_PASSWORD`. Running it again refreshes the accounts and moves the plan dates to today. `npm run seed:dev:remove` deletes only the seed accounts, clubs, archers, and plans.
+
+Set `PAGES_DEV_SUPABASE_URL`, `SUPABASE_PROJECT_ID` (the development project id), `SUPABASE_SERVICE_ROLE_KEY`, `SEED_USER_PASSWORD`, and optionally `PAGES_PRD_SUPABASE_URL` in your local `.env`. The script refuses to run unless the URL belongs to the development project id, refuses the production project, and rejects weak passwords (12+ characters with upper case, lower case, a digit, and a symbol). The service-role key is for this script only and never goes in a browser build.
+
+The migration workflow runs the same script after each push to `develop`. Add `SUPABASE_SERVICE_ROLE_KEY` and `SEED_USER_PASSWORD` as secrets in the `development` GitHub environment (it already needs `SUPABASE_PROJECT_ID`), and set `PAGES_DEV_SUPABASE_URL` and `PAGES_PRD_SUPABASE_URL` as repository variables so the production check applies in CI too. The seed accounts then exist on the public development preview, so keep the password private.
+
 The sign-in portal remains at the site root; ShootingLine does not have a public marketing landing page. Shared favicons, PWA manifest/icons, store icons, and the active social preview image are in `public/`. The Google Play feature graphic and four phone screenshots are in `public/store-graphics/`.
 
 The feature-forward social card and store, legal, and press copy in `docs/` are drafts, not current product claims or public policy pages. The supplied copy describes features that are not implemented yet.
