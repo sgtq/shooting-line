@@ -7,6 +7,9 @@ import AppSidebar from './components/AppSidebar.vue'
 import NavIcon from './components/NavIcon.vue'
 import PlansPage from './components/PlansPage.vue'
 import { useTheme } from './composables/useTheme'
+import { useNavItems } from './composables/useNavItems'
+import { usePermissions } from './composables/usePermissions'
+import { useToast } from './composables/useToast'
 import { useManagerStore } from './stores/managerStore'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
 import { summarizeDecision } from './services/archerRequests'
@@ -22,7 +25,7 @@ import {
   today,
 } from './services/display'
 import { findBlockingCategory } from './services/categoryRules'
-import { activeSubscription, findOverlappingSubscription, todayString } from './services/planRules'
+import { findOverlappingSubscription } from './services/planRules'
 import { firstDay, lastDay, MAX_TOURNAMENT_DAYS, datesToForm, resolveDays } from './services/tournamentDates'
 
 const props = defineProps({
@@ -47,76 +50,37 @@ function makeId() {
   return crypto.randomUUID()
 }
 
-const allNavItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { id: 'tournaments', label: 'Tournaments', icon: 'tournaments' },
-  { id: 'tournament-types', label: 'Tournament types', icon: 'tournament-types' },
-  { id: 'categories', label: 'Categories', icon: 'categories' },
-  { id: 'clubs', label: 'Clubs', icon: 'clubs' },
-  { id: 'participants', label: 'Archers', icon: 'archers' },
-  { id: 'requests', label: 'Requests', icon: 'requests' },
-  { id: 'user-access', label: 'User access', icon: 'user-access' },
-  { id: 'plans', label: 'Plans', icon: 'plans' },
-]
-const canManage = computed(() => ['admin', 'manager'].includes(props.userRole))
-const isAdmin = computed(() => props.userRole === 'admin')
-const isClubUser = computed(() => props.userRole === 'club')
-// Clubs can create tournaments only while they hold an active plan. The database enforces the same rule.
-const clubHasActivePlan = computed(() =>
-  Boolean(activeSubscription(data.value.subscriptions ?? [], props.userId, todayString())),
-)
-const canCreateTournament = computed(
-  () => canManage.value || (isClubUser.value && Boolean(props.userScope.clubId) && clubHasActivePlan.value),
-)
-// Clubs can read every tournament but change only their own, and only until it is started. A manager can
-// always change a tournament, and is the only one who can reopen a started one.
-const canEditTournament = computed(
-  () =>
-    canManage.value ||
-    Boolean(
-      clubHasActivePlan.value &&
-      isClubUser.value &&
-      selectedTournament.value?.clubId === props.userScope.clubId &&
-      !selectedTournament.value.startedAt,
-    ),
-)
-const canStartTournament = computed(() => !selectedTournament.value?.startedAt && canEditTournament.value)
-const showPlanNotice = computed(() => isClubUser.value && !canManage.value && !clubHasActivePlan.value)
-const planAccounts = computed(() =>
-  (data.value.userRoles ?? [])
-    .filter((item) => ['club', 'archer'].includes(item.role))
-    .map(({ userId, email, role }) => ({ userId, email, role })),
-)
-// A club without an active plan can read but cannot change anything.
-const canClubEdit = computed(() => isClubUser.value && clubHasActivePlan.value)
-const canManageParticipants = computed(() => canManage.value || (canClubEdit.value && Boolean(props.userScope.clubId)))
-function canEditClub(club) {
-  return canManage.value || (canClubEdit.value && club.id === props.userScope.clubId)
-}
+const selectedTournamentId = ref(data.value.tournaments[0]?.id || '')
+const selectedTournament = computed(() => data.value.tournaments.find((item) => item.id === selectedTournamentId.value))
+const {
+  canManage,
+  isAdmin,
+  isClubUser,
+  clubHasActivePlan,
+  canCreateTournament,
+  canEditTournament,
+  canStartTournament,
+  showPlanNotice,
+  planAccounts,
+  canClubEdit,
+  canManageParticipants,
+  canSearchArchers,
+  canEditClub,
+  canEditParticipant,
+} = usePermissions(props, data, selectedTournament)
+const visibleNavItems = useNavItems(canManage, isClubUser)
+const { toast, notify } = useToast()
 // Clubs have no separate detail page; the edit form is the club's detail view, so users who cannot edit
 // are taken to the Clubs directory instead.
 function openClubDetails(club) {
   if (canEditClub(club)) editClub(club)
   else activePage.value = 'clubs'
 }
-function canEditParticipant(person) {
-  return canManage.value || (canClubEdit.value && person.clubId === props.userScope.clubId)
-}
-const visibleNavItems = computed(() =>
-  allNavItems
-    .filter((item) => !['user-access', 'plans'].includes(item.id) || canManage.value)
-    .filter((item) => item.id !== 'requests' || canManage.value || isClubUser.value)
-    .map((item) => ({
-      ...item,
-      label: t(item.label),
-    })),
-)
 const activePage = ref('dashboard')
 const search = ref('')
 const participantClubFilter = ref('')
 const participantDirectorySearch = ref('')
 const tournamentStatusFilter = ref('upcoming')
-const selectedTournamentId = ref(data.value.tournaments[0]?.id || '')
 const selectedRounds = ref({})
 const selectedCategories = ref({})
 const selectedTournamentTab = ref('participants')
@@ -139,7 +103,6 @@ let archerSearchTimer = null
 let archerSearchRun = 0
 const editingClubId = ref('')
 const editingParticipantId = ref('')
-const toast = ref('')
 const tournamentQuery = ref('')
 const userName = ref(props.userName)
 const targetTypeOptions = computed(() => {
@@ -151,7 +114,6 @@ const targetTypeOptions = computed(() => {
   return options
 })
 
-const selectedTournament = computed(() => data.value.tournaments.find((item) => item.id === selectedTournamentId.value))
 const selectedScoreParticipant = computed(() =>
   data.value.participants.find((person) => person.id === selectedScoreParticipantId.value),
 )
@@ -399,7 +361,6 @@ const blankUserRole = () => ({
 const form = ref({})
 // Searches while the user types: the affiliation IDs first, then the name. Only the add-archer form searches, and
 // only for users who may change data, so a club without an active plan never reaches the database.
-const canSearchArchers = computed(() => canManage.value || (isClubUser.value && clubHasActivePlan.value))
 watch(() => [form.value.waId, form.value.aetayId, form.value.lastName, form.value.firstName], scheduleArcherSearch)
 
 /** @returns {void} */
@@ -436,14 +397,6 @@ function venueFor(tournament) {
   return tournament.venueMode === 'custom'
     ? tournament.customAddress
     : clubFor(tournament.clubId)?.address || t('Club address not set')
-}
-
-function notify(message, values) {
-  const translated = t(message, values)
-  toast.value = translated
-  window.setTimeout(() => {
-    if (toast.value === translated) toast.value = ''
-  }, 2800)
 }
 
 function openModal(type, assignToCurrentTournament = false) {
