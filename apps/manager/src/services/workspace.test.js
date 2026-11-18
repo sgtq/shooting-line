@@ -329,12 +329,14 @@ describe('plans repository', () => {
     const insert = vi.fn().mockResolvedValue(result)
     const upsert = vi.fn().mockResolvedValue(result)
     const eq = vi.fn().mockResolvedValue(result)
+    const update = vi.fn(() => ({ eq }))
     const client = {
       rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
       from: vi.fn(() => ({
         insert,
         upsert,
         delete: () => ({ eq }),
+        update,
         select: vi.fn().mockResolvedValue({
           data:
             {
@@ -352,13 +354,22 @@ describe('plans repository', () => {
                   price_paid: '10.00',
                   currency: 'MXN',
                 },
+                {
+                  id: 's2',
+                  user_id: 'u2',
+                  plan_id: 'p1',
+                  starts_on: '2026-01-01',
+                  ends_on: null,
+                  price_paid: '0.00',
+                  currency: 'MXN',
+                },
               ],
             }[client.from.mock.lastCall[0]] || [],
           error: null,
         }),
       })),
     }
-    return { client, insert, upsert, eq }
+    return { client, insert, upsert, eq, update }
   }
 
   it('loads plans, prices, and subscriptions with numbers and empty end dates normalized', async () => {
@@ -372,6 +383,33 @@ describe('plans repository', () => {
     expect(data.subscriptions[0]).toEqual(
       expect.objectContaining({ userId: 'u1', pricePaid: 10, endsOn: '2026-01-31' }),
     )
+  })
+
+  it('loads a subscription with no end date as an empty end date', async () => {
+    const { client } = planClient()
+    const data = await createManagerRepository(client).load()
+
+    expect(data.subscriptions[1]).toEqual(expect.objectContaining({ userId: 'u2', pricePaid: 0, endsOn: '' }))
+  })
+
+  it('stores an empty end date as null and can set one later', async () => {
+    const { client, insert, update, eq } = planClient()
+    const repository = createManagerRepository(client)
+
+    await repository.saveSubscription({
+      id: 's',
+      userId: 'u1',
+      planId: 'p1',
+      startsOn: '2026-02-01',
+      endsOn: '',
+      pricePaid: 0,
+      currency: 'MXN',
+    })
+    expect(insert).toHaveBeenLastCalledWith(expect.objectContaining({ ends_on: null, price_paid: 0 }))
+
+    await repository.updateSubscriptionEnd('s', '2027-01-31')
+    expect(update).toHaveBeenCalledWith({ ends_on: '2027-01-31' })
+    expect(eq).toHaveBeenLastCalledWith('id', 's')
   })
 
   it('writes plans, prices, and subscriptions with database column names', async () => {
@@ -435,6 +473,7 @@ describe('plans repository', () => {
       repository.savePlan({ id: 'p', name: 'x', userRole: 'club', durationKind: 'custom', isActive: true }),
     ).rejects.toThrow('row-level security')
     await expect(repository.removeSubscription('s')).rejects.toThrow('row-level security')
+    await expect(repository.updateSubscriptionEnd('s', '2027-01-31')).rejects.toThrow('row-level security')
   })
 })
 

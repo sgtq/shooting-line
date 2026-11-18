@@ -7,18 +7,25 @@ const props = defineProps({
   plans: { type: Array, required: true },
   prices: { type: Array, required: true },
   subscriptions: { type: Array, required: true },
-  // Club accounts that can be given a plan: { userId, email }.
-  clubUsers: { type: Array, required: true },
+  // Club and archer accounts that can be given a plan: { userId, email, role }.
+  accounts: { type: Array, required: true },
   error: { type: String, default: '' },
 })
 
-const emit = defineEmits(['save-plan', 'save-price', 'save-subscription', 'remove-subscription'])
+const emit = defineEmits([
+  'save-plan',
+  'save-price',
+  'save-subscription',
+  'set-subscription-end',
+  'remove-subscription',
+])
 
 // Prices are in Mexican pesos only.
 const CURRENCY = 'MXN'
-const DURATION_LABELS = { monthly: 'Monthly', yearly: 'Yearly', custom: 'Custom range' }
+const DURATION_LABELS = { monthly: 'Monthly', yearly: 'Yearly', custom: 'Custom range', unlimited: 'No end date' }
+const ROLE_LABELS = { club: 'Club', archer: 'Archer' }
 
-const planForm = ref({ name: '', durationKind: 'monthly' })
+const planForm = ref({ name: '', userRole: 'club', durationKind: 'monthly' })
 const priceForm = ref({ planId: '', amount: '', startsAt: todayString(), endsAt: '' })
 const subscriptionForm = ref({
   userId: '',
@@ -28,9 +35,20 @@ const subscriptionForm = ref({
   price: '',
 })
 
-const activePlans = computed(() => props.plans.filter((plan) => plan.isActive))
+const endDrafts = ref({})
+
+const selectedAccount = computed(
+  () => props.accounts.find((account) => account.userId === subscriptionForm.value.userId) || null,
+)
+// An account can only be given a plan made for its own role.
+const assignablePlans = computed(() =>
+  props.plans.filter(
+    (plan) => plan.isActive && (!selectedAccount.value || plan.userRole === selectedAccount.value.role),
+  ),
+)
 const selectedPlan = computed(() => props.plans.find((plan) => plan.id === subscriptionForm.value.planId) || null)
 const isCustomRange = computed(() => selectedPlan.value?.durationKind === 'custom')
+const hasNoEndDate = computed(() => selectedPlan.value?.durationKind === 'unlimited')
 
 function formatMoney(amount) {
   return new Intl.NumberFormat(language.value, { style: 'currency', currency: CURRENCY }).format(amount)
@@ -45,9 +63,21 @@ function planName(planId) {
   return props.plans.find((plan) => plan.id === planId)?.name || ''
 }
 
-function clubUserEmail(userId) {
-  return props.clubUsers.find((user) => user.userId === userId)?.email || ''
+function accountEmail(userId) {
+  return props.accounts.find((account) => account.userId === userId)?.email || ''
 }
+
+// A plan made for another role cannot stay selected after the account changes.
+watch(
+  () => subscriptionForm.value.userId,
+  () => {
+    if (selectedPlan.value && !assignablePlans.value.includes(selectedPlan.value)) {
+      subscriptionForm.value.planId = ''
+      subscriptionForm.value.endsOn = ''
+      subscriptionForm.value.price = ''
+    }
+  },
+)
 
 // The end date and price follow the chosen plan and start date, and the manager can still change both.
 watch(
@@ -62,8 +92,9 @@ watch(
 )
 
 function submitPlan() {
-  emit('save-plan', { name: planForm.value.name.trim(), durationKind: planForm.value.durationKind })
-  planForm.value = { name: '', durationKind: 'monthly' }
+  const { name, userRole, durationKind } = planForm.value
+  emit('save-plan', { name: name.trim(), userRole, durationKind })
+  planForm.value = { name: '', userRole, durationKind: 'monthly' }
 }
 
 function submitPrice() {
@@ -90,11 +121,31 @@ function submitSubscription() {
   })
 }
 
+function submitEndDate(subscription) {
+  const endsOn = endDrafts.value[subscription.id]
+  if (!endsOn) return
+  emit('set-subscription-end', { subscription, endsOn })
+  delete endDrafts.value[subscription.id]
+}
+
+function periodLabel(subscription) {
+  return `${subscription.startsOn} – ${subscription.endsOn || t('No end date')}`
+}
+
 function subscriptionStatus(subscription) {
   const today = todayString()
-  if (subscription.endsOn < today) return t('Expired')
+  if (subscription.endsOn && subscription.endsOn < today) return t('Expired')
   if (subscription.startsOn > today) return t('Scheduled')
   return t('Active')
+}
+
+function accountLabel(account) {
+  const active = hasActivePlan(account.userId) ? ` (${t('Active')})` : ''
+  return `${account.email} (${roleLabel(account.role)})${active}`
+}
+
+function roleLabel(role) {
+  return t(ROLE_LABELS[role] || role)
 }
 
 function hasActivePlan(userId) {
@@ -108,7 +159,7 @@ function hasActivePlan(userId) {
       <div>
         <p class="eyebrow">{{ t('ACCOUNT MANAGEMENT') }}</p>
         <h1>{{ t('Plans') }}</h1>
-        <p class="page-subtitle">{{ t('Set plan prices and give clubs access to create tournaments.') }}</p>
+        <p class="page-subtitle">{{ t('Set plan prices and give clubs and archers access.') }}</p>
       </div>
     </div>
     <p v-if="error" class="database-error" role="alert">{{ error }}</p>
@@ -119,6 +170,7 @@ function hasActivePlan(userId) {
           <thead>
             <tr>
               <th>{{ t('PLAN') }}</th>
+              <th>{{ t('ROLE') }}</th>
               <th>{{ t('DURATION') }}</th>
               <th>{{ t('CURRENT PRICE') }}</th>
               <th>{{ t('STATUS') }}</th>
@@ -128,6 +180,7 @@ function hasActivePlan(userId) {
           <tbody>
             <tr v-for="plan in plans" :key="plan.id">
               <td>{{ plan.name }}</td>
+              <td>{{ roleLabel(plan.userRole) }}</td>
               <td>{{ t(DURATION_LABELS[plan.durationKind]) }}</td>
               <td>{{ priceLabel(plan) }}</td>
               <td>{{ plan.isActive ? t('Active') : t('Inactive') }}</td>
@@ -138,7 +191,7 @@ function hasActivePlan(userId) {
               </td>
             </tr>
             <tr v-if="!plans.length">
-              <td colspan="5">
+              <td colspan="6">
                 <div class="table-empty">{{ t('No plans yet.') }}</div>
               </td>
             </tr>
@@ -154,6 +207,12 @@ function hasActivePlan(userId) {
           ><span>{{ t('PLAN NAME') }} <b>*</b></span
           ><input v-model="planForm.name" required :placeholder="t('e.g. Club monthly')"
         /></label>
+        <label class="form-field"
+          ><span>{{ t('ROLE') }} <b>*</b></span
+          ><select v-model="planForm.userRole">
+            <option v-for="(label, role) in ROLE_LABELS" :key="role" :value="role">{{ t(label) }}</option>
+          </select></label
+        >
         <label class="form-field"
           ><span>{{ t('DURATION') }} <b>*</b></span
           ><select v-model="planForm.durationKind">
@@ -195,14 +254,14 @@ function hasActivePlan(userId) {
     </form>
 
     <form class="panel plan-form" @submit.prevent="submitSubscription">
-      <h2>{{ t('Give a club a plan') }}</h2>
+      <h2>{{ t('Give an account a plan') }}</h2>
       <div class="form-grid">
         <label class="form-field"
-          ><span>{{ t('CLUB ACCOUNT') }} <b>*</b></span
+          ><span>{{ t('ACCOUNT') }} <b>*</b></span
           ><select v-model="subscriptionForm.userId" required>
-            <option value="" disabled>{{ t('Select a club account') }}</option>
-            <option v-for="user in clubUsers" :key="user.userId" :value="user.userId">
-              {{ user.email }}{{ hasActivePlan(user.userId) ? ` (${t('Active')})` : '' }}
+            <option value="" disabled>{{ t('Select an account') }}</option>
+            <option v-for="account in accounts" :key="account.userId" :value="account.userId">
+              {{ accountLabel(account) }}
             </option>
           </select></label
         >
@@ -210,7 +269,7 @@ function hasActivePlan(userId) {
           ><span>{{ t('PLAN') }} <b>*</b></span
           ><select v-model="subscriptionForm.planId" required>
             <option value="" disabled>{{ t('Select a plan') }}</option>
-            <option v-for="plan in activePlans" :key="plan.id" :value="plan.id">{{ plan.name }}</option>
+            <option v-for="plan in assignablePlans" :key="plan.id" :value="plan.id">{{ plan.name }}</option>
           </select></label
         >
         <label class="form-field"
@@ -218,15 +277,19 @@ function hasActivePlan(userId) {
           ><input v-model="subscriptionForm.startsOn" required type="date"
         /></label>
         <label class="form-field"
-          ><span>{{ t('VALID UNTIL') }} <b>*</b></span
+          ><span
+            >{{ t('VALID UNTIL') }} <b v-if="!hasNoEndDate">*</b><small v-else>{{ t('OPTIONAL') }}</small></span
           ><input
             v-model="subscriptionForm.endsOn"
-            required
+            :required="!hasNoEndDate"
             type="date"
             :min="subscriptionForm.startsOn"
             :aria-describedby="isCustomRange ? 'custom-range-hint' : undefined"
           />
-          <small v-if="isCustomRange" id="custom-range-hint">{{ t('Pick the last day of the range.') }}</small></label
+          <small v-if="isCustomRange" id="custom-range-hint">{{ t('Pick the last day of the range.') }}</small>
+          <small v-if="hasNoEndDate">{{
+            t('Leave empty so the plan never ends. A manager can set a date later.')
+          }}</small></label
         >
         <label class="form-field"
           ><span>{{ t('PRICE CHARGED') }} (MXN) <b>*</b></span
@@ -241,7 +304,7 @@ function hasActivePlan(userId) {
         <table>
           <thead>
             <tr>
-              <th>{{ t('CLUB ACCOUNT') }}</th>
+              <th>{{ t('ACCOUNT') }}</th>
               <th>{{ t('PLAN') }}</th>
               <th>{{ t('PERIOD') }}</th>
               <th>{{ t('PRICE CHARGED') }} (MXN)</th>
@@ -251,18 +314,34 @@ function hasActivePlan(userId) {
           </thead>
           <tbody>
             <tr v-for="subscription in subscriptions" :key="subscription.id">
-              <td>{{ clubUserEmail(subscription.userId) || subscription.userId }}</td>
+              <td>{{ accountEmail(subscription.userId) || subscription.userId }}</td>
               <td>{{ planName(subscription.planId) }}</td>
-              <td>{{ subscription.startsOn }} – {{ subscription.endsOn }}</td>
+              <td>{{ periodLabel(subscription) }}</td>
               <td>{{ formatMoney(subscription.pricePaid) }}</td>
               <td>{{ subscriptionStatus(subscription) }}</td>
               <td class="row-actions">
+                <template v-if="!subscription.endsOn">
+                  <input
+                    v-model="endDrafts[subscription.id]"
+                    type="date"
+                    :min="subscription.startsOn"
+                    :aria-label="t('End date')"
+                  />
+                  <button
+                    class="text-link"
+                    type="button"
+                    :disabled="!endDrafts[subscription.id]"
+                    @click="submitEndDate(subscription)"
+                  >
+                    {{ t('Set end date') }}
+                  </button>
+                </template>
                 <button class="text-link" @click="emit('remove-subscription', subscription)">{{ t('Remove') }}</button>
               </td>
             </tr>
             <tr v-if="!subscriptions.length">
               <td colspan="6">
-                <div class="table-empty">{{ t('No club has a plan yet.') }}</div>
+                <div class="table-empty">{{ t('No account has a plan yet.') }}</div>
               </td>
             </tr>
           </tbody>

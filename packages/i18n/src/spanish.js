@@ -517,8 +517,8 @@ export const spanish = {
   'add plan': 'Agregar plan',
   'e.g. club monthly': 'p. ej., Club mensual',
   'set a price': 'Definir un precio',
-  'set plan prices and give clubs access to create tournaments.':
-    'Define los precios de los planes y da a los clubes acceso para crear torneos.',
+  'set plan prices and give clubs and archers access.':
+    'Define los precios de los planes y da acceso a clubes y arqueros.',
   'a price with an end date works as a deal. the regular price applies again after it ends.':
     'Un precio con fecha de fin funciona como una oferta. El precio regular vuelve a aplicarse cuando termina.',
   'select a plan': 'Selecciona un plan',
@@ -527,17 +527,22 @@ export const spanish = {
   'valid until': 'Válido hasta',
   'save price': 'Guardar precio',
   'price saved': 'Precio guardado',
-  'give a club a plan': 'Dar un plan a un club',
-  'club account': 'Cuenta de club',
-  'select a club account': 'Selecciona una cuenta de club',
+  'give an account a plan': 'Dar un plan a una cuenta',
+  'select an account': 'Selecciona una cuenta',
+  'no end date': 'Sin fecha de fin',
+  'leave empty so the plan never ends. a manager can set a date later.':
+    'Déjalo vacío para que el plan nunca termine. Un administrador puede poner una fecha después.',
+  'end date': 'Fecha de fin',
+  'set end date': 'Poner fecha de fin',
+  'end date saved': 'Fecha de fin guardada',
   'pick the last day of the range.': 'Elige el último día del rango.',
   'price charged': 'Precio cobrado',
   'assign plan': 'Asignar plan',
   'plan assigned': 'Plan asignado',
   period: 'Periodo',
-  'no club has a plan yet.': 'Ningún club tiene un plan todavía.',
+  'no account has a plan yet.': 'Ninguna cuenta tiene un plan todavía.',
   'an active plan is required to create tournaments': 'Se requiere un plan activo para crear torneos',
-  'this club account already has a plan during these dates': 'Esta cuenta de club ya tiene un plan en estas fechas',
+  'this account already has a plan during these dates': 'Esta cuenta ya tiene un plan en estas fechas',
   'start tournament': 'Iniciar torneo',
   'reopen tournament': 'Reabrir torneo',
   'tournament started': 'Torneo iniciado',
@@ -567,4 +572,7 @@ export const spanish = {
   'your club has no plan yet.': 'Tu club todavía no tiene un plan.',
   'ask a manager to renew it to use tournament manager again.':
     'Pide a un administrador que lo renueve para volver a usar el Administrador de Torneos.',
+  'unable to check your access': 'No se pudo verificar tu acceso',
+  'your user is not enabled': 'Tu usuario no está habilitado',
+  'ask your club or a manager to enable it.': 'Pide a tu club o a un administrador que lo habilite.',
 }

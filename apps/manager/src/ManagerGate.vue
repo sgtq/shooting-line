@@ -25,6 +25,7 @@ const isAuthorized = ref(false)
 const hasAccess = ref(false)
 const isImportPrompt = ref(false)
 const isPlanLapsed = ref(false)
+const isArcherDisabled = ref(false)
 const lastPlanEndedOn = ref('')
 const isImporting = ref(false)
 let authSubscription
@@ -98,6 +99,22 @@ async function checkAppAccess(userId) {
         .limit(1)
       lastPlanEndedOn.value = lastPlan.data?.[0]?.ends_on || ''
       isPlanLapsed.value = true
+      isChecking.value = false
+      return
+    }
+  }
+
+  // The database also shows a disabled archer no data. Their own plan and their club decide, so it asks the
+  // database instead of repeating the rule here.
+  if (currentRole === 'archer') {
+    const lockResult = await client.value.rpc('user_without_plan')
+    if (lockResult.error) {
+      errorMessage.value = `${t('Unable to check your access')}: ${lockResult.error.message}`
+      isChecking.value = false
+      return
+    }
+    if (lockResult.data) {
+      isArcherDisabled.value = true
       isChecking.value = false
       return
     }
@@ -211,6 +228,16 @@ onUnmounted(() => authSubscription?.unsubscribe())
       <p v-if="lastPlanEndedOn">{{ t('Your last plan ended on {date}.', { date: lastPlanEndedOn }) }}</p>
       <p v-else>{{ t('Your club has no plan yet.') }}</p>
       <p>{{ t('Ask a manager to renew it to use Tournament Manager again.') }}</p>
+      <a href="../">{{ t('Return to main menu') }}</a>
+    </section>
+  </main>
+
+  <main v-else-if="isArcherDisabled" class="manager-access-state">
+    <section class="manager-access-panel" role="status">
+      <LanguageSwitcher />
+      <p class="manager-access-eyebrow">{{ t('ShootingLine access') }}</p>
+      <h1>{{ t('Your user is not enabled') }}</h1>
+      <p>{{ t('Ask your club or a manager to enable it.') }}</p>
       <a href="../">{{ t('Return to main menu') }}</a>
     </section>
   </main>

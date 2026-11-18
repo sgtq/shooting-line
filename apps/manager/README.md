@@ -79,7 +79,7 @@ Manager records are stored in Supabase PostgreSQL tables created and evolved by 
 - **System admin:** can manage all records, assign or remove manager roles in **User access**, and send password reset emails.
 - **Manager:** can create and manage clubs, tournament types, categories, tournaments, archers, and scores, enable or disable club users on the **Clubs** screen, and view **User access** to resend password reset emails to admin and manager accounts. Managers cannot add or remove roles. Managers also run the **Plans** screen (see [Plans](#plans)).
 - **Club:** can read every club, tournament, entry, and score, including those of other clubs, and the full record of its own archers only. Other archers show to it by name, and only once they are entered in a tournament. A club cannot read another club's archers' birth dates or affiliation IDs, and cannot list archers it does not own. It can find one by exact affiliation ID or by name, which shows only the name and club. It can edit its own club's contact details and logo, but never the club's name or location, which only a manager or admin can change. It can create or edit archers for its own club. A club with an active plan can also create tournaments hosted by its own club and change them until they are started (see [Plans](#plans)). Clubs cannot create clubs, categories, or tournament types, delete tournaments, enter scores, or change tournaments of other clubs.
-- **Archer:** read-only access to their own archer record and tournament entries.
+- **Archer:** read-only access to their own archer record and tournament entries, while the archer is enabled (see [Plans](#plans)). A disabled archer sees only a screen saying their user is not enabled.
 
 Admins manage manager roles from **User access**; the account must already exist in Supabase Auth. Club user access is enabled or disabled directly from the **Clubs** screen using the club's email and name (which grants or revokes the `club` role automatically). Saving a club's details and its access happens in one step, so if the access change fails (for example, no account exists for the email), the details are not saved either. One account can hold the club role for only one club; enabling a second club with the same email is rejected, even when two requests arrive at the same time. Enabling uses the club's saved login email, and falls back to its contact email when none is saved. A club shows as Enabled when at least one account holds its club role, including roles an admin assigned directly. Admins and managers can resend a one-time password reset email from a row in **User access**. Any signed-in user who can open the profile dialog (everyone except archers) can choose **Email me a password reset link** there to reset their own password. Users can also request a reset from the portal sign-in screen. Club logos can be uploaded as JPG, PNG, or WebP files up to 2 MB.
 
@@ -87,18 +87,30 @@ The GitHub Pages development preview is served at `/develop/` (or `/<repository>
 
 ### Plans
 
-Admins and managers open **Plans** from the sidebar. Only club accounts hold plans in this version. Archers have no
-plans.
+Admins and managers open **Plans** from the sidebar. Club and archer accounts hold plans. Each plan is made for one
+role, and an account can only be given a plan made for its own role.
 
-- A plan has a name and a duration kind: monthly, yearly, or custom range. A plan can be deactivated, which hides it
-  from new assignments but keeps existing subscriptions.
+- A plan has a name, a role (club or archer), and a duration kind: monthly, yearly, custom range, or no end date. A
+  plan can be deactivated, which hides it from new assignments but keeps existing subscriptions.
+- **Archer basic** is the starting archer plan. It has no end date and costs 0 MXN, so a manager can later give it an
+  end date or change its price. A subscription with no end date covers every day from its start. A manager sets its
+  end date later with **Set end date** on the subscription row. One account still cannot hold two subscriptions that
+  share a day, and a subscription with no end date shares a day with every later one.
+- An archer is enabled while a subscription covers today and one of these holds: the subscription was paid for
+  (price charged above 0), or it is free and the archer's club is active, or the archer has no club. A club is active
+  while an account holds its club role and that account has a plan covering today. When a club is disabled or its plan
+  ends, its archers on a free plan are disabled too, and archers with a paid plan stay enabled. The database enforces
+  this. A disabled archer reads no tournaments, entries, scores, matches, clubs, categories, or tournament types, and
+  the app shows only a screen saying their user is not enabled. They can still read their own account and
+  subscriptions. Nothing grants an archer a plan automatically: a manager assigns it on this screen.
 - Prices are in Mexican pesos (MXN) only. They are kept as history. Each price has an amount, a start date, and an
   optional end date. A price
   with an end date works as a deal. When several prices cover a day, the one with the latest start date applies, so
   the regular price returns after a deal ends.
-- A manager gives a club account a plan by choosing the plan, a start date, and an end date. Both dates count as
+- A manager gives an account a plan by choosing the account, the plan, a start date, and an end date. Both dates count as
   covered days, and one account cannot hold two plans that share a day. The app and the database both reject that. The end date is filled
-  in for monthly and yearly plans and can be changed. For a custom range the manager picks it. The price is filled
+  in for monthly and yearly plans and can be changed. For a custom range the manager picks it. For a plan with no end
+  date the field can stay empty. The price is filled
   in from the catalogue and can be changed. The price charged is saved with the subscription, so later price changes
   do not alter it.
 - A club can create tournaments only while a subscription covers today. The tournament is always hosted by the
