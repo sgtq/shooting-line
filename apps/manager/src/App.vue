@@ -28,16 +28,18 @@ import ClubForm from './components/ClubForm.vue'
 import ProfileForm from './components/ProfileForm.vue'
 import TournamentTypeForm from './components/TournamentTypeForm.vue'
 import UserRoleForm from './components/UserRoleForm.vue'
+import ArcherForm from './components/ArcherForm.vue'
+import TournamentForm from './components/TournamentForm.vue'
 import AppModal from './components/AppModal.vue'
 import TargetTypeModal from './components/TargetTypeModal.vue'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
 import { summarizeDecision } from './services/archerRequests'
-import { displayChoice, fullName } from './services/display'
+import { fullName } from './services/display'
 import { modalLabels } from './services/modalLabels'
 import { buildScoreRows } from './services/scoreRows'
 import { categoryBlockReason as categoryBlockReasonFor } from './services/categoryEligibility'
 import { findOverlappingSubscription } from './services/planRules'
-import { MAX_TOURNAMENT_DAYS, datesToForm, resolveDays } from './services/tournamentDates'
+import { datesToForm, resolveDays } from './services/tournamentDates'
 
 const props = defineProps({
   initialData: { type: Object, required: true },
@@ -892,11 +894,6 @@ async function toggleTournamentCategory(tournament, categoryId) {
     return
 }
 
-/** @returns {string[]} The bow types of the categories offered by the tournament. */
-function tournamentBowTypes(tournament) {
-  return [...new Set(tournament.categoryIds.map((categoryId) => categoryFor(categoryId)?.bowType ?? ''))]
-}
-
 /** @returns {string} The reason an archer cannot enter the category, or an empty string. */
 function categoryBlockReason(tournament, participant, category) {
   return categoryBlockReasonFor(tournament, participant, category, data.value)
@@ -922,11 +919,6 @@ async function addParticipantWithCategory(tournament, participant, event) {
       tournament.categoryAssignments[participant.id] = categoryId
     },
   )
-}
-
-/** @returns {string} Tooltip for category pickers, which disable options the archer cannot enter. */
-function categoryLimitHint() {
-  return t("Limited by the archer's age and the categories they have already entered")
 }
 
 async function clearParticipantCategory(tournament, participant) {
@@ -1550,129 +1542,17 @@ async function recordMatchScore(match, side, value) {
         :can-manage="canManage"
         @logo-selected="handleClubLogoSelection"
       />
-      <template v-else-if="modalType === 'tournament' || modalType === 'tournamentDates'">
-        <div class="form-grid">
-          <label v-if="modalType === 'tournament'" class="form-field full"
-            ><span>{{ t('TOURNAMENT NAME') }} <b>*</b></span
-            ><input v-model="form.name" required :placeholder="t('e.g. Spring Championship')"
-          /></label>
-          <div class="form-field full">
-            <span>{{ t('DATES') }} <b>*</b></span>
-            <select v-model="form.dateMode" :aria-label="t('How to enter the dates')">
-              <option value="range">{{ t('Date range') }}</option>
-              <option value="days">{{ t('Separate dates') }}</option>
-            </select>
-          </div>
-          <template v-if="form.dateMode === 'range'">
-            <label class="form-field"
-              ><span>{{ t('START DATE') }} <b>*</b></span
-              ><input v-model="form.startDate" required type="date"
-            /></label>
-            <label class="form-field"
-              ><span>{{ t('END DATE') }} <b>*</b></span
-              ><input v-model="form.endDate" required type="date" :min="form.startDate || undefined"
-            /></label>
-          </template>
-          <div v-else class="form-field full">
-            <div v-for="(day, index) in form.days" :key="index" class="field-with-button">
-              <input
-                v-model="form.days[index]"
-                required
-                type="date"
-                :aria-label="t('Tournament date {number}', { number: index + 1 })"
-              />
-              <button
-                v-if="form.days.length > 1"
-                type="button"
-                class="button button-outline"
-                @click="form.days.splice(index, 1)"
-              >
-                {{ t('Remove date') }}
-              </button>
-            </div>
-            <button
-              type="button"
-              class="button button-outline"
-              :disabled="form.days.length >= MAX_TOURNAMENT_DAYS"
-              @click="form.days.push('')"
-            >
-              {{ t('Add date') }}
-            </button>
-          </div>
-          <template v-if="modalType === 'tournament'">
-            <label class="form-field"
-              ><span>{{ t('DISCIPLINE') }}</span
-              ><select v-model="form.discipline">
-                <option value="Outdoor target">{{ t('Outdoor target') }}</option>
-                <option value="Indoor target">{{ t('Indoor target') }}</option>
-                <option value="Field">{{ t('Field') }}</option>
-                <option>3D</option>
-                <option value="Other">{{ t('Other') }}</option>
-              </select></label
-            >
-            <div class="form-field full">
-              <span>{{ t('TOURNAMENT TYPE') }} <b>*</b></span>
-              <div class="field-with-button">
-                <select v-model="form.tournamentTypeId" required :aria-label="t('Tournament type')">
-                  <option value="" disabled>{{ t('Select a tournament type') }}</option>
-                  <option v-for="type in data.tournamentTypes" :key="type.id" :value="type.id">
-                    {{ type.name }} — {{ type.distance }} {{ type.distanceUnit }}, {{ type.targetType }}
-                  </option>
-                </select>
-                <button
-                  v-if="canManage"
-                  type="button"
-                  class="icon-button target-type-add"
-                  :aria-label="t('Add tournament type')"
-                  :title="t('Add tournament type')"
-                  @click="openTournamentChildModal('tournamentType')"
-                >
-                  ＋
-                </button>
-              </div>
-            </div>
-            <div class="form-field full">
-              <span>{{ t('HOST CLUB') }}</span>
-              <div class="field-with-button">
-                <select v-model="form.clubId" :disabled="!canManage" :aria-label="t('Host club')">
-                  <option v-if="canManage" value="">{{ t('No club / independent event') }}</option>
-                  <option
-                    v-for="club in canManage ? data.clubs : data.clubs.filter((item) => item.id === userScope.clubId)"
-                    :key="club.id"
-                    :value="club.id"
-                  >
-                    {{ club.name }}
-                  </option>
-                </select>
-                <button
-                  v-if="canManage"
-                  type="button"
-                  class="icon-button target-type-add"
-                  :aria-label="t('Add new club')"
-                  :title="t('Add new club')"
-                  @click="openTournamentChildModal('club')"
-                >
-                  ＋
-                </button>
-              </div>
-            </div>
-            <div class="form-field full">
-              <span>{{ t('TOURNAMENT LOCATION') }}</span>
-              <div class="radio-row">
-                <label><input v-model="form.venueMode" type="radio" value="club" /> {{ t('Use club address') }}</label
-                ><label><input v-model="form.venueMode" type="radio" value="custom" /> {{ t('Custom address') }}</label>
-              </div>
-            </div>
-            <label v-if="form.venueMode === 'custom'" class="form-field full"
-              ><span>{{ t('CUSTOM ADDRESS') }} <b>*</b></span
-              ><input v-model="form.customAddress" required :placeholder="t('Street, city, state, ZIP')"
-            /></label>
-            <p v-else-if="form.clubId" class="address-preview full">
-              ⌖ {{ clubFor(form.clubId)?.address || t('This club has no address yet.') }}
-            </p>
-          </template>
-        </div>
-      </template>
+      <TournamentForm
+        v-else-if="modalType === 'tournament' || modalType === 'tournamentDates'"
+        v-model:form="form"
+        :modal-type="modalType"
+        :tournament-types="data.tournamentTypes"
+        :clubs="data.clubs"
+        :club-id="userScope.clubId || ''"
+        :can-manage="canManage"
+        @add-type="openTournamentChildModal('tournamentType')"
+        @add-club="openTournamentChildModal('club')"
+      />
       <TournamentTypeForm
         v-else-if="modalType === 'tournamentType'"
         v-model:form="form"
@@ -1688,132 +1568,22 @@ async function recordMatchScore(match, side, value) {
         :user-email="userEmail"
         @reset-password="sendOwnPasswordReset"
       />
-      <template v-else>
-        <div class="form-grid">
-          <label class="form-field"
-            ><span
-              >{{ t('WORLD ARCHERY ID') }} <small>{{ t('OPTIONAL') }}</small></span
-            ><input v-model="form.waId" autocomplete="off" :placeholder="t('Affiliation number')"
-          /></label>
-          <label class="form-field"
-            ><span
-              >{{ t('AETAY ID') }} <small>{{ t('OPTIONAL') }}</small></span
-            ><input v-model="form.aetayId" autocomplete="off" :placeholder="t('Affiliation number')"
-          /></label>
-          <label class="form-field full"
-            ><span
-              >{{ t('EMAIL') }} <small>{{ t('OPTIONAL') }}</small></span
-            ><input v-model="form.email" type="email" autocomplete="off" :placeholder="t('Needed to request a login')"
-          /></label>
-          <label class="form-field"
-            ><span>{{ t('LAST NAME') }} <b v-if="!selectedMatch">*</b></span
-            ><input
-              v-model="form.lastName"
-              :required="!selectedMatch"
-              autocomplete="family-name"
-              :placeholder="t('Last name')"
-          /></label>
-          <label class="form-field"
-            ><span>{{ t('FIRST NAME') }} <b v-if="!selectedMatch">*</b></span
-            ><input
-              v-model="form.firstName"
-              :required="!selectedMatch"
-              autocomplete="given-name"
-              :placeholder="t('First name')"
-          /></label>
-          <div
-            v-if="archerMatches.length"
-            class="archer-pick-list full"
-            role="radiogroup"
-            :aria-label="t('Archers found')"
-          >
-            <p class="privacy-note">
-              {{
-                assignNewParticipant
-                  ? t('Archers already in the database. Click one to add them instead of creating a new archer.')
-                  : t('Archers already in the database. Check that you are not creating a duplicate.')
-              }}
-            </p>
-            <label v-for="match in archerMatches" :key="match.token" class="archer-pick">
-              <input
-                v-model="selectedMatchToken"
-                type="radio"
-                name="archer-match"
-                :value="match.token"
-                :disabled="!assignNewParticipant"
-              />
-              <span class="roster-name"
-                ><strong>{{ match.lastName }}, {{ match.firstName }}</strong
-                ><small>{{ clubFor(match.clubId)?.name || t('No club') }}</small></span
-              >
-            </label>
-          </div>
-          <div v-if="!editingParticipantId" class="full">
-            <button type="button" class="text-link" @click="clearArcherForm">{{ t('Clear form') }}</button>
-          </div>
-          <p v-if="selectedMatch" class="address-preview full">
-            {{
-              t('Adding {name}. Their record stays private to their own club.', {
-                name: `${selectedMatch.firstName} ${selectedMatch.lastName}`,
-              })
-            }}
-            <button type="button" class="text-link" @click="selectedMatchToken = ''">
-              {{ t('Create a new archer instead') }}
-            </button>
-          </p>
-          <template v-if="!selectedMatch">
-            <label class="form-field full"
-              ><span>{{ t('BIRTH DATE') }} <b>*</b></span
-              ><input v-model="form.birthDate" required type="date"
-            /></label>
-            <label class="form-field full">
-              <span
-                >{{ t('CLUB') }} <small v-if="canManage">{{ t('OPTIONAL') }}</small><b v-else>*</b></span
-              >
-              <select v-model="form.clubId" :disabled="!canManage">
-                <option v-if="canManage" value="">{{ t('No club / independent archer') }}</option>
-                <option
-                  v-for="club in canManage ? data.clubs : data.clubs.filter((item) => item.id === userScope.clubId)"
-                  :key="club.id"
-                  :value="club.id"
-                >
-                  {{ club.name }}
-                </option>
-              </select>
-            </label>
-          </template>
-          <template v-if="assignNewParticipant && !editingParticipantId && selectedTournament?.categoryIds.length">
-            <label class="form-field"
-              ><span>{{ t('BOW TYPE') }} <b>*</b></span
-              ><select v-model="form.bowType" required aria-label="Bow type" @change="form.categoryId = ''">
-                <option value="" disabled>{{ t('Choose bow type') }}</option>
-                <option v-for="bowType in tournamentBowTypes(selectedTournament)" :key="bowType" :value="bowType">
-                  {{ bowType ? displayChoice(bowType) : t('Any bow type') }}
-                </option>
-              </select></label
-            >
-            <label class="form-field"
-              ><span>{{ t('CATEGORY') }} <b>*</b></span
-              ><select v-model="form.categoryId" required aria-label="Category" :title="categoryLimitHint()">
-                <option value="" disabled>{{ t('Choose category') }}</option>
-                <option
-                  v-for="categoryId in selectedTournament.categoryIds.filter(
-                    (id) => categoryFor(id)?.bowType === form.bowType,
-                  )"
-                  :key="categoryId"
-                  :value="categoryId"
-                  :disabled="Boolean(categoryBlockReason(selectedTournament, form, categoryFor(categoryId)))"
-                >
-                  {{ categoryFor(categoryId)?.name }}
-                </option>
-              </select></label
-            >
-          </template>
-          <p v-if="!selectedMatch" class="privacy-note full">
-            {{ t('Archer details are stored in the shared manager database.') }}
-          </p>
-        </div>
-      </template>
+      <ArcherForm
+        v-else
+        v-model:form="form"
+        v-model:match-token="selectedMatchToken"
+        :selected-match="selectedMatch"
+        :archer-matches="archerMatches"
+        :assign-new-participant="assignNewParticipant"
+        :editing-participant-id="editingParticipantId"
+        :selected-tournament="selectedTournament"
+        :clubs="data.clubs"
+        :categories="data.categories"
+        :tournaments="data.tournaments"
+        :club-id="userScope.clubId || ''"
+        :can-manage="canManage"
+        @clear="clearArcherForm"
+      />
       <template #after>
         <TargetTypeModal
           v-if="showTargetTypeModal"
