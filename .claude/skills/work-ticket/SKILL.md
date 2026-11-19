@@ -1,6 +1,6 @@
 ---
 name: work-ticket
-description: Work a ticket from start to a ready commit. Looks the ticket up by number in docs/planning/<app>/tickets.md, or reads it from a URL if one is given. Plans the change, builds it with tests, docs, and translations, and runs CI. Use when the user asks to work, start, build, or implement a ticket.
+description: Work a ticket from start to a ready commit. Reads the ticket from its GitHub issue, by issue number or URL. Plans the change, builds it with tests, docs, and translations, and runs CI. Use when the user asks to work, start, build, or implement a ticket.
 argument-hint: '<ticket number or URL>'
 ---
 
@@ -11,26 +11,28 @@ language, no em dashes, and ask the user when something is unclear instead of gu
 
 ## 1. Find the ticket
 
-- If the argument is a URL, read the ticket from that URL (use `gh issue view <url>` for GitHub issues).
-  Do not look in `tickets.md` first.
-- Otherwise treat the argument as a ticket number and look it up in the per-app files
-  `docs/planning/<app>/tickets.md` (`manager`, `ianseo-dashboard`, `scorecard`). Ids can be sub-tickets
-  such as `5a` or `5b`.
-- The same number can appear in more than one app (for example Manager and Scorecard both have `11`).
-  If the number matches more than one row, list the matches with their app and ask which one. The app
-  folder also holds a `plan.md` when there is one. Read it before planning.
-- If there is no argument, or no row matches, say so and ask. Do not pick a ticket yourself.
+Tickets are GitHub issues in `sgtq/shooting-line`. The `docs/planning/<app>/tickets.md` files are
+archived and no longer updated. Do not read them for tickets.
+
+- If the argument is a URL or an issue number, read it with `gh issue view <number or url>`
+  (add `--comments` when the discussion matters).
+- Fetch one issue only. Do not list or dump every issue body.
+- The `app:<name>` label (`manager`, `portal`, `scorecard`, `ianseo-dashboard`, `platform`) tells which
+  app it belongs to. Read `docs/planning/<app>/plan.md` before planning when it exists.
+- The issue body can have a "Depends on: #N" line, and some issues have a parent or sub-issues. Read
+  those with `gh issue view` when they matter.
+- If there is no argument, or the issue does not exist, say so and ask. Do not pick a ticket yourself.
 
 Read the full ticket text. If the ticket is vague, has open choices, or touches scope you cannot judge
 from the code, ask the user before planning.
 
 ## 2. Check the state of the work
 
-- If the status is `[x]`, tell the user it is already done and ask if they still want to continue.
-- If the status is `[~]`, look at the current branch, recent commits, and any related code to see what
-  is already built. Report that and continue only the remaining part.
-- Read the code the ticket touches. Check related tickets (for example `5` and `5a`) so the work does
-  not clash with or duplicate them.
+- If the issue is closed, tell the user it is already done and ask if they still want to continue.
+- If its project Status is In Progress, look at the current branch, recent commits, and any related code
+  to see what is already built. Report that and continue only the remaining part.
+- Read the code the ticket touches. Check related issues (parent, sub-issues, dependencies) so the work
+  does not clash with or duplicate them.
 
 ## 3. Get on the right branch
 
@@ -39,10 +41,15 @@ from the code, ask the user before planning.
 - Otherwise create a branch from the up to date `develop` (fetch first) named `feat/...`, `fix/...`,
   `test/...`, or `docs/...` to match the ticket. If `develop` does not exist locally or remotely, ask
   which base to use.
+- If the tree has uncommitted changes that do not belong to this ticket, never stash, reset, or switch
+  over them. Use a git worktree for the new branch as the default:
+  `git worktree add ../shooting-line-<slug> -b <branch> origin/develop`. Run `npm install` there and do
+  all the work in that folder. Ask the user first only when it is unclear whether the changes belong to
+  this ticket.
 - If a plain fetch fails with an SSL certificate error on Windows, retry with
   `git -c http.sslBackend=schannel fetch origin`.
 
-Once on the branch, flip the ticket to `[~]` now (see step 7).
+Once on the branch, set the ticket to In Progress now (see step 7).
 
 ## 4. Plan, then confirm
 
@@ -84,20 +91,21 @@ user at the end instead of fixing it.
 
 ## 7. Update the ticket status
 
-Keep the status in the app's `docs/planning/<app>/tickets.md` current as the work moves, not only at the end:
+The status is the Status field of the issue in its project (`ShootingLine <App>`, owned by `sgtq`).
 
-- Set `[~]` as soon as the branch is ready (end of step 3), before planning or coding.
-- Set `[x]` only when the work is finished and verified (step 6 passed).
-- If the work stops half way or is handed back, leave it at `[~]` and say what remains.
-
-Keep the table aligned. Run Prettier on the file after editing. The file is gitignored, so the change is
-not part of the commit. If the ticket came from a URL and is not in the file, skip this step and do not
-add a row.
+- Set In Progress as soon as the branch is ready (end of step 3), before planning or coding. Find the
+  item with `gh project item-list <project number> --owner sgtq --format json -L 200`, then run
+  `gh project item-edit` with the project, field, and option ids from `gh project field-list`.
+  Project numbers: manager 3, scorecard 4, ianseo-dashboard 5, portal 6, platform 7.
+- Do not close the issue by hand. Put `Closes #<number>` in the PR body so GitHub closes it on merge
+  and the project moves it to Done.
+- If the work stops half way or is handed back, leave it In Progress and say what remains.
+- If the issue is not in a project, skip this step and say so.
 
 ## 8. Commit
 
 `CLAUDE.md` requires approval before committing. Show the draft commit message in chat and wait for the
-user to approve. Start the message with a short summary line that names the ticket. End it with the
+user to approve. Start the message with a short summary line that names the ticket and its issue number (`#N`). End it with the
 attribution line from the session's system reminder. Do not push or open a PR unless the user asks.
 If they ask for a PR, open it against `develop` (`gh pr create --base develop`). Show the full draft
 (title and body) and wait for approval first.
