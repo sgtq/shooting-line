@@ -229,6 +229,27 @@ The separate `.github/workflows/supabase-functions.yml` deploys the password-res
 
 Configure these repository Actions variables for the Pages workflow: `PAGES_PRD_SUPABASE_URL` and `PAGES_PRD_SUPABASE_PUBLISHABLE_KEY` for production; `PAGES_DEV_SUPABASE_URL` and `PAGES_DEV_SUPABASE_PUBLISHABLE_KEY` for the development preview. Optional `PAGES_PRD_BASE_PATH` and `PAGES_DEV_BASE_PATH` override the default site paths. Grant Manager app access in the development Supabase project only to accounts that should use the preview.
 
+## Code layout
+
+`apps/manager/src/App.vue` is the shell. It holds the page state (which page is open, filters, the selected tournament) and
+passes data and events to the pages. Each kind of code has one place:
+
+- `components/`: one component per page (`ClubsPage`, `TournamentsPage`, `DashboardPage`, and so on), one per tab of the
+  tournament view (`TournamentArchersTab`, `TournamentScoresTab`, ...), and one per dialog form (`ClubForm`,
+  `ArcherForm`, ...). `AppModal` is the dialog frame. Components take props and emit events, and do not call the
+  database.
+- `stores/managerStore.js`: the Pinia store. It holds the workspace data and the error messages, runs every save
+  through `persistChange` (the screen changes only after the database accepts the change), and looks records up by id.
+- `composables/`: the logic that changes data or tracks state. `usePermissions` decides what each role may do,
+  `useScoring` and `useTournamentActions` hold the score, match, and tournament saves, `usePlanActions`,
+  `useArcherRequestActions`, and `useUserAccessActions` hold the saves of those pages, and `useDialogs` and
+  `useDialogSaves` hold the open dialog and its save.
+- `services/`: plain functions with no screen state, such as date and name formatting, the category rules, the roster
+  filters, and the blank forms. `services/workspace.js` is the one file that talks to Supabase. It loads the workspace
+  and holds the repository that the composables call to save.
+
+Unit tests sit next to the file they cover (`ClubsPage.test.js` beside `ClubsPage.vue`).
+
 ## Commands
 
 From the repository root:
