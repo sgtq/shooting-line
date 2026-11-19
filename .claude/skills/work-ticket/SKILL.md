@@ -17,8 +17,8 @@ archived and no longer updated. Do not read them for tickets.
 - If the argument is a URL or an issue number, read it with `gh issue view <number or url>`
   (add `--comments` when the discussion matters).
 - Fetch one issue only. Do not list or dump every issue body.
-- The `app:<name>` label (`manager`, `portal`, `scorecard`, `ianseo-dashboard`) tells which app it
-  belongs to. Read `docs/planning/<app>/plan.md` before planning when it exists.
+- The `app:<name>` label (`manager`, `portal`, `scorecard`, `ianseo-dashboard`, `platform`) tells which
+  app it belongs to. Read `docs/planning/<app>/plan.md` before planning when it exists.
 - The issue body can have a "Depends on: #N" line, and some issues have a parent or sub-issues. Read
   those with `gh issue view` when they matter.
 - If there is no argument, or the issue does not exist, say so and ask. Do not pick a ticket yourself.
@@ -96,7 +96,7 @@ The status is the Status field of the issue in its project (`ShootingLine <App>`
 - Set In Progress as soon as the branch is ready (end of step 3), before planning or coding. Find the
   item with `gh project item-list <project number> --owner sgtq --format json -L 200`, then run
   `gh project item-edit` with the project, field, and option ids from `gh project field-list`.
-  Project numbers: manager 3, scorecard 4, ianseo-dashboard 5, portal 6.
+  Project numbers: manager 3, scorecard 4, ianseo-dashboard 5, portal 6, platform 7.
 - Do not close the issue by hand. Put `Closes #<number>` in the PR body so GitHub closes it on merge
   and the project moves it to Done.
 - If the work stops half way or is handed back, leave it In Progress and say what remains.

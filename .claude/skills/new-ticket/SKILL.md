@@ -12,10 +12,11 @@ ask when something is unclear.
 
 ## 1. Pick the app
 
-- Use the label `app:manager`, `app:portal`, `app:scorecard`, or `app:ianseo-dashboard`. The launcher
-  belongs to `portal`, not `manager`.
+- Use the label `app:manager`, `app:portal`, `app:scorecard`, `app:ianseo-dashboard`, or `app:platform`.
+  The launcher belongs to `portal`, not `manager`. Use `platform` for CI, deploy, database, shared
+  packages, and other work that spans apps.
 - If it is unclear which app it belongs to, ask. Do not guess.
-- Project numbers (owner `sgtq`): manager 3, scorecard 4, ianseo-dashboard 5, portal 6.
+- Project numbers (owner `sgtq`): manager 3, scorecard 4, ianseo-dashboard 5, portal 6, platform 7.
 
 ## 2. Draft
 
