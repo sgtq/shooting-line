@@ -6,6 +6,8 @@ import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import NavIcon from './components/NavIcon.vue'
 import CategoriesPage from './components/CategoriesPage.vue'
+import ClubsPage from './components/ClubsPage.vue'
+import ParticipantsPage from './components/ParticipantsPage.vue'
 import PlansPage from './components/PlansPage.vue'
 import TournamentTypesPage from './components/TournamentTypesPage.vue'
 import UserAccessPage from './components/UserAccessPage.vue'
@@ -21,7 +23,6 @@ import {
   ageAtTournament,
   categoryDescription,
   displayChoice,
-  formatDate,
   formatDates,
   formatMonth,
   fullName,
@@ -69,7 +70,6 @@ const {
   canManageParticipants,
   canSearchArchers,
   canEditClub,
-  canEditParticipant,
 } = usePermissions(props, data, selectedTournament)
 const visibleNavItems = useNavItems(canManage, isClubUser)
 const { toast, notify } = useToast()
@@ -168,15 +168,6 @@ const nextTournament = computed(() => upcomingTournaments.value.find((item) => l
 // Name-only archers (other clubs') appear in tournaments and scores but never in the directory or its pickers,
 // so a club cannot browse archers it does not own.
 const directoryParticipants = computed(() => data.value.participants.filter((person) => !person.nameOnly))
-const filteredParticipants = computed(() => {
-  const term = search.value.trim().toLowerCase()
-  if (!term) return directoryParticipants.value
-  return directoryParticipants.value.filter((person) =>
-    [person.firstName, person.lastName, person.waId, person.aetayId]
-      .filter(Boolean)
-      .some((value) => value.toLowerCase().includes(term)),
-  )
-})
 const filteredTournamentParticipantsDirectory = computed(() => {
   const query = participantDirectorySearch.value.trim().toLowerCase()
   const entered = selectedTournament.value?.participantIds ?? []
@@ -251,20 +242,6 @@ const scoredCount = computed(
     data.value.scores.filter(
       (item) => item.tournamentId === selectedTournamentId.value && item.round === selectedRound.value,
     ).length,
-)
-const scoreSummaries = computed(() =>
-  directoryParticipants.value.map((participant) => {
-    const roundScores = data.value.scores.filter((item) => item.participantId === participant.id)
-    const matchScores = data.value.matches.filter(
-      (match) =>
-        (match.seed1Id === participant.id && match.score1 !== '') ||
-        (match.seed2Id === participant.id && match.score2 !== ''),
-    )
-    return {
-      participant,
-      scoreCount: roundScores.length + matchScores.length,
-    }
-  }),
 )
 const selectedParticipantScoreRows = computed(() =>
   [
@@ -1670,207 +1647,37 @@ async function recordMatchScore(match, side, value) {
           </section>
         </section>
 
-        <section v-else-if="activePage === 'clubs'">
-          <div class="page-heading heading-row">
-            <div>
-              <p class="eyebrow">{{ t('YOUR COMMUNITY') }}</p>
-              <h1>{{ t('Archery clubs') }}</h1>
-              <p class="page-subtitle">{{ t('View clubs and manage your club details.') }}</p>
-            </div>
-            <button v-if="canManage" class="button button-primary" @click="openModal('club')">
-              <span>＋</span> {{ t('Add club') }}
-            </button>
-          </div>
-          <div class="section-toolbar">
-            <div class="toolbar-count">{{ data.clubs.length }} {{ t('clubs in the directory') }}</div>
-            <div class="search-box"><span>⌕</span><input v-model="search" :placeholder="t('Search clubs...')" /></div>
-          </div>
-          <div class="clubs-grid">
-            <article
-              v-for="club in data.clubs.filter(
-                (item) => !search || item.name.toLowerCase().includes(search.toLowerCase()),
-              )"
-              :key="club.id"
-              class="club-card"
-            >
-              <div class="club-card-head">
-                <img
-                  v-if="club.logoUrl"
-                  class="club-logo"
-                  :src="club.logoUrl"
-                  :alt="t('{name} logo', { name: club.name })"
-                /><span v-else class="club-avatar large">{{ club.name.charAt(0) }}</span>
-              </div>
-              <h3>{{ club.name }}</h3>
-              <a v-if="club.mapUrl" class="club-location" :href="club.mapUrl" target="_blank" rel="noreferrer"
-                >⌖ {{ club.address || t('Open map') }} ↗</a
-              >
-              <p v-else class="club-location">⌖ {{ club.address || t('No address added') }}</p>
-              <div class="club-contact">
-                <span class="contact-label">{{ t('REPRESENTATIVE') }}</span><strong>{{
-                  club.representative || t('Not provided')
-                }}</strong
-                ><a :href="`tel:${club.phone}`">{{ club.phone || t('No phone number') }}</a
-                ><a v-if="club.email" :href="`mailto:${club.email}`">{{ club.email }}</a>
-              </div>
-              <div v-if="canManage || userRole === 'club'" class="club-user-row">
-                <div>
-                  <span class="contact-label">{{ t('CLUB USER') }}</span>
-                  <strong>{{ club.email || club.userEmail || t('No email set') }}</strong>
-                </div>
-                <div class="club-user-controls">
-                  <span class="status-pill" :class="club.userEnabled ? 'status-active' : 'status-disabled'"
-                    ><i></i>{{ club.userEnabled ? t('Enabled') : t('Disabled') }}</span
-                  >
-                  <button
-                    v-if="canManage"
-                    type="button"
-                    class="button button-small button-outline"
-                    @click="toggleClub(club)"
-                  >
-                    {{ club.userEnabled ? t('Disable') : t('Enable') }}
-                  </button>
-                </div>
-              </div>
-              <div class="club-card-actions">
-                <button
-                  v-if="canManage || (isClubUser && club.id === userScope.clubId)"
-                  class="button button-small button-outline"
-                  @click="addParticipantToClub(club.id)"
-                >
-                  {{ t('＋ Add archer') }}
-                </button>
-                <a
-                  v-if="club.website"
-                  :href="club.website"
-                  target="_blank"
-                  rel="noreferrer"
-                  class="button button-small button-outline"
-                  >{{ t('Website ↗') }}</a
-                >
-                <button
-                  v-if="canEditClub(club)"
-                  class="button button-icon"
-                  :aria-label="t('Edit club')"
-                  :title="t('Edit club')"
-                  @click="editClub(club)"
-                >
-                  <NavIcon name="pencil" />
-                </button>
-              </div>
-            </article>
-            <button v-if="canManage" class="add-card" @click="openModal('club')">
-              <span>＋</span><strong>{{ t('Add a club') }}</strong
-              ><small>{{ t('Add club contact and location details') }}</small>
-            </button>
-          </div>
-        </section>
+        <ClubsPage
+          v-else-if="activePage === 'clubs'"
+          v-model:search="search"
+          :clubs="data.clubs"
+          :can-manage="canManage"
+          :can-club-edit="canClubEdit"
+          :is-club-user="isClubUser"
+          :club-id="userScope.clubId || ''"
+          @create="openModal('club')"
+          @edit="editClub"
+          @toggle-user="toggleClub"
+          @add-archer="addParticipantToClub"
+        />
 
-        <section v-else-if="activePage === 'participants'">
-          <div class="page-heading heading-row">
-            <div>
-              <p class="eyebrow">{{ t('ARCHER DIRECTORY') }}</p>
-              <h1>{{ t('Archers') }}</h1>
-              <p class="page-subtitle">{{ t('A reusable directory of archers for your tournaments.') }}</p>
-            </div>
-            <button v-if="canManageParticipants" class="button button-primary" @click="openModal('participant')">
-              <span>＋</span> {{ t('Add archer') }}
-            </button>
-          </div>
-          <div class="section-toolbar">
-            <div class="toolbar-count">
-              {{ directoryParticipants.length }} {{ t('archers') }} <span>·</span> {{ t('Saved for future events') }}
-            </div>
-            <div class="search-box">
-              <span>⌕</span><input v-model="search" :placeholder="t('Search last name or affiliation...')" />
-            </div>
-          </div>
-          <section class="panel table-panel">
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>{{ t('ARCHER') }}</th>
-                    <th>{{ t('BIRTH DATE') }}</th>
-                    <th>{{ t('WORLD ARCHERY ID') }}</th>
-                    <th>{{ t('AETAY ID') }}</th>
-                    <th>{{ t('CLUB') }}</th>
-                    <th>{{ t('TOURNAMENTS') }}</th>
-                    <th>{{ t('SCORES') }}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="person in filteredParticipants" :key="person.id">
-                    <td>
-                      <div class="person-cell">
-                        <span class="person-avatar"
-                          >{{ person.firstName.charAt(0) }}{{ person.lastName.charAt(0) }}</span
-                        ><span
-                          ><strong>{{ person.lastName }}, {{ person.firstName }}</strong
-                          ><small>{{ t('Archer') }}</small></span
-                        >
-                      </div>
-                    </td>
-                    <td>{{ formatDate(person.birthDate) }}</td>
-                    <td>{{ person.waId || '—' }}</td>
-                    <td>{{ person.aetayId || '—' }}</td>
-                    <td>
-                      <select
-                        v-if="canManage"
-                        class="category-select participant-club-select"
-                        :aria-label="t('{name} club', { name: fullName(person) })"
-                        :value="person.clubId || ''"
-                        @change="setParticipantClub(person, $event)"
-                      >
-                        <option value="">{{ t('No club') }}</option>
-                        <option v-for="club in data.clubs" :key="club.id" :value="club.id">
-                          {{ club.name }}
-                        </option></select
-                      ><span v-else>{{ clubFor(person.clubId)?.name || '—' }}</span>
-                    </td>
-                    <td>
-                      <span class="tournament-count"
-                        >{{ data.tournaments.filter((event) => event.participantIds.includes(person.id)).length }}
-                        {{ t('events') }}</span
-                      >
-                    </td>
-                    <td>
-                      {{
-                        scoreSummaries.find((summary) => summary.participant.id === person.id)?.scoreCount ||
-                        t('No scores yet')
-                      }}
-                    </td>
-                    <td>
-                      <div class="table-actions">
-                        <button
-                          v-if="canEditParticipant(person)"
-                          class="button button-icon"
-                          :aria-label="t('Edit {name}', { name: fullName(person) })"
-                          @click="editParticipant(person)"
-                        >
-                          <NavIcon name="pencil" />
-                        </button>
-                        <button
-                          class="text-link"
-                          :aria-label="t('View scores for {name}', { name: fullName(person) })"
-                          @click="openScoreDetails(person.id)"
-                        >
-                          {{ t('View scores →') }}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr v-if="!filteredParticipants.length">
-                    <td colspan="8">
-                      <div class="table-empty">{{ t('No archers found.') }}</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </section>
+        <ParticipantsPage
+          v-else-if="activePage === 'participants'"
+          v-model:search="search"
+          :participants="directoryParticipants"
+          :clubs="data.clubs"
+          :tournaments="data.tournaments"
+          :scores="data.scores"
+          :matches="data.matches"
+          :can-manage="canManage"
+          :can-manage-participants="canManageParticipants"
+          :can-club-edit="canClubEdit"
+          :club-id="userScope.clubId || ''"
+          @create="openModal('participant')"
+          @edit="editParticipant"
+          @set-club="setParticipantClub"
+          @view-scores="openScoreDetails"
+        />
 
         <section v-else-if="activePage === 'tournaments'">
           <div class="page-heading heading-row">
