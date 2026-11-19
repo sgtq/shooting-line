@@ -12,3 +12,5 @@
 - Check `README.md` and the README of each app or package the change touches (for example
   `apps/manager/README.md` and `apps/portal/README.md`).
 - Remove or reword statements the change makes false, such as "there is no X" or "only admins can Y".
+- Keep Spanish copies in step too. When a README, user manual, or runbook has a Spanish (es-419) copy,
+  update that copy in the same commit as the English change. Do not leave the two out of sync.
