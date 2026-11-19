@@ -23,9 +23,12 @@ import { useNavItems } from './composables/useNavItems'
 import { usePermissions } from './composables/usePermissions'
 import { useToast } from './composables/useToast'
 import { useManagerStore } from './stores/managerStore'
+import AppModal from './components/AppModal.vue'
+import TargetTypeModal from './components/TargetTypeModal.vue'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
 import { summarizeDecision } from './services/archerRequests'
 import { displayChoice, fullName } from './services/display'
+import { modalLabels } from './services/modalLabels'
 import { buildScoreRows } from './services/scoreRows'
 import { categoryBlockReason as categoryBlockReasonFor } from './services/categoryEligibility'
 import { findOverlappingSubscription } from './services/planRules'
@@ -286,6 +289,34 @@ function scheduleArcherSearch() {
       modalError.value = `${t('Archer search failed')}: ${error.message}`
     }
   }, 300)
+}
+
+const modalText = computed(() => {
+  const editingByType = {
+    club: editingClubId.value,
+    tournamentType: editingTournamentTypeId.value,
+    category: editingCategoryId.value,
+    participant: editingParticipantId.value,
+  }
+  return modalLabels(modalType.value, {
+    editing: Boolean(editingByType[modalType.value]),
+    hasMatch: Boolean(selectedMatch.value),
+    hasParentForm: Boolean(modalFlow.value),
+  })
+})
+
+/** @returns {Promise<void>} Runs the save of the open dialog. */
+async function submitModal() {
+  const saves = {
+    club: saveClub,
+    tournament: saveTournament,
+    tournamentDates: saveTournamentDates,
+    tournamentType: saveTournamentType,
+    category: saveCategory,
+    userRole: saveUserRole,
+    profile: saveUserProfile,
+  }
+  await (saves[modalType.value] ?? saveParticipant)()
 }
 
 function openModal(type, assignToCurrentTournament = false) {
@@ -1498,478 +1529,152 @@ async function recordMatchScore(match, side, value) {
       </div>
     </main>
 
-    <div v-if="showModal" class="modal-backdrop" @click.self="closeModal">
-      <form
-        class="modal"
-        @submit.prevent="
-          modalType === 'club'
-            ? saveClub()
-            : modalType === 'tournament'
-              ? saveTournament()
-              : modalType === 'tournamentDates'
-                ? saveTournamentDates()
-                : modalType === 'tournamentType'
-                  ? saveTournamentType()
-                  : modalType === 'category'
-                    ? saveCategory()
-                    : modalType === 'userRole'
-                      ? saveUserRole()
-                      : modalType === 'profile'
-                        ? saveUserProfile()
-                        : saveParticipant()
-        "
-      >
-        <div class="modal-heading">
-          <div>
-            <p class="eyebrow">
-              {{
-                modalType === 'club'
-                  ? t('CLUB DIRECTORY')
-                  : modalType === 'tournament' || modalType === 'tournamentDates' || modalType === 'tournamentType'
-                    ? t('EVENT MANAGEMENT')
-                    : modalType === 'category'
-                      ? t('CATEGORY DIRECTORY')
-                      : modalType === 'userRole'
-                        ? t('SYSTEM SETTINGS')
-                        : modalType === 'profile'
-                          ? t('ACCOUNT PROFILE')
-                          : t('ARCHER DIRECTORY')
-              }}
-            </p>
-            <h2>
-              {{
-                modalType === 'club'
-                  ? editingClubId
-                    ? t('Edit club')
-                    : t('Add a club')
-                  : modalType === 'tournament'
-                    ? t('Create tournament')
-                    : modalType === 'tournamentDates'
-                      ? t('Edit tournament dates')
-                      : modalType === 'tournamentType'
-                        ? editingTournamentTypeId
-                          ? t('Edit tournament type')
-                          : t('Create tournament type')
-                        : modalType === 'category'
-                          ? editingCategoryId
-                            ? t('Edit category')
-                            : t('Create category')
-                          : modalType === 'userRole'
-                            ? t('Add manager')
-                            : modalType === 'profile'
-                              ? t('Edit profile')
-                              : editingParticipantId
-                                ? t('Edit archer')
-                                : t('Add archer')
-              }}
-            </h2>
-          </div>
-          <button type="button" class="modal-close" :aria-label="t('Close dialog')" @click="closeModal">×</button>
+    <AppModal
+      v-if="showModal"
+      :eyebrow="modalText.eyebrow"
+      :title="modalText.title"
+      :submit-label="modalText.submit"
+      :cancel-label="modalText.cancel"
+      :error="modalError"
+      @submit="submitModal"
+      @close="closeModal"
+    >
+      <template v-if="modalType === 'club'">
+        <div class="form-grid">
+          <label class="form-field full"
+            ><span>{{ t('CLUB NAME') }} <b>*</b></span
+            ><input v-model="form.name" required :disabled="!canManage" :placeholder="t('e.g. Northside Archery Club')"
+          /></label>
+          <p v-if="!canManage" class="privacy-note full">
+            {{ t('Only a manager can change the name and location of a club.') }}
+          </p>
+          <label class="form-field"
+            ><span>{{ t('REPRESENTATIVE NAME') }} <b>*</b></span
+            ><input v-model="form.representative" required :placeholder="t('Full name')"
+          /></label>
+          <label class="form-field"
+            ><span>{{ t('PHONE NUMBER') }} <b>*</b></span
+            ><input v-model="form.phone" required type="tel" placeholder="(555) 123-4567"
+          /></label>
+          <label class="form-field"
+            ><span
+              >{{ t('EMAIL') }} <small>{{ t('OPTIONAL') }}</small></span
+            ><input v-model="form.email" type="email" placeholder="contact@club.org"
+          /></label>
+          <label class="form-field"
+            ><span
+              >{{ t('WEBSITE') }} <small>{{ t('OPTIONAL') }}</small></span
+            ><input v-model="form.website" type="url" placeholder="https://"
+          /></label>
+          <label class="form-field full"
+            ><span>{{ t('LOCATION ADDRESS') }} <b>*</b></span
+            ><input v-model="form.address" required :disabled="!canManage" :placeholder="t('Street, city, state, ZIP')"
+          /></label>
+          <label class="form-field full"
+            ><span
+              >{{ t('MAP LOCATION URL') }} <small>{{ t('OPTIONAL') }}</small></span
+            ><input v-model="form.mapUrl" type="url" :disabled="!canManage" placeholder="https://maps.google.com/..."
+          /></label>
+          <label class="form-field full">
+            <span
+              >{{ t('CLUB LOGO') }} <small>{{ t('JPG, PNG, OR WEBP · MAX 2 MB') }}</small></span
+            >
+            <input type="file" accept="image/jpeg,image/png,image/webp" @change="handleClubLogoSelection" />
+          </label>
+          <img
+            v-if="form.logoPreview"
+            class="club-logo-preview"
+            :src="form.logoPreview"
+            :alt="t('{name} logo preview', { name: form.name || t('Club') })"
+          />
         </div>
-        <p v-if="modalError" class="database-error modal-error" role="alert">{{ modalError }}</p>
-        <template v-if="modalType === 'club'">
-          <div class="form-grid">
-            <label class="form-field full"
-              ><span>{{ t('CLUB NAME') }} <b>*</b></span
-              ><input
-                v-model="form.name"
-                required
-                :disabled="!canManage"
-                :placeholder="t('e.g. Northside Archery Club')"
-            /></label>
-            <p v-if="!canManage" class="privacy-note full">
-              {{ t('Only a manager can change the name and location of a club.') }}
-            </p>
-            <label class="form-field"
-              ><span>{{ t('REPRESENTATIVE NAME') }} <b>*</b></span
-              ><input v-model="form.representative" required :placeholder="t('Full name')"
-            /></label>
-            <label class="form-field"
-              ><span>{{ t('PHONE NUMBER') }} <b>*</b></span
-              ><input v-model="form.phone" required type="tel" placeholder="(555) 123-4567"
-            /></label>
-            <label class="form-field"
-              ><span
-                >{{ t('EMAIL') }} <small>{{ t('OPTIONAL') }}</small></span
-              ><input v-model="form.email" type="email" placeholder="contact@club.org"
-            /></label>
-            <label class="form-field"
-              ><span
-                >{{ t('WEBSITE') }} <small>{{ t('OPTIONAL') }}</small></span
-              ><input v-model="form.website" type="url" placeholder="https://"
-            /></label>
-            <label class="form-field full"
-              ><span>{{ t('LOCATION ADDRESS') }} <b>*</b></span
-              ><input
-                v-model="form.address"
-                required
-                :disabled="!canManage"
-                :placeholder="t('Street, city, state, ZIP')"
-            /></label>
-            <label class="form-field full"
-              ><span
-                >{{ t('MAP LOCATION URL') }} <small>{{ t('OPTIONAL') }}</small></span
-              ><input v-model="form.mapUrl" type="url" :disabled="!canManage" placeholder="https://maps.google.com/..."
-            /></label>
-            <label class="form-field full">
-              <span
-                >{{ t('CLUB LOGO') }} <small>{{ t('JPG, PNG, OR WEBP · MAX 2 MB') }}</small></span
-              >
-              <input type="file" accept="image/jpeg,image/png,image/webp" @change="handleClubLogoSelection" />
-            </label>
-            <img
-              v-if="form.logoPreview"
-              class="club-logo-preview"
-              :src="form.logoPreview"
-              :alt="t('{name} logo preview', { name: form.name || t('Club') })"
-            />
+      </template>
+      <template v-else-if="modalType === 'tournament' || modalType === 'tournamentDates'">
+        <div class="form-grid">
+          <label v-if="modalType === 'tournament'" class="form-field full"
+            ><span>{{ t('TOURNAMENT NAME') }} <b>*</b></span
+            ><input v-model="form.name" required :placeholder="t('e.g. Spring Championship')"
+          /></label>
+          <div class="form-field full">
+            <span>{{ t('DATES') }} <b>*</b></span>
+            <select v-model="form.dateMode" :aria-label="t('How to enter the dates')">
+              <option value="range">{{ t('Date range') }}</option>
+              <option value="days">{{ t('Separate dates') }}</option>
+            </select>
           </div>
-        </template>
-        <template v-else-if="modalType === 'tournament' || modalType === 'tournamentDates'">
-          <div class="form-grid">
-            <label v-if="modalType === 'tournament'" class="form-field full"
-              ><span>{{ t('TOURNAMENT NAME') }} <b>*</b></span
-              ><input v-model="form.name" required :placeholder="t('e.g. Spring Championship')"
+          <template v-if="form.dateMode === 'range'">
+            <label class="form-field"
+              ><span>{{ t('START DATE') }} <b>*</b></span
+              ><input v-model="form.startDate" required type="date"
             /></label>
-            <div class="form-field full">
-              <span>{{ t('DATES') }} <b>*</b></span>
-              <select v-model="form.dateMode" :aria-label="t('How to enter the dates')">
-                <option value="range">{{ t('Date range') }}</option>
-                <option value="days">{{ t('Separate dates') }}</option>
-              </select>
-            </div>
-            <template v-if="form.dateMode === 'range'">
-              <label class="form-field"
-                ><span>{{ t('START DATE') }} <b>*</b></span
-                ><input v-model="form.startDate" required type="date"
-              /></label>
-              <label class="form-field"
-                ><span>{{ t('END DATE') }} <b>*</b></span
-                ><input v-model="form.endDate" required type="date" :min="form.startDate || undefined"
-              /></label>
-            </template>
-            <div v-else class="form-field full">
-              <div v-for="(day, index) in form.days" :key="index" class="field-with-button">
-                <input
-                  v-model="form.days[index]"
-                  required
-                  type="date"
-                  :aria-label="t('Tournament date {number}', { number: index + 1 })"
-                />
-                <button
-                  v-if="form.days.length > 1"
-                  type="button"
-                  class="button button-outline"
-                  @click="form.days.splice(index, 1)"
-                >
-                  {{ t('Remove date') }}
-                </button>
-              </div>
+            <label class="form-field"
+              ><span>{{ t('END DATE') }} <b>*</b></span
+              ><input v-model="form.endDate" required type="date" :min="form.startDate || undefined"
+            /></label>
+          </template>
+          <div v-else class="form-field full">
+            <div v-for="(day, index) in form.days" :key="index" class="field-with-button">
+              <input
+                v-model="form.days[index]"
+                required
+                type="date"
+                :aria-label="t('Tournament date {number}', { number: index + 1 })"
+              />
               <button
+                v-if="form.days.length > 1"
                 type="button"
                 class="button button-outline"
-                :disabled="form.days.length >= MAX_TOURNAMENT_DAYS"
-                @click="form.days.push('')"
+                @click="form.days.splice(index, 1)"
               >
-                {{ t('Add date') }}
+                {{ t('Remove date') }}
               </button>
             </div>
-            <template v-if="modalType === 'tournament'">
-              <label class="form-field"
-                ><span>{{ t('DISCIPLINE') }}</span
-                ><select v-model="form.discipline">
-                  <option value="Outdoor target">{{ t('Outdoor target') }}</option>
-                  <option value="Indoor target">{{ t('Indoor target') }}</option>
-                  <option value="Field">{{ t('Field') }}</option>
-                  <option>3D</option>
-                  <option value="Other">{{ t('Other') }}</option>
-                </select></label
-              >
-              <div class="form-field full">
-                <span>{{ t('TOURNAMENT TYPE') }} <b>*</b></span>
-                <div class="field-with-button">
-                  <select v-model="form.tournamentTypeId" required :aria-label="t('Tournament type')">
-                    <option value="" disabled>{{ t('Select a tournament type') }}</option>
-                    <option v-for="type in data.tournamentTypes" :key="type.id" :value="type.id">
-                      {{ type.name }} — {{ type.distance }} {{ type.distanceUnit }}, {{ type.targetType }}
-                    </option>
-                  </select>
-                  <button
-                    v-if="canManage"
-                    type="button"
-                    class="icon-button target-type-add"
-                    :aria-label="t('Add tournament type')"
-                    :title="t('Add tournament type')"
-                    @click="openTournamentChildModal('tournamentType')"
-                  >
-                    ＋
-                  </button>
-                </div>
-              </div>
-              <div class="form-field full">
-                <span>{{ t('HOST CLUB') }}</span>
-                <div class="field-with-button">
-                  <select v-model="form.clubId" :disabled="!canManage" :aria-label="t('Host club')">
-                    <option v-if="canManage" value="">{{ t('No club / independent event') }}</option>
-                    <option
-                      v-for="club in canManage ? data.clubs : data.clubs.filter((item) => item.id === userScope.clubId)"
-                      :key="club.id"
-                      :value="club.id"
-                    >
-                      {{ club.name }}
-                    </option>
-                  </select>
-                  <button
-                    v-if="canManage"
-                    type="button"
-                    class="icon-button target-type-add"
-                    :aria-label="t('Add new club')"
-                    :title="t('Add new club')"
-                    @click="openTournamentChildModal('club')"
-                  >
-                    ＋
-                  </button>
-                </div>
-              </div>
-              <div class="form-field full">
-                <span>{{ t('TOURNAMENT LOCATION') }}</span>
-                <div class="radio-row">
-                  <label><input v-model="form.venueMode" type="radio" value="club" /> {{ t('Use club address') }}</label
-                  ><label
-                    ><input v-model="form.venueMode" type="radio" value="custom" /> {{ t('Custom address') }}</label
-                  >
-                </div>
-              </div>
-              <label v-if="form.venueMode === 'custom'" class="form-field full"
-                ><span>{{ t('CUSTOM ADDRESS') }} <b>*</b></span
-                ><input v-model="form.customAddress" required :placeholder="t('Street, city, state, ZIP')"
-              /></label>
-              <p v-else-if="form.clubId" class="address-preview full">
-                ⌖ {{ clubFor(form.clubId)?.address || t('This club has no address yet.') }}
-              </p>
-            </template>
+            <button
+              type="button"
+              class="button button-outline"
+              :disabled="form.days.length >= MAX_TOURNAMENT_DAYS"
+              @click="form.days.push('')"
+            >
+              {{ t('Add date') }}
+            </button>
           </div>
-        </template>
-        <template v-else-if="modalType === 'tournamentType'">
-          <div class="form-grid">
-            <label class="form-field full"
-              ><span>{{ t('TYPE NAME') }} <b>*</b></span
-              ><input v-model="form.name" required :placeholder="t('e.g. Outdoor 70m Recurve')"
-            /></label>
+          <template v-if="modalType === 'tournament'">
             <label class="form-field"
-              ><span>{{ t('DISTANCE') }} <b>*</b></span
-              ><input v-model.number="form.distance" required type="number" min="0.1" step="any" placeholder="70"
-            /></label>
-            <label class="form-field"
-              ><span>{{ t('DISTANCE UNIT') }} <b>*</b></span
-              ><select v-model="form.distanceUnit" required>
-                <option value="m">{{ t('Meters') }}</option>
-                <option value="yd">{{ t('Yards') }}</option>
+              ><span>{{ t('DISCIPLINE') }}</span
+              ><select v-model="form.discipline">
+                <option value="Outdoor target">{{ t('Outdoor target') }}</option>
+                <option value="Indoor target">{{ t('Indoor target') }}</option>
+                <option value="Field">{{ t('Field') }}</option>
+                <option>3D</option>
+                <option value="Other">{{ t('Other') }}</option>
               </select></label
             >
             <div class="form-field full">
-              <span>{{ t('TARGET TYPE') }} <b>*</b></span>
+              <span>{{ t('TOURNAMENT TYPE') }} <b>*</b></span>
               <div class="field-with-button">
-                <select v-model="form.targetType" required :aria-label="t('Target type')">
-                  <option value="" disabled>{{ t('Select or add a custom target type') }}</option>
-                  <option v-for="targetType in targetTypeOptions" :key="targetType">{{ targetType }}</option>
+                <select v-model="form.tournamentTypeId" required :aria-label="t('Tournament type')">
+                  <option value="" disabled>{{ t('Select a tournament type') }}</option>
+                  <option v-for="type in data.tournamentTypes" :key="type.id" :value="type.id">
+                    {{ type.name }} — {{ type.distance }} {{ type.distanceUnit }}, {{ type.targetType }}
+                  </option>
                 </select>
                 <button
                   v-if="canManage"
                   type="button"
                   class="icon-button target-type-add"
-                  :aria-label="t('Add custom target type')"
-                  :title="t('Add custom target type')"
-                  @click="openTargetTypeModal"
+                  :aria-label="t('Add tournament type')"
+                  :title="t('Add tournament type')"
+                  @click="openTournamentChildModal('tournamentType')"
                 >
                   ＋
                 </button>
               </div>
             </div>
-            <label class="form-field"
-              ><span>{{ t('ENDS (SERIES)') }} <b>*</b></span
-              ><input v-model.number="form.ends" required type="number" min="1" step="1" placeholder="12"
-            /></label>
-            <label class="form-field"
-              ><span>{{ t('ARROWS PER END') }} <b>*</b></span
-              ><input v-model.number="form.arrowsPerEnd" required type="number" min="1" step="1" placeholder="6"
-            /></label>
-            <p class="address-preview full">
-              {{ t('This format can be selected when creating a tournament and reused for future events.') }}
-            </p>
-          </div>
-        </template>
-        <template v-else-if="modalType === 'category'">
-          <div class="form-grid">
-            <label class="form-field full"
-              ><span>{{ t('CATEGORY NAME') }} <b>*</b></span
-              ><input v-model="form.name" required :placeholder="t('e.g. Junior Recurve')"
-            /></label>
-            <label class="form-field"
-              ><span
-                >{{ t('MINIMUM AGE') }} <small>{{ t('OPTIONAL') }}</small></span
-              ><input v-model.number="form.minAge" type="number" min="0" step="1" :placeholder="t('No minimum')"
-            /></label>
-            <label class="form-field"
-              ><span
-                >{{ t('MAXIMUM AGE') }} <small>{{ t('OPTIONAL') }}</small></span
-              ><input v-model.number="form.maxAge" type="number" min="0" step="1" :placeholder="t('No maximum')"
-            /></label>
-            <label class="form-field full"
-              ><span
-                >{{ t('BOW TYPE') }} <small>{{ t('OPTIONAL') }}</small></span
-              ><select v-model="form.bowType">
-                <option value="">{{ t('Any bow type') }}</option>
-                <option value="Recurve">{{ t('Recurve') }}</option>
-                <option value="Compound">{{ t('Compound') }}</option>
-                <option value="Barebow">{{ t('Barebow') }}</option>
-                <option value="Longbow">{{ t('Longbow') }}</option>
-                <option value="Traditional">{{ t('Traditional') }}</option>
-              </select></label
-            >
-            <label class="form-field full checkbox-field"
-              ><input v-model="form.levelExempt" type="checkbox" /><span>{{
-                t('Not part of the level order (limited only by age, such as Masters)')
-              }}</span></label
-            >
-            <label v-if="!form.levelExempt" class="form-field full"
-              ><span>{{ t('LEVEL ORDER') }} <b>*</b></span
-              ><input
-                v-model.number="form.sortOrder"
-                required
-                type="number"
-                min="0"
-                step="1"
-                :placeholder="t('e.g. 0 for the lowest level')"
-            /></label>
-            <p v-if="!form.levelExempt" class="address-preview full">
-              {{
-                t('Within a bow type, an archer who entered a category can never enter one with a lower level order.')
-              }}
-            </p>
-            <p class="address-preview full">
-              {{
-                t(
-                  "Age limits are checked against the archer's age on the tournament date. Leave a field blank when it does not apply.",
-                )
-              }}
-            </p>
-          </div>
-        </template>
-        <template v-else-if="modalType === 'userRole'">
-          <div class="form-grid">
-            <label class="form-field full">
-              <span>{{ t('ACCOUNT EMAIL') }} <b>*</b></span>
-              <input v-model="form.email" required type="email" placeholder="manager@example.com" />
-            </label>
-            <label class="form-field full">
-              <span
-                >{{ t('DISPLAY NAME') }} <small>{{ t('OPTIONAL') }}</small></span
-              >
-              <input v-model="form.displayName" :placeholder="t('Name shown in the app')" />
-            </label>
-            <p class="address-preview full">
-              {{ t('The account must already exist in Supabase Auth before a manager role can be assigned.') }}
-            </p>
-          </div>
-        </template>
-        <template v-else-if="modalType === 'profile'">
-          <label class="form-field">
-            <span>{{ t('DISPLAY NAME') }} <b>*</b></span>
-            <input v-model="form.displayName" required autocomplete="name" />
-          </label>
-          <button v-if="userEmail" type="button" class="button button-outline" @click="sendOwnPasswordReset">
-            {{ t('Email me a password reset link') }}
-          </button>
-        </template>
-        <template v-else>
-          <div class="form-grid">
-            <label class="form-field"
-              ><span
-                >{{ t('WORLD ARCHERY ID') }} <small>{{ t('OPTIONAL') }}</small></span
-              ><input v-model="form.waId" autocomplete="off" :placeholder="t('Affiliation number')"
-            /></label>
-            <label class="form-field"
-              ><span
-                >{{ t('AETAY ID') }} <small>{{ t('OPTIONAL') }}</small></span
-              ><input v-model="form.aetayId" autocomplete="off" :placeholder="t('Affiliation number')"
-            /></label>
-            <label class="form-field full"
-              ><span
-                >{{ t('EMAIL') }} <small>{{ t('OPTIONAL') }}</small></span
-              ><input
-                v-model="form.email"
-                type="email"
-                autocomplete="off"
-                :placeholder="t('Needed to request a login')"
-            /></label>
-            <label class="form-field"
-              ><span>{{ t('LAST NAME') }} <b v-if="!selectedMatch">*</b></span
-              ><input
-                v-model="form.lastName"
-                :required="!selectedMatch"
-                autocomplete="family-name"
-                :placeholder="t('Last name')"
-            /></label>
-            <label class="form-field"
-              ><span>{{ t('FIRST NAME') }} <b v-if="!selectedMatch">*</b></span
-              ><input
-                v-model="form.firstName"
-                :required="!selectedMatch"
-                autocomplete="given-name"
-                :placeholder="t('First name')"
-            /></label>
-            <div
-              v-if="archerMatches.length"
-              class="archer-pick-list full"
-              role="radiogroup"
-              :aria-label="t('Archers found')"
-            >
-              <p class="privacy-note">
-                {{
-                  assignNewParticipant
-                    ? t('Archers already in the database. Click one to add them instead of creating a new archer.')
-                    : t('Archers already in the database. Check that you are not creating a duplicate.')
-                }}
-              </p>
-              <label v-for="match in archerMatches" :key="match.token" class="archer-pick">
-                <input
-                  v-model="selectedMatchToken"
-                  type="radio"
-                  name="archer-match"
-                  :value="match.token"
-                  :disabled="!assignNewParticipant"
-                />
-                <span class="roster-name"
-                  ><strong>{{ match.lastName }}, {{ match.firstName }}</strong
-                  ><small>{{ clubFor(match.clubId)?.name || t('No club') }}</small></span
-                >
-              </label>
-            </div>
-            <div v-if="!editingParticipantId" class="full">
-              <button type="button" class="text-link" @click="clearArcherForm">{{ t('Clear form') }}</button>
-            </div>
-            <p v-if="selectedMatch" class="address-preview full">
-              {{
-                t('Adding {name}. Their record stays private to their own club.', {
-                  name: `${selectedMatch.firstName} ${selectedMatch.lastName}`,
-                })
-              }}
-              <button type="button" class="text-link" @click="selectedMatchToken = ''">
-                {{ t('Create a new archer instead') }}
-              </button>
-            </p>
-            <template v-if="!selectedMatch">
-              <label class="form-field full"
-                ><span>{{ t('BIRTH DATE') }} <b>*</b></span
-                ><input v-model="form.birthDate" required type="date"
-              /></label>
-              <label class="form-field full">
-                <span
-                  >{{ t('CLUB') }} <small v-if="canManage">{{ t('OPTIONAL') }}</small><b v-else>*</b></span
-                >
-                <select v-model="form.clubId" :disabled="!canManage">
-                  <option v-if="canManage" value="">{{ t('No club / independent archer') }}</option>
+            <div class="form-field full">
+              <span>{{ t('HOST CLUB') }}</span>
+              <div class="field-with-button">
+                <select v-model="form.clubId" :disabled="!canManage" :aria-label="t('Host club')">
+                  <option v-if="canManage" value="">{{ t('No club / independent event') }}</option>
                   <option
                     v-for="club in canManage ? data.clubs : data.clubs.filter((item) => item.id === userScope.clubId)"
                     :key="club.id"
@@ -1978,117 +1683,301 @@ async function recordMatchScore(match, side, value) {
                     {{ club.name }}
                   </option>
                 </select>
-              </label>
-            </template>
-            <template v-if="assignNewParticipant && !editingParticipantId && selectedTournament?.categoryIds.length">
-              <label class="form-field"
-                ><span>{{ t('BOW TYPE') }} <b>*</b></span
-                ><select v-model="form.bowType" required aria-label="Bow type" @change="form.categoryId = ''">
-                  <option value="" disabled>{{ t('Choose bow type') }}</option>
-                  <option v-for="bowType in tournamentBowTypes(selectedTournament)" :key="bowType" :value="bowType">
-                    {{ bowType ? displayChoice(bowType) : t('Any bow type') }}
-                  </option>
-                </select></label
-              >
-              <label class="form-field"
-                ><span>{{ t('CATEGORY') }} <b>*</b></span
-                ><select v-model="form.categoryId" required aria-label="Category" :title="categoryLimitHint()">
-                  <option value="" disabled>{{ t('Choose category') }}</option>
-                  <option
-                    v-for="categoryId in selectedTournament.categoryIds.filter(
-                      (id) => categoryFor(id)?.bowType === form.bowType,
-                    )"
-                    :key="categoryId"
-                    :value="categoryId"
-                    :disabled="Boolean(categoryBlockReason(selectedTournament, form, categoryFor(categoryId)))"
-                  >
-                    {{ categoryFor(categoryId)?.name }}
-                  </option>
-                </select></label
-              >
-            </template>
-            <p v-if="!selectedMatch" class="privacy-note full">
-              {{ t('Archer details are stored in the shared manager database.') }}
-            </p>
-          </div>
-        </template>
-        <div class="modal-actions">
-          <button type="button" class="button button-outline" @click="closeModal">
-            {{ modalFlow ? t('Back') : t('Cancel') }}</button><button type="submit" class="button button-primary">
-            {{
-              modalType === 'club'
-                ? editingClubId
-                  ? t('Save changes')
-                  : t('Save club')
-                : modalType === 'tournament'
-                  ? t('Create tournament')
-                  : modalType === 'tournamentDates'
-                    ? t('Save dates')
-                    : modalType === 'tournamentType'
-                      ? editingTournamentTypeId
-                        ? t('Save type')
-                        : t('Create type')
-                      : modalType === 'category'
-                        ? editingCategoryId
-                          ? t('Save category')
-                          : t('Create category')
-                        : modalType === 'userRole'
-                          ? t('Add manager')
-                          : modalType === 'profile'
-                            ? t('Save profile')
-                            : editingParticipantId
-                              ? t('Save changes')
-                              : selectedMatch
-                                ? t('Add to tournament')
-                                : t('Save archer')
-            }}
-          </button>
-        </div>
-      </form>
-      <div v-if="showTargetTypeModal" class="modal-backdrop target-type-backdrop" @click.self="closeTargetTypeModal">
-        <section
-          class="modal target-type-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="target-type-modal-title"
-        >
-          <div class="modal-heading">
-            <div>
-              <p class="eyebrow">{{ t('CUSTOM TARGET TYPES') }}</p>
-              <h2 id="target-type-modal-title">{{ t('Add a target type') }}</h2>
+                <button
+                  v-if="canManage"
+                  type="button"
+                  class="icon-button target-type-add"
+                  :aria-label="t('Add new club')"
+                  :title="t('Add new club')"
+                  @click="openTournamentChildModal('club')"
+                >
+                  ＋
+                </button>
+              </div>
             </div>
-            <button type="button" class="modal-close" :aria-label="t('Close dialog')" @click="closeTargetTypeModal">
-              ×
-            </button>
+            <div class="form-field full">
+              <span>{{ t('TOURNAMENT LOCATION') }}</span>
+              <div class="radio-row">
+                <label><input v-model="form.venueMode" type="radio" value="club" /> {{ t('Use club address') }}</label
+                ><label><input v-model="form.venueMode" type="radio" value="custom" /> {{ t('Custom address') }}</label>
+              </div>
+            </div>
+            <label v-if="form.venueMode === 'custom'" class="form-field full"
+              ><span>{{ t('CUSTOM ADDRESS') }} <b>*</b></span
+              ><input v-model="form.customAddress" required :placeholder="t('Street, city, state, ZIP')"
+            /></label>
+            <p v-else-if="form.clubId" class="address-preview full">
+              ⌖ {{ clubFor(form.clubId)?.address || t('This club has no address yet.') }}
+            </p>
+          </template>
+        </div>
+      </template>
+      <template v-else-if="modalType === 'tournamentType'">
+        <div class="form-grid">
+          <label class="form-field full"
+            ><span>{{ t('TYPE NAME') }} <b>*</b></span
+            ><input v-model="form.name" required :placeholder="t('e.g. Outdoor 70m Recurve')"
+          /></label>
+          <label class="form-field"
+            ><span>{{ t('DISTANCE') }} <b>*</b></span
+            ><input v-model.number="form.distance" required type="number" min="0.1" step="any" placeholder="70"
+          /></label>
+          <label class="form-field"
+            ><span>{{ t('DISTANCE UNIT') }} <b>*</b></span
+            ><select v-model="form.distanceUnit" required>
+              <option value="m">{{ t('Meters') }}</option>
+              <option value="yd">{{ t('Yards') }}</option>
+            </select></label
+          >
+          <div class="form-field full">
+            <span>{{ t('TARGET TYPE') }} <b>*</b></span>
+            <div class="field-with-button">
+              <select v-model="form.targetType" required :aria-label="t('Target type')">
+                <option value="" disabled>{{ t('Select or add a custom target type') }}</option>
+                <option v-for="targetType in targetTypeOptions" :key="targetType">{{ targetType }}</option>
+              </select>
+              <button
+                v-if="canManage"
+                type="button"
+                class="icon-button target-type-add"
+                :aria-label="t('Add custom target type')"
+                :title="t('Add custom target type')"
+                @click="openTargetTypeModal"
+              >
+                ＋
+              </button>
+            </div>
           </div>
-          <label class="form-field">
-            <span>{{ t('TARGET TYPE NAME') }} <b>*</b></span>
-            <input
-              v-model="targetTypeName"
-              required
-              autofocus
-              :aria-label="t('Custom target type name')"
-              :placeholder="t('e.g. 40 cm triple-spot')"
-              @keydown.enter.prevent="saveTargetType"
-            />
-          </label>
-          <p v-if="targetTypeError" class="database-error modal-error" role="alert">
-            {{ targetTypeError }}
+          <label class="form-field"
+            ><span>{{ t('ENDS (SERIES)') }} <b>*</b></span
+            ><input v-model.number="form.ends" required type="number" min="1" step="1" placeholder="12"
+          /></label>
+          <label class="form-field"
+            ><span>{{ t('ARROWS PER END') }} <b>*</b></span
+            ><input v-model.number="form.arrowsPerEnd" required type="number" min="1" step="1" placeholder="6"
+          /></label>
+          <p class="address-preview full">
+            {{ t('This format can be selected when creating a tournament and reused for future events.') }}
           </p>
-          <div class="modal-actions">
-            <button type="button" class="button button-outline" @click="closeTargetTypeModal">{{ t('Cancel') }}</button>
-            <button
-              type="button"
-              class="button button-primary"
-              :aria-label="t('Save custom target type')"
-              @click="saveTargetType"
+        </div>
+      </template>
+      <template v-else-if="modalType === 'category'">
+        <div class="form-grid">
+          <label class="form-field full"
+            ><span>{{ t('CATEGORY NAME') }} <b>*</b></span
+            ><input v-model="form.name" required :placeholder="t('e.g. Junior Recurve')"
+          /></label>
+          <label class="form-field"
+            ><span
+              >{{ t('MINIMUM AGE') }} <small>{{ t('OPTIONAL') }}</small></span
+            ><input v-model.number="form.minAge" type="number" min="0" step="1" :placeholder="t('No minimum')"
+          /></label>
+          <label class="form-field"
+            ><span
+              >{{ t('MAXIMUM AGE') }} <small>{{ t('OPTIONAL') }}</small></span
+            ><input v-model.number="form.maxAge" type="number" min="0" step="1" :placeholder="t('No maximum')"
+          /></label>
+          <label class="form-field full"
+            ><span
+              >{{ t('BOW TYPE') }} <small>{{ t('OPTIONAL') }}</small></span
+            ><select v-model="form.bowType">
+              <option value="">{{ t('Any bow type') }}</option>
+              <option value="Recurve">{{ t('Recurve') }}</option>
+              <option value="Compound">{{ t('Compound') }}</option>
+              <option value="Barebow">{{ t('Barebow') }}</option>
+              <option value="Longbow">{{ t('Longbow') }}</option>
+              <option value="Traditional">{{ t('Traditional') }}</option>
+            </select></label
+          >
+          <label class="form-field full checkbox-field"
+            ><input v-model="form.levelExempt" type="checkbox" /><span>{{
+              t('Not part of the level order (limited only by age, such as Masters)')
+            }}</span></label
+          >
+          <label v-if="!form.levelExempt" class="form-field full"
+            ><span>{{ t('LEVEL ORDER') }} <b>*</b></span
+            ><input
+              v-model.number="form.sortOrder"
+              required
+              type="number"
+              min="0"
+              step="1"
+              :placeholder="t('e.g. 0 for the lowest level')"
+          /></label>
+          <p v-if="!form.levelExempt" class="address-preview full">
+            {{ t('Within a bow type, an archer who entered a category can never enter one with a lower level order.') }}
+          </p>
+          <p class="address-preview full">
+            {{
+              t(
+                "Age limits are checked against the archer's age on the tournament date. Leave a field blank when it does not apply.",
+              )
+            }}
+          </p>
+        </div>
+      </template>
+      <template v-else-if="modalType === 'userRole'">
+        <div class="form-grid">
+          <label class="form-field full">
+            <span>{{ t('ACCOUNT EMAIL') }} <b>*</b></span>
+            <input v-model="form.email" required type="email" placeholder="manager@example.com" />
+          </label>
+          <label class="form-field full">
+            <span
+              >{{ t('DISPLAY NAME') }} <small>{{ t('OPTIONAL') }}</small></span
             >
-              {{ t('Save target type') }}
-            </button>
+            <input v-model="form.displayName" :placeholder="t('Name shown in the app')" />
+          </label>
+          <p class="address-preview full">
+            {{ t('The account must already exist in Supabase Auth before a manager role can be assigned.') }}
+          </p>
+        </div>
+      </template>
+      <template v-else-if="modalType === 'profile'">
+        <label class="form-field">
+          <span>{{ t('DISPLAY NAME') }} <b>*</b></span>
+          <input v-model="form.displayName" required autocomplete="name" />
+        </label>
+        <button v-if="userEmail" type="button" class="button button-outline" @click="sendOwnPasswordReset">
+          {{ t('Email me a password reset link') }}
+        </button>
+      </template>
+      <template v-else>
+        <div class="form-grid">
+          <label class="form-field"
+            ><span
+              >{{ t('WORLD ARCHERY ID') }} <small>{{ t('OPTIONAL') }}</small></span
+            ><input v-model="form.waId" autocomplete="off" :placeholder="t('Affiliation number')"
+          /></label>
+          <label class="form-field"
+            ><span
+              >{{ t('AETAY ID') }} <small>{{ t('OPTIONAL') }}</small></span
+            ><input v-model="form.aetayId" autocomplete="off" :placeholder="t('Affiliation number')"
+          /></label>
+          <label class="form-field full"
+            ><span
+              >{{ t('EMAIL') }} <small>{{ t('OPTIONAL') }}</small></span
+            ><input v-model="form.email" type="email" autocomplete="off" :placeholder="t('Needed to request a login')"
+          /></label>
+          <label class="form-field"
+            ><span>{{ t('LAST NAME') }} <b v-if="!selectedMatch">*</b></span
+            ><input
+              v-model="form.lastName"
+              :required="!selectedMatch"
+              autocomplete="family-name"
+              :placeholder="t('Last name')"
+          /></label>
+          <label class="form-field"
+            ><span>{{ t('FIRST NAME') }} <b v-if="!selectedMatch">*</b></span
+            ><input
+              v-model="form.firstName"
+              :required="!selectedMatch"
+              autocomplete="given-name"
+              :placeholder="t('First name')"
+          /></label>
+          <div
+            v-if="archerMatches.length"
+            class="archer-pick-list full"
+            role="radiogroup"
+            :aria-label="t('Archers found')"
+          >
+            <p class="privacy-note">
+              {{
+                assignNewParticipant
+                  ? t('Archers already in the database. Click one to add them instead of creating a new archer.')
+                  : t('Archers already in the database. Check that you are not creating a duplicate.')
+              }}
+            </p>
+            <label v-for="match in archerMatches" :key="match.token" class="archer-pick">
+              <input
+                v-model="selectedMatchToken"
+                type="radio"
+                name="archer-match"
+                :value="match.token"
+                :disabled="!assignNewParticipant"
+              />
+              <span class="roster-name"
+                ><strong>{{ match.lastName }}, {{ match.firstName }}</strong
+                ><small>{{ clubFor(match.clubId)?.name || t('No club') }}</small></span
+              >
+            </label>
           </div>
-        </section>
-      </div>
-    </div>
+          <div v-if="!editingParticipantId" class="full">
+            <button type="button" class="text-link" @click="clearArcherForm">{{ t('Clear form') }}</button>
+          </div>
+          <p v-if="selectedMatch" class="address-preview full">
+            {{
+              t('Adding {name}. Their record stays private to their own club.', {
+                name: `${selectedMatch.firstName} ${selectedMatch.lastName}`,
+              })
+            }}
+            <button type="button" class="text-link" @click="selectedMatchToken = ''">
+              {{ t('Create a new archer instead') }}
+            </button>
+          </p>
+          <template v-if="!selectedMatch">
+            <label class="form-field full"
+              ><span>{{ t('BIRTH DATE') }} <b>*</b></span
+              ><input v-model="form.birthDate" required type="date"
+            /></label>
+            <label class="form-field full">
+              <span
+                >{{ t('CLUB') }} <small v-if="canManage">{{ t('OPTIONAL') }}</small><b v-else>*</b></span
+              >
+              <select v-model="form.clubId" :disabled="!canManage">
+                <option v-if="canManage" value="">{{ t('No club / independent archer') }}</option>
+                <option
+                  v-for="club in canManage ? data.clubs : data.clubs.filter((item) => item.id === userScope.clubId)"
+                  :key="club.id"
+                  :value="club.id"
+                >
+                  {{ club.name }}
+                </option>
+              </select>
+            </label>
+          </template>
+          <template v-if="assignNewParticipant && !editingParticipantId && selectedTournament?.categoryIds.length">
+            <label class="form-field"
+              ><span>{{ t('BOW TYPE') }} <b>*</b></span
+              ><select v-model="form.bowType" required aria-label="Bow type" @change="form.categoryId = ''">
+                <option value="" disabled>{{ t('Choose bow type') }}</option>
+                <option v-for="bowType in tournamentBowTypes(selectedTournament)" :key="bowType" :value="bowType">
+                  {{ bowType ? displayChoice(bowType) : t('Any bow type') }}
+                </option>
+              </select></label
+            >
+            <label class="form-field"
+              ><span>{{ t('CATEGORY') }} <b>*</b></span
+              ><select v-model="form.categoryId" required aria-label="Category" :title="categoryLimitHint()">
+                <option value="" disabled>{{ t('Choose category') }}</option>
+                <option
+                  v-for="categoryId in selectedTournament.categoryIds.filter(
+                    (id) => categoryFor(id)?.bowType === form.bowType,
+                  )"
+                  :key="categoryId"
+                  :value="categoryId"
+                  :disabled="Boolean(categoryBlockReason(selectedTournament, form, categoryFor(categoryId)))"
+                >
+                  {{ categoryFor(categoryId)?.name }}
+                </option>
+              </select></label
+            >
+          </template>
+          <p v-if="!selectedMatch" class="privacy-note full">
+            {{ t('Archer details are stored in the shared manager database.') }}
+          </p>
+        </div>
+      </template>
+      <template #after>
+        <TargetTypeModal
+          v-if="showTargetTypeModal"
+          v-model:name="targetTypeName"
+          :error="targetTypeError"
+          @save="saveTargetType"
+          @close="closeTargetTypeModal"
+        />
+      </template>
+    </AppModal>
     <Transition name="toast"
       ><div v-if="toast" class="toast-message"><span>✓</span>{{ toast }}</div></Transition
     >
