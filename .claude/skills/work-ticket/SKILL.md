@@ -43,14 +43,16 @@ from the code, ask the user before planning.
   `feat`, `fix`, `test`, `docs`, or `refactor`, and `<short-name>` is a few lowercase words joined by
   hyphens that sum up the ticket (for example `manager/feat/move-saves-out-of-app`). If `develop` does
   not exist locally or remotely, ask which base to use. Create it with
-  `gh issue develop <number> --name <branch> --base develop` so the branch is linked to the issue. Its
-  PR then shows in the issue's Development section. The default branch is `main`, so `Closes #N` alone
-  does not make that link.
+  `gh issue develop <number> --name <branch> --base develop --checkout`. This creates the branch on
+  GitHub, links it to the issue, and switches to it locally in one step. Its PR then shows in the
+  issue's Development section. The default branch is `main`, so `Closes #N` alone does not make that
+  link.
 - If the tree has uncommitted changes that do not belong to this ticket, never stash, reset, or switch
-  over them. Use a git worktree for the new branch as the default:
-  `git worktree add ../shooting-line-<slug> -b <branch> origin/develop`. Run `npm install` there and do
-  all the work in that folder. Ask the user first only when it is unclear whether the changes belong to
-  this ticket.
+  over them. Use a git worktree for the new branch as the default. Create and link the branch without
+  `--checkout`: `gh issue develop <number> --name <branch> --base develop`. Then run `git fetch origin`
+  and `git worktree add ../shooting-line-<slug> <branch>`. Run `npm install` there and do all the work
+  in that folder. Do not use `-b` here, since that would make a second branch that is not linked to the
+  issue. Ask the user first only when it is unclear whether the changes belong to this ticket.
 - If a plain fetch fails with an SSL certificate error on Windows, retry with
   `git -c http.sslBackend=schannel fetch origin`.
 
