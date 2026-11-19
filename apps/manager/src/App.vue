@@ -10,6 +10,7 @@ import ClubsPage from './components/ClubsPage.vue'
 import DashboardPage from './components/DashboardPage.vue'
 import TournamentsPage from './components/TournamentsPage.vue'
 import ParticipantsPage from './components/ParticipantsPage.vue'
+import ScoreDetailPage from './components/ScoreDetailPage.vue'
 import PlansPage from './components/PlansPage.vue'
 import TournamentTypesPage from './components/TournamentTypesPage.vue'
 import UserAccessPage from './components/UserAccessPage.vue'
@@ -28,9 +29,10 @@ import {
   fullName,
   venueFor,
 } from './services/display'
+import { buildScoreRows } from './services/scoreRows'
 import { findBlockingCategory } from './services/categoryRules'
 import { findOverlappingSubscription } from './services/planRules'
-import { firstDay, MAX_TOURNAMENT_DAYS, datesToForm, resolveDays } from './services/tournamentDates'
+import { MAX_TOURNAMENT_DAYS, datesToForm, resolveDays } from './services/tournamentDates'
 
 const props = defineProps({
   initialData: { type: Object, required: true },
@@ -226,41 +228,7 @@ const scoredCount = computed(
       (item) => item.tournamentId === selectedTournamentId.value && item.round === selectedRound.value,
     ).length,
 )
-const selectedParticipantScoreRows = computed(() =>
-  [
-    ...data.value.scores
-      .filter((item) => item.participantId === selectedScoreParticipantId.value)
-      .map((item) => ({
-        ...item,
-        tournament: data.value.tournaments.find((event) => event.id === item.tournamentId),
-        category: categoryFor(
-          item.categoryId ||
-            data.value.tournaments.find((event) => event.id === item.tournamentId)?.categoryAssignments?.[
-              item.participantId
-            ],
-        ),
-        scoreType: t('Round score'),
-      })),
-    ...data.value.matches.flatMap((match) => {
-      const shooterIsFirst = match.seed1Id === selectedScoreParticipantId.value && match.score1 !== ''
-      const shooterIsSecond = match.seed2Id === selectedScoreParticipantId.value && match.score2 !== ''
-      if (!shooterIsFirst && !shooterIsSecond) return []
-      const opponentId = shooterIsFirst ? match.seed2Id : match.seed1Id
-      return [
-        {
-          tournamentId: match.tournamentId,
-          tournament: data.value.tournaments.find((event) => event.id === match.tournamentId),
-          category: categoryFor(match.categoryId),
-          round: `${match.round} ${t('vs')} ${fullName(participantById(opponentId) || { firstName: t('Unknown'), lastName: '' })}`,
-          score: shooterIsFirst ? match.score1 : match.score2,
-          scoreType: t('Olympic match'),
-        },
-      ]
-    }),
-  ].sort((a, b) =>
-    (b.tournament ? firstDay(b.tournament) : '').localeCompare(a.tournament ? firstDay(a.tournament) : ''),
-  ),
-)
+const selectedParticipantScoreRows = computed(() => buildScoreRows(selectedScoreParticipantId.value, data.value))
 
 const blankClub = () => ({
   name: '',
@@ -1522,61 +1490,12 @@ async function recordMatchScore(match, side, value) {
           @remove-subscription="removeSubscription"
         />
 
-        <section v-else-if="activePage === 'score-detail'">
-          <div class="page-heading heading-row">
-            <div>
-              <button class="text-link back-link" @click="activePage = 'participants'">{{ t('← All archers') }}</button>
-              <p class="eyebrow">{{ t('ARCHER RECORD') }}</p>
-              <h1>
-                {{
-                  selectedScoreParticipant
-                    ? `${selectedScoreParticipant.lastName}, ${selectedScoreParticipant.firstName}`
-                    : t('Archer details')
-                }}
-              </h1>
-              <p class="page-subtitle">{{ t('Tournament round and Olympic match scores for this archer.') }}</p>
-            </div>
-          </div>
-          <section class="panel table-panel">
-            <div v-if="selectedScoreParticipant && selectedParticipantScoreRows.length" class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>{{ t('TOURNAMENT') }}</th>
-                    <th>{{ t('DATE') }}</th>
-                    <th>{{ t('CATEGORY') }}</th>
-                    <th>{{ t('ENTRY') }}</th>
-                    <th>{{ t('ROUND / MATCH') }}</th>
-                    <th>{{ t('SCORE') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="(row, index) in selectedParticipantScoreRows"
-                    :key="`${row.tournamentId}-${row.round}-${index}`"
-                  >
-                    <td>{{ row.tournament?.name || t('Tournament removed') }}</td>
-                    <td>{{ row.tournament ? formatDates(row.tournament) : '—' }}</td>
-                    <td>{{ row.category?.name || t('Unassigned') }}</td>
-                    <td>{{ row.scoreType }}</td>
-                    <td>{{ row.round }}</td>
-                    <td>
-                      <strong>{{ row.score }}</strong>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div v-else class="empty-state">
-              <div class="empty-icon">▤</div>
-              <strong>{{ t('No scores recorded yet') }}</strong>
-              <p>{{ t('Scores for this archer will appear here after you record them in a tournament.') }}</p>
-              <button class="button button-outline" @click="activePage = 'participants'">
-                {{ t('Back to archers') }}
-              </button>
-            </div>
-          </section>
-        </section>
+        <ScoreDetailPage
+          v-else-if="activePage === 'score-detail'"
+          :participant="selectedScoreParticipant"
+          :rows="selectedParticipantScoreRows"
+          @back="activePage = 'participants'"
+        />
 
         <section v-else-if="activePage === 'tournament-detail'">
           <template v-if="selectedTournament">
