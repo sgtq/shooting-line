@@ -8,6 +8,7 @@ import NavIcon from './components/NavIcon.vue'
 import CategoriesPage from './components/CategoriesPage.vue'
 import ClubsPage from './components/ClubsPage.vue'
 import DashboardPage from './components/DashboardPage.vue'
+import TournamentCategoriesTab from './components/TournamentCategoriesTab.vue'
 import TournamentDetailPage from './components/TournamentDetailPage.vue'
 import TournamentsPage from './components/TournamentsPage.vue'
 import ParticipantsPage from './components/ParticipantsPage.vue'
@@ -22,7 +23,7 @@ import { useToast } from './composables/useToast'
 import { useManagerStore } from './stores/managerStore'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
 import { summarizeDecision } from './services/archerRequests'
-import { ageAtTournament, categoryDescription, displayChoice, fullName } from './services/display'
+import { ageAtTournament, displayChoice, fullName } from './services/display'
 import { buildScoreRows } from './services/scoreRows'
 import { findBlockingCategory } from './services/categoryRules'
 import { findOverlappingSubscription } from './services/planRules'
@@ -1665,55 +1666,15 @@ async function recordMatchScore(match, side, value) {
               </button>
             </div>
           </section>
-          <section v-else-if="selectedTournamentTab === 'categories'" class="panel roster-panel">
-            <div class="panel-heading">
-              <div>
-                <h2>{{ t('Tournament categories') }}</h2>
-                <p>
-                  {{
-                    canEditTournament
-                      ? t('Choose the divisions available for this event. Assign each archer in Archers.')
-                      : t('Divisions available for this event.')
-                  }}
-                </p>
-              </div>
-              <button v-if="canManage" class="text-link" @click="activePage = 'categories'">
-                {{ t('Manage category catalogue →') }}
-              </button>
-            </div>
-            <div v-if="data.categories.length" class="roster-list">
-              <label v-for="category in data.categories" :key="category.id" class="roster-row category-roster-row"
-                ><input
-                  type="checkbox"
-                  :checked="selectedTournament.categoryIds.includes(category.id)"
-                  :disabled="!canEditTournament"
-                  @change="toggleTournamentCategory(selectedTournament, category.id)"
-                /><span class="category-roster-copy"
-                  ><strong>{{ category.name }}</strong
-                  ><small>{{ categoryDescription(category) }}</small></span
-                ><span class="roster-state">{{
-                  data.tournaments.filter(
-                    (event) => event.id === selectedTournament.id && event.categoryIds.includes(category.id),
-                  ).length
-                    ? t('Available')
-                    : t('Not added')
-                }}</span></label
-              >
-            </div>
-            <div v-else class="empty-state">
-              <strong>{{ t('No categories in the catalogue') }}</strong>
-              <p>
-                {{
-                  canManage
-                    ? t('Create categories by age, bow type, or both.')
-                    : t('Categories will appear here when available.')
-                }}
-              </p>
-              <button v-if="canManage" class="button button-primary" @click="activePage = 'categories'">
-                {{ t('Open category catalogue') }}
-              </button>
-            </div>
-          </section>
+          <TournamentCategoriesTab
+            v-else-if="selectedTournamentTab === 'categories'"
+            :tournament="selectedTournament"
+            :categories="data.categories"
+            :can-manage="canManage"
+            :can-edit-tournament="canEditTournament"
+            @toggle="toggleTournamentCategory"
+            @open-catalogue="activePage = 'categories'"
+          />
           <section v-else-if="selectedTournamentTab === 'scores'" class="panel score-workspace">
             <div class="score-toolbar">
               <label class="select-field"
