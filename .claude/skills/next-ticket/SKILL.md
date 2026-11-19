@@ -1,26 +1,28 @@
 ---
 name: next-ticket
-description: Pick the next ticket from the GitHub project boards, by priority and then board order, and ask the user to confirm before starting it. Takes the Platform project first unless a project is named. Use when the user asks for the next ticket, what to work on next, or to take the next issue.
+description: Pick the next ticket from the ShootingLine GitHub project, by priority and then board order, and ask the user to confirm before starting it. Takes platform tickets first unless an app is named. Use when the user asks for the next ticket, what to work on next, or to take the next issue.
 argument-hint: '[manager | portal | scorecard | ianseo-dashboard | platform]'
 ---
 
 # Next ticket
 
-Pick the next issue to work on from the project boards, show it, and wait for the user to confirm. Only
+Pick the next issue to work on from the project board, show it, and wait for the user to confirm. Only
 then hand it to the `work-ticket` skill. Follow `CLAUDE.md` and `CLAUDE.local.md`: plain language, no em
 dashes, ask when something is unclear.
 
 ## 1. Choose the project
 
-- If the argument names an app, use only that project.
-- Otherwise check the projects in this order and stop at the first one with an eligible issue:
-  platform 7, manager 3, portal 6, scorecard 4, ianseo-dashboard 5. All are owned by `sgtq`.
-- Say which projects you skipped because nothing was eligible.
+All apps share the single `ShootingLine` project (number 8, owner `sgtq`). The app is the `app:*` label.
+
+- If the argument names an app, use only items with that label.
+- Otherwise check the apps in this order and stop at the first one with an eligible issue:
+  platform, manager, portal, scorecard, ianseo-dashboard.
+- Say which apps you skipped because nothing was eligible.
 
 ## 2. Read the board order
 
-`gh project item-list <number> --owner sgtq --format json -L 200` returns the items in board order, the
-same order as the cards on the board. Do not sort by issue number.
+`gh project item-list 8 --owner sgtq --format json -L 200` returns the items in board order, the
+same order as the cards on the board. Each item lists its labels. Do not sort by issue number.
 
 - Items with Status "In Progress" are already started. Report them first and ask whether to continue
   one of them instead of starting a new ticket.
@@ -43,7 +45,7 @@ there are three.
 ## 4. Suggest and confirm
 
 Show the first eligible issue as the suggestion, with its number, title, project, and a one-line reason
-("High priority" or "top of Todo on the Platform board"). Show the next two as alternatives. Ask the user which one to take,
+("High priority" or "top of Todo for platform"). Show the next two as alternatives. Ask the user which one to take,
 and wait for the answer. Never start work before the user confirms.
 
 If nothing is eligible in any project, say so and list what is blocking the first few candidates.

@@ -20,7 +20,8 @@ language, no em dashes, and ask the user when something is unclear instead of gu
 
 - App label (exactly one): `app:manager`, `app:portal`, `app:scorecard`, `app:ianseo-dashboard`, or
   `app:platform` (CI, deploy, database, shared packages, cross-app work). Choose from the code the work
-  changes. If it spans apps, use `app:platform` or ask.
+  changes. The launcher belongs to `portal`, not `manager`. If it spans apps, use `app:platform` or ask.
+  If it is unclear, ask. Do not guess.
 - Type label (exactly one): `bug` (something broken), `enhancement` (new feature or improvement),
   `documentation`, or `accessibility`. Use the labels that exist: `gh label list`.
 
@@ -50,13 +51,15 @@ Related work this ticket does not cover.
 Depends on: #N
 ```
 
-Write for someone who has not seen this conversation. Describe behavior, not a full design. Include
+These match the web forms in `.github/ISSUE_TEMPLATE/` (what is needed, how we know it is done, depends
+on, notes), with Context and Out of scope added. Write for someone who has not seen this conversation. Describe behavior, not a full design. Include
 tests, docs, and Spanish translations in the acceptance criteria when the change needs them. Add
 `Depends on: #N` only when there is a real dependency.
 
 ## 5. Confirm, then create
 
-Show the full draft in chat (title, labels, body, priority) and wait for approval. Then:
+An issue is visible to everyone with access to the repo, so create nothing before approval. Show the full
+draft in chat (title, labels, body, priority, and any parent or dependencies) and wait. Then:
 
 1. `gh issue create --title "<title>" --label "<app label>,<type label>" --body-file <file>`
    (write the body to a temp file in the scratchpad).
