@@ -8,6 +8,7 @@ import NavIcon from './components/NavIcon.vue'
 import CategoriesPage from './components/CategoriesPage.vue'
 import ClubsPage from './components/ClubsPage.vue'
 import DashboardPage from './components/DashboardPage.vue'
+import TournamentDetailPage from './components/TournamentDetailPage.vue'
 import TournamentsPage from './components/TournamentsPage.vue'
 import ParticipantsPage from './components/ParticipantsPage.vue'
 import ScoreDetailPage from './components/ScoreDetailPage.vue'
@@ -21,14 +22,7 @@ import { useToast } from './composables/useToast'
 import { useManagerStore } from './stores/managerStore'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
 import { summarizeDecision } from './services/archerRequests'
-import {
-  ageAtTournament,
-  categoryDescription,
-  displayChoice,
-  formatDates,
-  fullName,
-  venueFor,
-} from './services/display'
+import { ageAtTournament, categoryDescription, displayChoice, fullName } from './services/display'
 import { buildScoreRows } from './services/scoreRows'
 import { findBlockingCategory } from './services/categoryRules'
 import { findOverlappingSubscription } from './services/planRules'
@@ -1497,485 +1491,397 @@ async function recordMatchScore(match, side, value) {
           @back="activePage = 'participants'"
         />
 
-        <section v-else-if="activePage === 'tournament-detail'">
-          <template v-if="selectedTournament">
-            <div class="page-heading heading-row">
+        <TournamentDetailPage
+          v-else-if="activePage === 'tournament-detail'"
+          v-model:tab="selectedTournamentTab"
+          :tournament="selectedTournament"
+          :clubs="data.clubs"
+          :tournament-types="data.tournamentTypes"
+          :can-manage="canManage"
+          :can-edit-tournament="canEditTournament"
+          :can-start-tournament="canStartTournament"
+          @back="activePage = 'tournaments'"
+          @edit-dates="openTournamentDatesModal"
+          @toggle-started="toggleTournamentStarted"
+        >
+          <section v-if="selectedTournamentTab === 'participants'" class="panel roster-panel">
+            <div class="panel-heading">
               <div>
-                <button class="text-link back-link" @click="activePage = 'tournaments'">
-                  {{ t('← All tournaments') }}
-                </button>
-                <p class="eyebrow">{{ t('TOURNAMENT DETAILS') }}</p>
-                <h1>{{ selectedTournament.name }}</h1>
-                <p class="page-subtitle">
-                  {{ formatDates(selectedTournament) }} · {{ displayChoice(selectedTournament.discipline) }}
-                </p>
-                <p v-if="selectedTournament.startedAt" class="page-subtitle">
-                  {{
-                    canManage
-                      ? t('This tournament is started.')
-                      : t('This tournament is started and locked. Ask a manager to reopen it.')
-                  }}
-                </p>
+                <h2>{{ t('Tournament archers') }}</h2>
+                <p>{{ t('Archers entered in this tournament.') }}</p>
               </div>
-              <div class="heading-actions">
-                <button
-                  v-if="canEditTournament"
-                  class="button button-outline"
-                  @click="openTournamentDatesModal(selectedTournament)"
-                >
-                  {{ t('Edit dates') }}
-                </button>
-                <button
-                  v-if="canStartTournament"
-                  class="button button-outline"
-                  @click="toggleTournamentStarted(selectedTournament)"
-                >
-                  {{ t('Start tournament') }}
-                </button>
-                <button
-                  v-else-if="canManage && selectedTournament.startedAt"
-                  class="button button-outline"
-                  @click="toggleTournamentStarted(selectedTournament)"
-                >
-                  {{ t('Reopen tournament') }}
-                </button>
-              </div>
-            </div>
-            <section class="tournament-summary">
-              <div>
-                <span>{{ t('HOST CLUB') }}</span><strong>{{
-                  clubFor(selectedTournament.clubId)?.name || t('Independent event')
-                }}</strong>
-              </div>
-              <div>
-                <span>{{ t('LOCATION') }}</span><strong>{{ venueFor(selectedTournament, data.clubs) }}</strong>
-              </div>
-              <div>
-                <span>{{ t('ARCHERS') }}</span><strong>{{ selectedTournament.participantIds.length }}</strong>
-              </div>
-              <div>
-                <span>{{ t('CATEGORIES') }}</span><strong>{{ selectedTournament.categoryIds.length }}</strong>
-              </div>
-              <div v-if="tournamentTypeFor(selectedTournament.tournamentTypeId)" class="format-summary">
-                <span>{{ t('FORMAT') }}</span><strong
-                  >{{ tournamentTypeFor(selectedTournament.tournamentTypeId).distance }}
-                  {{ tournamentTypeFor(selectedTournament.tournamentTypeId).distanceUnit }} ·
-                  {{ tournamentTypeFor(selectedTournament.tournamentTypeId).targetType }} ·
-                  {{ tournamentTypeFor(selectedTournament.tournamentTypeId).ends }} ×
-                  {{ tournamentTypeFor(selectedTournament.tournamentTypeId).arrowsPerEnd }}</strong
-                >
-              </div>
-              <a
-                v-if="selectedTournament.venueMode === 'club' && clubFor(selectedTournament.clubId)?.mapUrl"
-                :href="clubFor(selectedTournament.clubId).mapUrl"
-                target="_blank"
-                rel="noreferrer"
+              <button
+                v-if="canEditTournament"
                 class="button button-small button-outline"
-                >{{ t('Open map ↗') }}</a
+                @click="addParticipantToTournament"
               >
-            </section>
-            <div class="tournament-tabs" role="tablist" :aria-label="t('Tournament sections')">
-              <button
-                :class="{ active: selectedTournamentTab === 'participants' }"
-                @click="selectedTournamentTab = 'participants'"
-              >
-                {{ t('Archers') }}
-              </button>
-              <button
-                :class="{ active: selectedTournamentTab === 'categories' }"
-                @click="selectedTournamentTab = 'categories'"
-              >
-                {{ t('Categories') }}
-              </button>
-              <button :class="{ active: selectedTournamentTab === 'scores' }" @click="selectedTournamentTab = 'scores'">
-                {{ t('Rounds & scores') }}
-              </button>
-              <button
-                :class="{ active: selectedTournamentTab === 'olympic' }"
-                @click="selectedTournamentTab = 'olympic'"
-              >
-                {{ t('Olympic matches') }}
+                {{ t('＋ Add archer') }}
               </button>
             </div>
-            <section v-if="selectedTournamentTab === 'participants'" class="panel roster-panel">
-              <div class="panel-heading">
-                <div>
-                  <h2>{{ t('Tournament archers') }}</h2>
-                  <p>{{ t('Archers entered in this tournament.') }}</p>
-                </div>
-                <button
-                  v-if="canEditTournament"
-                  class="button button-small button-outline"
-                  @click="addParticipantToTournament"
-                >
-                  {{ t('＋ Add archer') }}
-                </button>
+            <div class="participant-directory-filter">
+              <label class="select-field"
+                ><span>{{ t('FILTER BY CLUB') }}</span
+                ><select v-model="participantClubFilter" :aria-label="t('Filter archers by club')">
+                  <option value="">{{ t('All clubs') }}</option>
+                  <option value="__unassigned__">{{ t('No club assigned') }}</option>
+                  <option v-for="club in data.clubs" :key="club.id" :value="club.id">{{ club.name }}</option>
+                </select></label
+              >
+              <label class="select-field"
+                ><span>{{ t('SEARCH LAST NAME OR AFFILIATION') }}</span
+                ><input
+                  v-model="participantDirectorySearch"
+                  list="archer-search-options"
+                  :aria-label="t('Search archers by last name or affiliation')"
+                  :placeholder="t('Type a last name or ID')"
+              /></label>
+              <datalist id="archer-search-options">
+                <option v-for="value in participantSearchOptions" :key="value" :value="value" />
+              </datalist>
+            </div>
+            <div v-if="filteredTournamentParticipantsDirectory.length" class="roster-list">
+              <div class="roster-row roster-head">
+                <span>{{ t('ARCHER') }}</span>
+                <span>{{ t('CATEGORY') }}</span>
+                <span v-if="canEditTournament">{{ t('ACTIONS') }}</span>
               </div>
-              <div class="participant-directory-filter">
-                <label class="select-field"
-                  ><span>{{ t('FILTER BY CLUB') }}</span
-                  ><select v-model="participantClubFilter" :aria-label="t('Filter archers by club')">
-                    <option value="">{{ t('All clubs') }}</option>
-                    <option value="__unassigned__">{{ t('No club assigned') }}</option>
-                    <option v-for="club in data.clubs" :key="club.id" :value="club.id">{{ club.name }}</option>
-                  </select></label
-                >
-                <label class="select-field"
-                  ><span>{{ t('SEARCH LAST NAME OR AFFILIATION') }}</span
-                  ><input
-                    v-model="participantDirectorySearch"
-                    list="archer-search-options"
-                    :aria-label="t('Search archers by last name or affiliation')"
-                    :placeholder="t('Type a last name or ID')"
-                /></label>
-                <datalist id="archer-search-options">
-                  <option v-for="value in participantSearchOptions" :key="value" :value="value" />
-                </datalist>
-              </div>
-              <div v-if="filteredTournamentParticipantsDirectory.length" class="roster-list">
-                <div class="roster-row roster-head">
-                  <span>{{ t('ARCHER') }}</span>
-                  <span>{{ t('CATEGORY') }}</span>
-                  <span v-if="canEditTournament">{{ t('ACTIONS') }}</span>
-                </div>
-                <div v-for="person in filteredTournamentParticipantsDirectory" :key="person.id" class="roster-row">
-                  <span class="roster-person">
-                    <span class="person-avatar">{{ person.firstName.charAt(0) }}{{ person.lastName.charAt(0) }}</span>
-                    <span class="roster-name"
-                      ><strong>{{ person.lastName }}, {{ person.firstName }}</strong
-                      ><small
-                        >{{
-                          person.waId ? `World Archery ${person.waId}` : person.aetayId || t('No affiliation number')
-                        }}
-                        · {{ clubFor(person.clubId)?.name || t('No club') }} ·
-                        {{ ageAtTournament(person, selectedTournament) ?? t('Age unknown') }} {{ t('at event') }}</small
-                      ></span
-                    >
-                  </span>
-                  <span class="roster-category-cell">
-                    <template v-if="isChangingCategory(person)">
-                      <select
-                        class="category-select"
-                        :title="categoryLimitHint()"
-                        :aria-label="t('Change category of {name}', { name: fullName(person) })"
-                        value=""
-                        @change="changeParticipantCategory(selectedTournament, person, $event)"
-                      >
-                        <option value="">{{ t('Change category') }}</option>
-                        <option
-                          v-for="category in categoryChangeOptions(selectedTournament, person)"
-                          :key="category.id"
-                          :value="category.id"
-                        >
-                          {{ category.name }}
-                        </option>
-                      </select>
-                      <button
-                        class="button"
-                        :aria-label="t('Cancel changing the category of {name}', { name: fullName(person) })"
-                        @click="changingCategoryKey = ''"
-                      >
-                        {{ t('Cancel') }}
-                      </button>
-                    </template>
-                    <template v-else-if="selectedTournament.categoryAssignments[person.id]">
-                      <span class="roster-category">{{
-                        categoryFor(selectedTournament.categoryAssignments[person.id])?.name || '—'
-                      }}</span>
-                      <template v-if="canEditTournament">
-                        <button
-                          v-if="categoryChangeOptions(selectedTournament, person).length"
-                          class="button button-icon"
-                          :aria-label="t('Change category of {name}', { name: fullName(person) })"
-                          :title="t('Change category')"
-                          @click="changingCategoryKey = changeKey(person)"
-                        >
-                          <NavIcon name="pencil" />
-                        </button>
-                        <button
-                          class="button button-icon"
-                          :aria-label="t('Remove the category of {name}', { name: fullName(person) })"
-                          :title="t('Remove category')"
-                          @click="clearParticipantCategory(selectedTournament, person)"
-                        >
-                          <NavIcon name="close" />
-                        </button>
-                      </template>
-                    </template>
+              <div v-for="person in filteredTournamentParticipantsDirectory" :key="person.id" class="roster-row">
+                <span class="roster-person">
+                  <span class="person-avatar">{{ person.firstName.charAt(0) }}{{ person.lastName.charAt(0) }}</span>
+                  <span class="roster-name"
+                    ><strong>{{ person.lastName }}, {{ person.firstName }}</strong
+                    ><small
+                      >{{
+                        person.waId ? `World Archery ${person.waId}` : person.aetayId || t('No affiliation number')
+                      }}
+                      · {{ clubFor(person.clubId)?.name || t('No club') }} ·
+                      {{ ageAtTournament(person, selectedTournament) ?? t('Age unknown') }} {{ t('at event') }}</small
+                    ></span
+                  >
+                </span>
+                <span class="roster-category-cell">
+                  <template v-if="isChangingCategory(person)">
                     <select
-                      v-else-if="canEditTournament && selectedTournament.categoryIds.length"
                       class="category-select"
                       :title="categoryLimitHint()"
-                      :aria-label="t('Choose category of {name}', { name: fullName(person) })"
+                      :aria-label="t('Change category of {name}', { name: fullName(person) })"
                       value=""
-                      @change="addParticipantWithCategory(selectedTournament, person, $event)"
+                      @change="changeParticipantCategory(selectedTournament, person, $event)"
                     >
-                      <option value="">{{ t('Choose category') }}</option>
+                      <option value="">{{ t('Change category') }}</option>
                       <option
-                        v-for="categoryId in selectedTournament.categoryIds"
-                        :key="categoryId"
-                        :value="categoryId"
-                        :disabled="Boolean(categoryBlockReason(selectedTournament, person, categoryFor(categoryId)))"
-                        :title="categoryBlockReason(selectedTournament, person, categoryFor(categoryId))"
+                        v-for="category in categoryChangeOptions(selectedTournament, person)"
+                        :key="category.id"
+                        :value="category.id"
                       >
-                        {{ categoryFor(categoryId)?.name }}
+                        {{ category.name }}
                       </option>
                     </select>
-                    <span v-else class="roster-category">—</span>
-                  </span>
-                  <span v-if="canEditTournament" class="roster-actions">
                     <button
-                      class="button button-soft-danger"
-                      :aria-label="t('Remove {name} from tournament', { name: fullName(person) })"
-                      @click="removeParticipantFromTournament(selectedTournament, person)"
+                      class="button"
+                      :aria-label="t('Cancel changing the category of {name}', { name: fullName(person) })"
+                      @click="changingCategoryKey = ''"
                     >
-                      {{ t('Remove from tournament') }}
+                      {{ t('Cancel') }}
                     </button>
-                  </span>
-                </div>
-              </div>
-              <div v-else class="empty-state">
-                <strong>{{
-                  selectedTournament.participantIds.length
-                    ? t('No archers match these filters')
-                    : t('No archers in this tournament')
-                }}</strong>
-                <p>
-                  {{
-                    selectedTournament.participantIds.length
-                      ? t('Choose another club or clear the search.')
-                      : canEditTournament
-                        ? t('Add an archer from the database or create a new one.')
-                        : t('Archers entered in this tournament will appear here.')
-                  }}
-                </p>
-                <button
-                  v-if="canEditTournament && !selectedTournament.participantIds.length"
-                  class="button button-primary"
-                  @click="addParticipantToTournament"
-                >
-                  {{ t('Add archer') }}
-                </button>
-              </div>
-            </section>
-            <section v-else-if="selectedTournamentTab === 'categories'" class="panel roster-panel">
-              <div class="panel-heading">
-                <div>
-                  <h2>{{ t('Tournament categories') }}</h2>
-                  <p>
-                    {{
-                      canEditTournament
-                        ? t('Choose the divisions available for this event. Assign each archer in Archers.')
-                        : t('Divisions available for this event.')
-                    }}
-                  </p>
-                </div>
-                <button v-if="canManage" class="text-link" @click="activePage = 'categories'">
-                  {{ t('Manage category catalogue →') }}
-                </button>
-              </div>
-              <div v-if="data.categories.length" class="roster-list">
-                <label v-for="category in data.categories" :key="category.id" class="roster-row category-roster-row"
-                  ><input
-                    type="checkbox"
-                    :checked="selectedTournament.categoryIds.includes(category.id)"
-                    :disabled="!canEditTournament"
-                    @change="toggleTournamentCategory(selectedTournament, category.id)"
-                  /><span class="category-roster-copy"
-                    ><strong>{{ category.name }}</strong
-                    ><small>{{ categoryDescription(category) }}</small></span
-                  ><span class="roster-state">{{
-                    data.tournaments.filter(
-                      (event) => event.id === selectedTournament.id && event.categoryIds.includes(category.id),
-                    ).length
-                      ? t('Available')
-                      : t('Not added')
-                  }}</span></label
-                >
-              </div>
-              <div v-else class="empty-state">
-                <strong>{{ t('No categories in the catalogue') }}</strong>
-                <p>
-                  {{
-                    canManage
-                      ? t('Create categories by age, bow type, or both.')
-                      : t('Categories will appear here when available.')
-                  }}
-                </p>
-                <button v-if="canManage" class="button button-primary" @click="activePage = 'categories'">
-                  {{ t('Open category catalogue') }}
-                </button>
-              </div>
-            </section>
-            <section v-else-if="selectedTournamentTab === 'scores'" class="panel score-workspace">
-              <div class="score-toolbar">
-                <label class="select-field"
-                  ><span>{{ t('TOURNAMENT ROUND') }}</span
-                  ><select v-model="selectedRound">
-                    <option v-for="round in selectedTournament.rounds" :key="round">{{ round }}</option>
-                  </select></label
-                >
-                <form v-if="canEditTournament" class="add-round-form" @submit.prevent="addRound">
-                  <input
-                    v-model="newRoundName"
-                    :placeholder="t('Add a round...')"
-                    :aria-label="t('New round name')"
-                  /><button class="button button-small button-outline" type="submit">
-                    {{ t('＋ Add round') }}
-                  </button>
-                </form>
-                <div class="score-completion">
-                  <strong
-                    >{{ scoredCount }}<small> / {{ tournamentParticipants.length }}</small></strong
-                  ><span>{{ t('scores entered') }}</span>
-                </div>
-              </div>
-              <div v-if="scoreRows.length" class="table-wrap">
-                <table class="score-table">
-                  <thead>
-                    <tr>
-                      <th>{{ t('ARCHER') }}</th>
-                      <th>{{ t('CATEGORY') }}</th>
-                      <th>{{ t('WORLD ARCHERY ID') }}</th>
-                      <th>{{ t('ROUND SCORE') }}</th>
-                      <th>{{ t('STATUS') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in scoreRows" :key="row.participant.id">
-                      <td>
-                        <div class="person-cell">
-                          <span class="person-avatar"
-                            >{{ row.participant.firstName.charAt(0) }}{{ row.participant.lastName.charAt(0) }}</span
-                          ><strong>{{ row.participant.lastName }}, {{ row.participant.firstName }}</strong>
-                        </div>
-                      </td>
-                      <td>{{ categoryFor(row.categoryId)?.name || t('Unassigned') }}</td>
-                      <td>{{ row.participant.waId || '—' }}</td>
-                      <td>
-                        <input
-                          class="score-input sl-score"
-                          type="number"
-                          min="0"
-                          :value="row.score"
-                          :placeholder="t('Enter score')"
-                          :disabled="!canManage"
-                          @change="saveScore(row.participant.id, $event.target.value)"
-                        />
-                      </td>
-                      <td>
-                        <span class="status-pill" :class="row.score !== '' ? 'status-active' : 'status-pending'"
-                          ><i></i>{{ row.score !== '' ? 'Recorded' : 'Pending' }}</span
-                        >
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-else class="empty-state">
-                <div class="empty-icon"><NavIcon name="archers" /></div>
-                <strong>{{ t('No archers added') }}</strong>
-                <p>{{ t('Add archers in the Archers section of this tournament before recording scores.') }}</p>
-                <button class="button button-outline" @click="selectedTournamentTab = 'participants'">
-                  {{ t('View archers') }}
-                </button>
-              </div>
-              <div v-if="canManage && scoreRows.length" class="score-footnote">
-                {{ t('Enter or update an archer’s score; changes save against this tournament and round.') }}
-              </div>
-            </section>
-            <section v-else>
-              <div class="olympic-toolbar">
-                <label class="select-field"
-                  ><span>{{ t('CATEGORY') }}</span
-                  ><select v-model="selectedCategoryId" :disabled="!canManage">
-                    <option value="">{{ t('All archers') }}</option>
-                    <option v-for="categoryId in selectedTournament.categoryIds" :key="categoryId" :value="categoryId">
+                  </template>
+                  <template v-else-if="selectedTournament.categoryAssignments[person.id]">
+                    <span class="roster-category">{{
+                      categoryFor(selectedTournament.categoryAssignments[person.id])?.name || '—'
+                    }}</span>
+                    <template v-if="canEditTournament">
+                      <button
+                        v-if="categoryChangeOptions(selectedTournament, person).length"
+                        class="button button-icon"
+                        :aria-label="t('Change category of {name}', { name: fullName(person) })"
+                        :title="t('Change category')"
+                        @click="changingCategoryKey = changeKey(person)"
+                      >
+                        <NavIcon name="pencil" />
+                      </button>
+                      <button
+                        class="button button-icon"
+                        :aria-label="t('Remove the category of {name}', { name: fullName(person) })"
+                        :title="t('Remove category')"
+                        @click="clearParticipantCategory(selectedTournament, person)"
+                      >
+                        <NavIcon name="close" />
+                      </button>
+                    </template>
+                  </template>
+                  <select
+                    v-else-if="canEditTournament && selectedTournament.categoryIds.length"
+                    class="category-select"
+                    :title="categoryLimitHint()"
+                    :aria-label="t('Choose category of {name}', { name: fullName(person) })"
+                    value=""
+                    @change="addParticipantWithCategory(selectedTournament, person, $event)"
+                  >
+                    <option value="">{{ t('Choose category') }}</option>
+                    <option
+                      v-for="categoryId in selectedTournament.categoryIds"
+                      :key="categoryId"
+                      :value="categoryId"
+                      :disabled="Boolean(categoryBlockReason(selectedTournament, person, categoryFor(categoryId)))"
+                      :title="categoryBlockReason(selectedTournament, person, categoryFor(categoryId))"
+                    >
                       {{ categoryFor(categoryId)?.name }}
                     </option>
-                  </select></label
-                >
-                <div>
-                  <span class="contact-label">{{ t('SEEDING SCORES FROM') }}</span><strong class="round-label">{{
-                    selectedRound
-                  }}</strong>
-                </div>
-                <span class="seed-note"><span>↕</span> {{ t('1st place vs. last place · 2nd vs. second-last') }}</span>
-                <button v-if="canManage" class="button button-primary" @click="generateMatches">
-                  <span>✦</span> {{ t('Seed from round scores') }}
-                </button>
+                  </select>
+                  <span v-else class="roster-category">—</span>
+                </span>
+                <span v-if="canEditTournament" class="roster-actions">
+                  <button
+                    class="button button-soft-danger"
+                    :aria-label="t('Remove {name} from tournament', { name: fullName(person) })"
+                    @click="removeParticipantFromTournament(selectedTournament, person)"
+                  >
+                    {{ t('Remove from tournament') }}
+                  </button>
+                </span>
               </div>
-              <div v-if="olympicMatches.length" class="matches-grid">
-                <section v-for="(match, index) in olympicMatches" :key="match.id" class="match-card">
-                  <div class="match-head">
-                    <span>{{ match.round }}</span><span class="match-number"
-                      >{{ t('MATCH') }} {{ String(index + 1).padStart(2, '0') }}</span
-                    >
-                  </div>
-                  <div class="match-archer">
-                    <span class="seed-badge">{{ match.seed1 }}</span><strong>{{
-                      fullName(participantById(match.seed1Id) || { firstName: t('Unknown'), lastName: '' })
-                    }}</strong
-                    ><input
-                      class="sl-score"
-                      type="number"
-                      min="0"
-                      :value="match.score1"
-                      placeholder="—"
-                      :disabled="!canManage"
-                      @change="recordMatchScore(match, 'score1', $event.target.value)"
-                    />
-                  </div>
-                  <div class="match-divider">
-                    <span>{{ t('VS') }}</span>
-                  </div>
-                  <div class="match-archer">
-                    <span class="seed-badge">{{ match.seed2 }}</span><strong>{{
-                      fullName(participantById(match.seed2Id) || { firstName: t('Unknown'), lastName: '' })
-                    }}</strong
-                    ><input
-                      class="sl-score"
-                      type="number"
-                      min="0"
-                      :value="match.score2"
-                      placeholder="—"
-                      :disabled="!canManage"
-                      @change="recordMatchScore(match, 'score2', $event.target.value)"
-                    />
-                  </div>
-                  <div class="match-foot">
-                    <span>{{
-                      match.score1 !== '' && match.score2 !== '' ? 'Scores recorded' : 'Enter both match scores'
-                    }}</span><i :class="{ complete: match.score1 !== '' && match.score2 !== '' }"></i>
-                  </div>
-                </section>
-              </div>
-              <section v-else class="panel empty-state bracket-empty">
-                <div class="empty-icon">⌁</div>
-                <strong>{{ t('No matches seeded yet') }}</strong>
-                <p>{{ t('Record at least two scores for this tournament round. Highest seed faces lowest seed.') }}</p>
-                <button class="button button-outline" @click="selectedTournamentTab = 'scores'">
-                  {{ t('Enter round scores') }}
-                </button>
-              </section>
-              <p class="bracket-note">
+            </div>
+            <div v-else class="empty-state">
+              <strong>{{
+                selectedTournament.participantIds.length
+                  ? t('No archers match these filters')
+                  : t('No archers in this tournament')
+              }}</strong>
+              <p>
                 {{
-                  t(
-                    'First-round pairings belong to this tournament. Re-seeding replaces its current first-round matches.',
-                  )
+                  selectedTournament.participantIds.length
+                    ? t('Choose another club or clear the search.')
+                    : canEditTournament
+                      ? t('Add an archer from the database or create a new one.')
+                      : t('Archers entered in this tournament will appear here.')
                 }}
               </p>
+              <button
+                v-if="canEditTournament && !selectedTournament.participantIds.length"
+                class="button button-primary"
+                @click="addParticipantToTournament"
+              >
+                {{ t('Add archer') }}
+              </button>
+            </div>
+          </section>
+          <section v-else-if="selectedTournamentTab === 'categories'" class="panel roster-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>{{ t('Tournament categories') }}</h2>
+                <p>
+                  {{
+                    canEditTournament
+                      ? t('Choose the divisions available for this event. Assign each archer in Archers.')
+                      : t('Divisions available for this event.')
+                  }}
+                </p>
+              </div>
+              <button v-if="canManage" class="text-link" @click="activePage = 'categories'">
+                {{ t('Manage category catalogue →') }}
+              </button>
+            </div>
+            <div v-if="data.categories.length" class="roster-list">
+              <label v-for="category in data.categories" :key="category.id" class="roster-row category-roster-row"
+                ><input
+                  type="checkbox"
+                  :checked="selectedTournament.categoryIds.includes(category.id)"
+                  :disabled="!canEditTournament"
+                  @change="toggleTournamentCategory(selectedTournament, category.id)"
+                /><span class="category-roster-copy"
+                  ><strong>{{ category.name }}</strong
+                  ><small>{{ categoryDescription(category) }}</small></span
+                ><span class="roster-state">{{
+                  data.tournaments.filter(
+                    (event) => event.id === selectedTournament.id && event.categoryIds.includes(category.id),
+                  ).length
+                    ? t('Available')
+                    : t('Not added')
+                }}</span></label
+              >
+            </div>
+            <div v-else class="empty-state">
+              <strong>{{ t('No categories in the catalogue') }}</strong>
+              <p>
+                {{
+                  canManage
+                    ? t('Create categories by age, bow type, or both.')
+                    : t('Categories will appear here when available.')
+                }}
+              </p>
+              <button v-if="canManage" class="button button-primary" @click="activePage = 'categories'">
+                {{ t('Open category catalogue') }}
+              </button>
+            </div>
+          </section>
+          <section v-else-if="selectedTournamentTab === 'scores'" class="panel score-workspace">
+            <div class="score-toolbar">
+              <label class="select-field"
+                ><span>{{ t('TOURNAMENT ROUND') }}</span
+                ><select v-model="selectedRound">
+                  <option v-for="round in selectedTournament.rounds" :key="round">{{ round }}</option>
+                </select></label
+              >
+              <form v-if="canEditTournament" class="add-round-form" @submit.prevent="addRound">
+                <input
+                  v-model="newRoundName"
+                  :placeholder="t('Add a round...')"
+                  :aria-label="t('New round name')"
+                /><button class="button button-small button-outline" type="submit">
+                  {{ t('＋ Add round') }}
+                </button>
+              </form>
+              <div class="score-completion">
+                <strong
+                  >{{ scoredCount }}<small> / {{ tournamentParticipants.length }}</small></strong
+                ><span>{{ t('scores entered') }}</span>
+              </div>
+            </div>
+            <div v-if="scoreRows.length" class="table-wrap">
+              <table class="score-table">
+                <thead>
+                  <tr>
+                    <th>{{ t('ARCHER') }}</th>
+                    <th>{{ t('CATEGORY') }}</th>
+                    <th>{{ t('WORLD ARCHERY ID') }}</th>
+                    <th>{{ t('ROUND SCORE') }}</th>
+                    <th>{{ t('STATUS') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in scoreRows" :key="row.participant.id">
+                    <td>
+                      <div class="person-cell">
+                        <span class="person-avatar"
+                          >{{ row.participant.firstName.charAt(0) }}{{ row.participant.lastName.charAt(0) }}</span
+                        ><strong>{{ row.participant.lastName }}, {{ row.participant.firstName }}</strong>
+                      </div>
+                    </td>
+                    <td>{{ categoryFor(row.categoryId)?.name || t('Unassigned') }}</td>
+                    <td>{{ row.participant.waId || '—' }}</td>
+                    <td>
+                      <input
+                        class="score-input sl-score"
+                        type="number"
+                        min="0"
+                        :value="row.score"
+                        :placeholder="t('Enter score')"
+                        :disabled="!canManage"
+                        @change="saveScore(row.participant.id, $event.target.value)"
+                      />
+                    </td>
+                    <td>
+                      <span class="status-pill" :class="row.score !== '' ? 'status-active' : 'status-pending'"
+                        ><i></i>{{ row.score !== '' ? 'Recorded' : 'Pending' }}</span
+                      >
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="empty-state">
+              <div class="empty-icon"><NavIcon name="archers" /></div>
+              <strong>{{ t('No archers added') }}</strong>
+              <p>{{ t('Add archers in the Archers section of this tournament before recording scores.') }}</p>
+              <button class="button button-outline" @click="selectedTournamentTab = 'participants'">
+                {{ t('View archers') }}
+              </button>
+            </div>
+            <div v-if="canManage && scoreRows.length" class="score-footnote">
+              {{ t('Enter or update an archer’s score; changes save against this tournament and round.') }}
+            </div>
+          </section>
+          <section v-else>
+            <div class="olympic-toolbar">
+              <label class="select-field"
+                ><span>{{ t('CATEGORY') }}</span
+                ><select v-model="selectedCategoryId" :disabled="!canManage">
+                  <option value="">{{ t('All archers') }}</option>
+                  <option v-for="categoryId in selectedTournament.categoryIds" :key="categoryId" :value="categoryId">
+                    {{ categoryFor(categoryId)?.name }}
+                  </option>
+                </select></label
+              >
+              <div>
+                <span class="contact-label">{{ t('SEEDING SCORES FROM') }}</span><strong class="round-label">{{
+                  selectedRound
+                }}</strong>
+              </div>
+              <span class="seed-note"><span>↕</span> {{ t('1st place vs. last place · 2nd vs. second-last') }}</span>
+              <button v-if="canManage" class="button button-primary" @click="generateMatches">
+                <span>✦</span> {{ t('Seed from round scores') }}
+              </button>
+            </div>
+            <div v-if="olympicMatches.length" class="matches-grid">
+              <section v-for="(match, index) in olympicMatches" :key="match.id" class="match-card">
+                <div class="match-head">
+                  <span>{{ match.round }}</span><span class="match-number"
+                    >{{ t('MATCH') }} {{ String(index + 1).padStart(2, '0') }}</span
+                  >
+                </div>
+                <div class="match-archer">
+                  <span class="seed-badge">{{ match.seed1 }}</span><strong>{{
+                    fullName(participantById(match.seed1Id) || { firstName: t('Unknown'), lastName: '' })
+                  }}</strong
+                  ><input
+                    class="sl-score"
+                    type="number"
+                    min="0"
+                    :value="match.score1"
+                    placeholder="—"
+                    :disabled="!canManage"
+                    @change="recordMatchScore(match, 'score1', $event.target.value)"
+                  />
+                </div>
+                <div class="match-divider">
+                  <span>{{ t('VS') }}</span>
+                </div>
+                <div class="match-archer">
+                  <span class="seed-badge">{{ match.seed2 }}</span><strong>{{
+                    fullName(participantById(match.seed2Id) || { firstName: t('Unknown'), lastName: '' })
+                  }}</strong
+                  ><input
+                    class="sl-score"
+                    type="number"
+                    min="0"
+                    :value="match.score2"
+                    placeholder="—"
+                    :disabled="!canManage"
+                    @change="recordMatchScore(match, 'score2', $event.target.value)"
+                  />
+                </div>
+                <div class="match-foot">
+                  <span>{{
+                    match.score1 !== '' && match.score2 !== '' ? 'Scores recorded' : 'Enter both match scores'
+                  }}</span><i :class="{ complete: match.score1 !== '' && match.score2 !== '' }"></i>
+                </div>
+              </section>
+            </div>
+            <section v-else class="panel empty-state bracket-empty">
+              <div class="empty-icon">⌁</div>
+              <strong>{{ t('No matches seeded yet') }}</strong>
+              <p>{{ t('Record at least two scores for this tournament round. Highest seed faces lowest seed.') }}</p>
+              <button class="button button-outline" @click="selectedTournamentTab = 'scores'">
+                {{ t('Enter round scores') }}
+              </button>
             </section>
-          </template>
-          <section v-else class="panel empty-state">
+            <p class="bracket-note">
+              {{
+                t(
+                  'First-round pairings belong to this tournament. Re-seeding replaces its current first-round matches.',
+                )
+              }}
+            </p>
+          </section>
+          <template #empty>
             <strong>{{ t('Tournament not found') }}</strong><button
               class="button button-outline"
               @click="activePage = 'tournaments'"
             >
               {{ t('Back to tournaments') }}
             </button>
-          </section>
-        </section>
+          </template>
+        </TournamentDetailPage>
       </div>
     </main>
 
