@@ -48,3 +48,8 @@ Place new shared code in `packages/` only when more than one app uses it.
 Inside `apps/manager/src/`, pages, tabs, and dialog forms are components in `components/`, shared state is the Pinia
 store in `stores/`, logic that changes data is a composable in `composables/`, and plain functions are in `services/`.
 See `apps/manager/README.md` for details.
+
+## Supabase migrations
+
+- Migration files in `supabase/migrations/` use timestamped names (`YYYYMMDDHHMMSS_description.sql`). Keep that
+  format.
