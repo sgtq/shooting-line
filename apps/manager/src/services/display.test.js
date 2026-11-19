@@ -7,7 +7,9 @@ import {
   formatDate,
   formatDates,
   fullName,
+  greetingFor,
   today,
+  venueFor,
 } from './display'
 
 afterEach(() => {
@@ -103,5 +105,43 @@ describe('ageAtTournament', () => {
   it('returns null without a birth date or a tournament day', () => {
     expect(ageAtTournament({ birthDate: '' }, tournament)).toBeNull()
     expect(ageAtTournament({ birthDate: '2010-01-01' }, { dates: [] })).toBeNull()
+  })
+})
+
+describe('greetingFor', () => {
+  it('changes with the time of day', () => {
+    expect(greetingFor('Ana', 8)).toBe('Good morning, Ana')
+    expect(greetingFor('Ana', 12)).toBe('Good afternoon, Ana')
+    expect(greetingFor('Ana', 16)).toBe('Good afternoon, Ana')
+    expect(greetingFor('Ana', 17)).toBe('Good evening, Ana')
+    expect(greetingFor('Ana', 0)).toBe('Good morning, Ana')
+  })
+
+  it('addresses someone with no name as there', () => {
+    expect(greetingFor('', 9)).toBe('Good morning, there')
+  })
+})
+
+describe('venueFor', () => {
+  const clubs = [
+    { id: 'c1', address: '1 Main St' },
+    { id: 'c2', address: '' },
+  ]
+
+  it('uses the custom address when the venue is custom', () => {
+    expect(venueFor({ venueMode: 'custom', customAddress: 'Field 9', clubId: 'c1' }, clubs)).toBe('Field 9')
+  })
+
+  it('uses the hosting club address', () => {
+    expect(venueFor({ venueMode: 'club', customAddress: '', clubId: 'c1' }, clubs)).toBe('1 Main St')
+  })
+
+  it('says the address is not set when the club has none or there is no club', () => {
+    expect(venueFor({ venueMode: 'club', customAddress: '', clubId: 'c2' }, clubs)).toBe('Club address not set')
+    expect(venueFor({ venueMode: 'club', customAddress: '', clubId: '' }, clubs)).toBe('Club address not set')
+  })
+
+  it('returns an empty string without a tournament', () => {
+    expect(venueFor(undefined, clubs)).toBe('')
   })
 })

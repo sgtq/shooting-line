@@ -101,3 +101,24 @@ export function ageAtTournament(participant, tournament) {
     (eventDate.getUTCMonth() === birthDate.getUTCMonth() && eventDate.getUTCDate() >= birthDate.getUTCDate())
   return years - (birthdayHasPassed ? 0 : 1)
 }
+
+/**
+ * @param {string} userName The signed-in user's name, or an empty string.
+ * @param {number} hour The hour of the day, 0 to 23.
+ * @returns {string} A greeting for the time of day, such as "Good morning, Ana".
+ */
+export function greetingFor(userName, hour) {
+  const salutation = t(hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening')
+  return `${salutation}, ${userName || t('there')}`
+}
+
+/**
+ * @param {{ venueMode: string, customAddress: string, clubId: string }|undefined} tournament
+ * @param {{ id: string, address: string }[]} clubs
+ * @returns {string} The custom address, or the hosting club's address, or a note that none is set.
+ */
+export function venueFor(tournament, clubs) {
+  if (!tournament) return ''
+  if (tournament.venueMode === 'custom') return tournament.customAddress
+  return clubs.find((club) => club.id === tournament.clubId)?.address || t('Club address not set')
+}

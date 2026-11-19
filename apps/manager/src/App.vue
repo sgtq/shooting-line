@@ -7,6 +7,8 @@ import AppSidebar from './components/AppSidebar.vue'
 import NavIcon from './components/NavIcon.vue'
 import CategoriesPage from './components/CategoriesPage.vue'
 import ClubsPage from './components/ClubsPage.vue'
+import DashboardPage from './components/DashboardPage.vue'
+import TournamentsPage from './components/TournamentsPage.vue'
 import ParticipantsPage from './components/ParticipantsPage.vue'
 import PlansPage from './components/PlansPage.vue'
 import TournamentTypesPage from './components/TournamentTypesPage.vue'
@@ -18,19 +20,17 @@ import { useToast } from './composables/useToast'
 import { useManagerStore } from './stores/managerStore'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
 import { summarizeDecision } from './services/archerRequests'
-import { dayOfMonth } from './services/dateFormat'
 import {
   ageAtTournament,
   categoryDescription,
   displayChoice,
   formatDates,
-  formatMonth,
   fullName,
-  today,
+  venueFor,
 } from './services/display'
 import { findBlockingCategory } from './services/categoryRules'
 import { findOverlappingSubscription } from './services/planRules'
-import { firstDay, lastDay, MAX_TOURNAMENT_DAYS, datesToForm, resolveDays } from './services/tournamentDates'
+import { firstDay, MAX_TOURNAMENT_DAYS, datesToForm, resolveDays } from './services/tournamentDates'
 
 const props = defineProps({
   initialData: { type: Object, required: true },
@@ -143,11 +143,7 @@ const currentNavPage = computed(() =>
       ? 'participants'
       : activePage.value,
 )
-const salutation = computed(() => {
-  const hour = new Date().getHours()
-  return t(hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening')
-})
-const greeting = computed(() => `${salutation.value}, ${userName.value || t('there')}`)
+// A tournament still counts as next while its last day has not passed.
 const roleSummary = computed(() => {
   const roleLabels = {
     admin: 'System admin',
@@ -160,11 +156,6 @@ const roleSummary = computed(() => {
     .filter(Boolean)
     .join(' · ')
 })
-const upcomingTournaments = computed(() =>
-  [...data.value.tournaments].sort((a, b) => firstDay(a).localeCompare(firstDay(b))),
-)
-// A tournament still counts as next while its last day has not passed.
-const nextTournament = computed(() => upcomingTournaments.value.find((item) => lastDay(item) >= today()))
 // Name-only archers (other clubs') appear in tournaments and scores but never in the directory or its pickers,
 // so a club cannot browse archers it does not own.
 const directoryParticipants = computed(() => data.value.participants.filter((person) => !person.nameOnly))
@@ -201,14 +192,6 @@ const participantSearchOptions = computed(() => {
 })
 const selectedMatch = computed(
   () => archerMatches.value.find((match) => match.token === selectedMatchToken.value) || null,
-)
-const filteredTournaments = computed(() =>
-  upcomingTournaments.value.filter((tournament) => {
-    const matchesSearch = tournament.name.toLowerCase().includes(tournamentQuery.value.toLowerCase())
-    const isPast = lastDay(tournament) < today()
-    const matchesStatus = tournamentStatusFilter.value === 'past' ? isPast : !isPast
-    return matchesSearch && matchesStatus
-  }),
 )
 const tournamentParticipants = computed(() => {
   if (!selectedTournament.value) return []
@@ -370,13 +353,6 @@ function scheduleArcherSearch() {
       modalError.value = `${t('Archer search failed')}: ${error.message}`
     }
   }, 300)
-}
-
-function venueFor(tournament) {
-  if (!tournament) return ''
-  return tournament.venueMode === 'custom'
-    ? tournament.customAddress
-    : clubFor(tournament.clubId)?.address || t('Club address not set')
 }
 
 function openModal(type, assignToCurrentTournament = false) {
@@ -1072,12 +1048,6 @@ function openTournament(tournamentId, tab = 'participants') {
   activePage.value = 'tournament-detail'
 }
 
-// A drag-select ends in a click on the card; skip opening so the selected text can be copied.
-function openUnlessSelecting(open) {
-  if (window.getSelection()?.toString()) return
-  open()
-}
-
 function openScoreDetails(participantId) {
   selectedScoreParticipantId.value = participantId
   activePage.value = 'score-detail'
@@ -1432,220 +1402,23 @@ async function recordMatchScore(match, side, value) {
 
       <p v-if="databaseError" class="database-error" role="alert">{{ databaseError }}</p>
       <div class="page-container">
-        <section v-if="activePage === 'dashboard'">
-          <div class="page-heading heading-row">
-            <div>
-              <p class="eyebrow">{{ t('OVERVIEW') }}</p>
-              <h1>{{ greeting }} <span class="wave">✳</span></h1>
-              <p class="page-subtitle">{{ t('Here’s what’s happening across your archery community.') }}</p>
-            </div>
-            <button v-if="canCreateTournament" class="button button-primary" @click="openModal('tournament')">
-              <span>＋</span> {{ t('Create tournament') }}
-            </button>
-          </div>
-
-          <p v-if="showPlanNotice" class="privacy-note">
-            {{
-              t(
-                'Your club needs an active plan to create tournaments or change anything. Contact a manager to get one.',
-              )
-            }}
-          </p>
-
-          <div class="stats-grid">
-            <article class="stat-card clickable-card" @click="openUnlessSelecting(() => (activePage = 'tournaments'))">
-              <div class="stat-top">
-                <span class="stat-icon olive"><NavIcon name="tournaments" /></span
-                ><span class="stat-caption">{{ t('ALL TIME') }}</span>
-              </div>
-              <button
-                class="stat-value stat-value-button"
-                :aria-label="t('Open tournaments')"
-                @click="activePage = 'tournaments'"
-              >
-                {{ data.tournaments.length }}
-              </button>
-              <span class="stat-label">{{ t('Total tournaments') }}</span>
-              <div class="stat-foot"><span class="stat-dot green"></span> {{ t('Open event calendar') }}</div>
-            </article>
-            <article class="stat-card clickable-card" @click="openUnlessSelecting(() => (activePage = 'clubs'))">
-              <div class="stat-top">
-                <span class="stat-icon sand"><NavIcon name="clubs" /></span
-                ><span class="stat-caption">{{ t('REGISTERED') }}</span>
-              </div>
-              <button class="stat-value stat-value-button" :aria-label="t('Open clubs')" @click="activePage = 'clubs'">
-                {{ data.clubs.length }}
-              </button>
-              <span class="stat-label">{{ t('Clubs') }}</span>
-              <div class="stat-foot"><span class="stat-dot green"></span> {{ t('Open club directory') }}</div>
-            </article>
-            <article class="stat-card clickable-card" @click="openUnlessSelecting(() => (activePage = 'participants'))">
-              <div class="stat-top">
-                <span class="stat-icon blue"><NavIcon name="archers" /></span
-                ><span class="stat-caption">{{ t('DATABASE') }}</span>
-              </div>
-              <button
-                class="stat-value stat-value-button"
-                :aria-label="t('Open archers')"
-                @click="activePage = 'participants'"
-              >
-                {{ directoryParticipants.length }}
-              </button>
-              <span class="stat-label">{{ t('Archers') }}</span>
-              <div class="stat-foot">{{ t('Open archer directory') }}</div>
-            </article>
-            <article
-              class="stat-card next-stat"
-              :class="{ 'clickable-card': nextTournament }"
-              @click="nextTournament && openUnlessSelecting(() => openTournament(nextTournament.id))"
-            >
-              <div class="stat-top">
-                <span class="stat-icon peach">◷</span><span class="stat-caption">{{ t('UP NEXT') }}</span>
-              </div>
-              <strong class="next-event">{{ nextTournament?.name || t('No upcoming events') }}</strong>
-              <span class="stat-label">{{
-                nextTournament ? formatDates(nextTournament) : t('No event scheduled')
-              }}</span>
-              <button v-if="nextTournament" class="text-link" @click="openTournament(nextTournament.id)">
-                {{ t('View tournament') }} <span>→</span>
-              </button>
-            </article>
-          </div>
-
-          <div class="content-grid">
-            <section class="panel events-panel">
-              <div class="panel-heading">
-                <div>
-                  <h2>{{ t('Upcoming tournaments') }}</h2>
-                  <p>{{ t('Your next events at a glance') }}</p>
-                </div>
-                <button class="text-link" @click="activePage = 'tournaments'">
-                  {{ t('View all') }} <span>→</span>
-                </button>
-              </div>
-              <div v-if="upcomingTournaments.length" class="event-list">
-                <article
-                  v-for="event in upcomingTournaments.slice(0, 4)"
-                  :key="event.id"
-                  class="event-row clickable-card"
-                  role="button"
-                  tabindex="0"
-                  :aria-label="event.name"
-                  @click="openUnlessSelecting(() => openTournament(event.id))"
-                  @keydown.enter.space.self.prevent="openTournament(event.id)"
-                >
-                  <div class="date-tile">
-                    <span>{{ formatMonth(firstDay(event)) }}</span><strong>{{ dayOfMonth(firstDay(event)) }}</strong>
-                  </div>
-                  <div class="event-info">
-                    <strong>{{ event.name }}</strong><span
-                      >{{ clubFor(event.clubId)?.name || t('Independent event') }} ·
-                      {{ displayChoice(event.discipline) }}</span
-                    >
-                  </div>
-                  <span class="event-attendees"
-                    >{{ event.participantIds.length }} <small>{{ t('archers') }}</small></span
-                  >
-                  <span class="row-arrow" aria-hidden="true">↗</span>
-                </article>
-              </div>
-              <div v-else class="empty-state">
-                <div class="empty-icon"><NavIcon name="tournaments" /></div>
-                <strong>{{ t('No tournaments yet') }}</strong>
-                <p>{{ canManage ? t('Create an event to get started.') : t('Upcoming events will appear here.') }}</p>
-                <button v-if="canCreateTournament" class="button button-outline" @click="openModal('tournament')">
-                  {{ t('Create tournament') }}
-                </button>
-              </div>
-            </section>
-            <section class="panel quick-panel">
-              <div class="panel-heading">
-                <div>
-                  <h2>{{ t('Quick actions') }}</h2>
-                  <p>{{ t('Keep things moving') }}</p>
-                </div>
-              </div>
-              <button v-if="canManageParticipants" class="quick-action" @click="openModal('participant')">
-                <span class="quick-icon lavender"><NavIcon name="archers" /></span
-                ><span
-                  ><strong>{{ t('Add archer') }}</strong
-                  ><small>{{ t('Grow your archer directory') }}</small></span
-                ><b>→</b>
-              </button>
-              <button v-if="canManage" class="quick-action" @click="openModal('club')">
-                <span class="quick-icon peach"><NavIcon name="clubs" /></span
-                ><span
-                  ><strong>{{ t('Add a club') }}</strong
-                  ><small>{{ t('Register a new archery club') }}</small></span
-                ><b>→</b>
-              </button>
-              <button
-                v-if="canManage"
-                class="quick-action"
-                @click="
-                  selectedTournament ? openTournament(selectedTournament.id, 'scores') : (activePage = 'tournaments')
-                "
-              >
-                <span class="quick-icon mint">▤</span
-                ><span
-                  ><strong>{{ t('Enter scores') }}</strong
-                  ><small>{{ t('Record a tournament round') }}</small></span
-                ><b>→</b>
-              </button>
-              <div class="tip-box">
-                <span>✦</span>
-                <p>
-                  <strong>{{ t('Good to know') }}</strong><br />{{
-                    t('Archers can be reused across multiple tournaments.')
-                  }}
-                </p>
-              </div>
-            </section>
-          </div>
-          <section class="panel clubs-preview">
-            <div class="panel-heading">
-              <div>
-                <h2>{{ t('Your clubs') }}</h2>
-                <p>{{ t('Club accounts and representatives') }}</p>
-              </div>
-              <button class="text-link" @click="activePage = 'clubs'">{{ t('Manage clubs') }} <span>→</span></button>
-            </div>
-            <div class="club-preview-list">
-              <div
-                v-for="club in data.clubs.slice(0, 3)"
-                :key="club.id"
-                class="club-preview-item clickable-card"
-                @click="openUnlessSelecting(() => openClubDetails(club))"
-              >
-                <span class="club-avatar">{{ club.name.charAt(0) }}</span><span class="club-preview-name"
-                  ><strong>{{ club.name }}</strong
-                  ><small>{{ club.representative }}</small></span
-                >
-                <button
-                  type="button"
-                  class="status-pill status-pill-button details-control"
-                  :title="t('Open club details')"
-                  @click.stop="openUnlessSelecting(() => openClubDetails(club))"
-                >
-                  {{ t('Details') }}
-                </button>
-                <button
-                  v-if="canManage"
-                  type="button"
-                  class="status-pill status-pill-button"
-                  :class="club.userEnabled ? 'status-active' : 'status-disabled'"
-                  :title="club.userEnabled ? t('Disable') : t('Enable')"
-                  @click.stop="toggleClub(club)"
-                >
-                  <i></i>{{ club.userEnabled ? t('Enabled') : t('Disabled') }}
-                </button>
-                <span v-else class="status-pill" :class="club.userEnabled ? 'status-active' : 'status-disabled'"
-                  ><i></i>{{ club.userEnabled ? t('Enabled') : t('Disabled') }}</span
-                >
-              </div>
-            </div>
-          </section>
-        </section>
+        <DashboardPage
+          v-if="activePage === 'dashboard'"
+          :user-name="userName"
+          :tournaments="data.tournaments"
+          :clubs="data.clubs"
+          :archer-count="directoryParticipants.length"
+          :selected-tournament-id="selectedTournament?.id || ''"
+          :can-manage="canManage"
+          :can-manage-participants="canManageParticipants"
+          :can-create-tournament="canCreateTournament"
+          :show-plan-notice="showPlanNotice"
+          @navigate="activePage = $event"
+          @create="openModal($event)"
+          @open-tournament="openTournament"
+          @open-club="openClubDetails"
+          @toggle-club="toggleClub"
+        />
 
         <ClubsPage
           v-else-if="activePage === 'clubs'"
@@ -1679,91 +1452,20 @@ async function recordMatchScore(match, side, value) {
           @view-scores="openScoreDetails"
         />
 
-        <section v-else-if="activePage === 'tournaments'">
-          <div class="page-heading heading-row">
-            <div>
-              <p class="eyebrow">{{ t('EVENT MANAGEMENT') }}</p>
-              <h1>{{ t('Tournaments') }}</h1>
-              <p class="page-subtitle">{{ t('Create events, select archers, and manage event details.') }}</p>
-            </div>
-            <button v-if="canCreateTournament" class="button button-primary" @click="openModal('tournament')">
-              <span>＋</span> {{ t('Create tournament') }}
-            </button>
-          </div>
-          <p v-if="showPlanNotice" class="privacy-note">
-            {{
-              t(
-                'Your club needs an active plan to create tournaments or change anything. Contact a manager to get one.',
-              )
-            }}
-          </p>
-          <div v-if="canManage" class="type-shortcut">
-            <span>{{ t('Need a different event format?') }}</span><button
-              class="text-link"
-              @click="activePage = 'tournament-types'"
-            >
-              {{ t('Manage tournament types →') }}
-            </button>
-          </div>
-          <div class="section-toolbar">
-            <div class="toolbar-count">
-              {{ filteredTournaments.length }} {{ t(tournamentStatusFilter) }} {{ t('tournaments') }}
-            </div>
-            <div class="tournament-filters" role="group" :aria-label="t('Filter tournaments by date')">
-              <button
-                :class="{ active: tournamentStatusFilter === 'upcoming' }"
-                :aria-pressed="tournamentStatusFilter === 'upcoming'"
-                @click="tournamentStatusFilter = 'upcoming'"
-              >
-                {{ t('Upcoming') }}
-              </button>
-              <button
-                :class="{ active: tournamentStatusFilter === 'past' }"
-                :aria-pressed="tournamentStatusFilter === 'past'"
-                @click="tournamentStatusFilter = 'past'"
-              >
-                {{ t('Past') }}
-              </button>
-            </div>
-            <div class="search-box">
-              <span>⌕</span><input v-model="tournamentQuery" :placeholder="t('Search tournaments...')" />
-            </div>
-          </div>
-          <div class="tournament-list">
-            <article
-              v-for="event in filteredTournaments"
-              :key="event.id"
-              class="tournament-card clickable-card"
-              role="button"
-              tabindex="0"
-              :aria-label="event.name"
-              @click="openUnlessSelecting(() => openTournament(event.id))"
-              @keydown.enter.space.self.prevent="openTournament(event.id)"
-            >
-              <div class="tournament-date">
-                <span>{{ formatMonth(firstDay(event)) }}</span><strong>{{ dayOfMonth(firstDay(event)) }}</strong
-                ><small>{{ firstDay(event).slice(0, 4) }}</small>
-              </div>
-              <div class="tournament-details">
-                <span class="event-tag">{{
-                  tournamentTypeFor(event.tournamentTypeId)?.name || displayChoice(event.discipline)
-                }}</span>
-                <h3>{{ event.name }}</h3>
-                <div class="tournament-meta">
-                  <span>⌖ {{ venueFor(event) }}</span
-                  ><span><NavIcon name="archers" /> {{ event.participantIds.length }} {{ t('archers') }}</span
-                  ><span><NavIcon name="categories" /> {{ event.categoryIds.length }} {{ t('categories') }}</span
-                  ><span><NavIcon name="clubs" /> {{ clubFor(event.clubId)?.name || t('Independent') }}</span>
-                </div>
-              </div>
-            </article>
-            <div v-if="!filteredTournaments.length" class="empty-state panel">
-              <div class="empty-icon"><NavIcon name="tournaments" /></div>
-              <strong>{{ t('No tournaments found') }}</strong>
-              <p>{{ t('Try a different search or create a tournament.') }}</p>
-            </div>
-          </div>
-        </section>
+        <TournamentsPage
+          v-else-if="activePage === 'tournaments'"
+          v-model:status="tournamentStatusFilter"
+          v-model:query="tournamentQuery"
+          :tournaments="data.tournaments"
+          :tournament-types="data.tournamentTypes"
+          :clubs="data.clubs"
+          :can-manage="canManage"
+          :can-create-tournament="canCreateTournament"
+          :show-plan-notice="showPlanNotice"
+          @create="openModal('tournament')"
+          @open-tournament="openTournament"
+          @open-types="activePage = 'tournament-types'"
+        />
 
         <TournamentTypesPage
           v-else-if="activePage === 'tournament-types'"
@@ -1927,7 +1629,7 @@ async function recordMatchScore(match, side, value) {
                 }}</strong>
               </div>
               <div>
-                <span>{{ t('LOCATION') }}</span><strong>{{ venueFor(selectedTournament) }}</strong>
+                <span>{{ t('LOCATION') }}</span><strong>{{ venueFor(selectedTournament, data.clubs) }}</strong>
               </div>
               <div>
                 <span>{{ t('ARCHERS') }}</span><strong>{{ selectedTournament.participantIds.length }}</strong>
