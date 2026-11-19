@@ -1,3 +1,4 @@
+import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLanguage } from '@shooting-line/i18n'
@@ -62,7 +63,7 @@ function makeClient({
 
 async function openGate(options) {
   holder.client = makeClient(options)
-  const wrapper = mount(ManagerGate)
+  const wrapper = mount(ManagerGate, { global: { plugins: [createPinia()] } })
   await flushPromises()
   return wrapper
 }
