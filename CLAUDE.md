@@ -5,6 +5,13 @@
 - Before creating a PR, show the full draft (title and body) in chat and wait for approval.
 - Before committing, show the draft commit message in chat and wait for approval.
 
+## Tickets and PR titles
+
+- Tickets are GitHub issues in one project, `ShootingLine` (`sgtq`, number 8). Each has one `app:*` label and
+  a title that starts with the app: `[manager] Short summary`.
+- PR titles use `<type>(<app>): <summary> (#<issue>)`, for example `feat(manager): move saves out of App.vue (#8)`.
+  The PR body keeps `Closes #<issue>` (see `.github/pull_request_template.md`).
+
 ## Documentation
 
 - Keep READMEs in step with the code. When a change alters behavior, access rules, setup steps,
