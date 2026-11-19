@@ -24,6 +24,7 @@ import { useNavItems } from './composables/useNavItems'
 import { usePlanActions } from './composables/usePlanActions'
 import { usePermissions } from './composables/usePermissions'
 import { useScoring } from './composables/useScoring'
+import { useTournamentActions } from './composables/useTournamentActions'
 import { useToast } from './composables/useToast'
 import { useManagerStore } from './stores/managerStore'
 import CategoryForm from './components/CategoryForm.vue'
@@ -36,7 +37,7 @@ import TournamentForm from './components/TournamentForm.vue'
 import AppModal from './components/AppModal.vue'
 import TargetTypeModal from './components/TargetTypeModal.vue'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
-import { fullName } from './services/display'
+
 import { makeId } from './services/ids'
 import { modalLabels } from './services/modalLabels'
 import { buildScoreRows } from './services/scoreRows'
@@ -182,6 +183,15 @@ const {
   selectedTournament,
   tournamentParticipants,
 })
+const {
+  toggleTournamentCategory,
+  addParticipantWithCategory,
+  clearParticipantCategory,
+  toggleTournamentStarted,
+  removeParticipantFromTournament,
+  setParticipantClub,
+  toggleClub,
+} = useTournamentActions({ repository: props.repository, notify, selectedCategoryId })
 const selectedParticipantScoreRows = computed(() => buildScoreRows(selectedScoreParticipantId.value, data.value))
 
 const blankClub = () => ({
@@ -749,92 +759,9 @@ async function sendRolePasswordReset(role) {
   notify('If the account exists, a password reset email will be sent')
 }
 
-async function toggleTournamentCategory(tournament, categoryId) {
-  const index = tournament.categoryIds.indexOf(categoryId)
-  const enabled = index === -1
-  if (
-    !(await persistChange(
-      () => props.repository.setTournamentCategory(tournament.id, categoryId, enabled),
-      () => {
-        if (enabled) {
-          tournament.categoryIds.push(categoryId)
-        } else {
-          tournament.categoryIds.splice(index, 1)
-          for (const [participantId, assignedCategoryId] of Object.entries(tournament.categoryAssignments)) {
-            if (assignedCategoryId === categoryId) delete tournament.categoryAssignments[participantId]
-          }
-          if (selectedCategoryId.value === categoryId) selectedCategoryId.value = ''
-        }
-      },
-    ))
-  )
-    return
-}
-
 /** @returns {string} The reason an archer cannot enter the category, or an empty string. */
 function categoryBlockReason(tournament, participant, category) {
   return categoryBlockReasonFor(tournament, participant, category, data.value)
-}
-
-async function addParticipantWithCategory(tournament, participant, event) {
-  const categoryId = event.target.value
-  const category = categoryFor(categoryId)
-  event.target.value = ''
-  if (!category) {
-    notify('Select a valid category')
-    return
-  }
-  const reason = categoryBlockReason(tournament, participant, category)
-  if (reason) {
-    notify(reason)
-    return
-  }
-  await persistChange(
-    () => props.repository.setTournamentParticipant(tournament.id, participant.id, true, categoryId),
-    () => {
-      if (!tournament.participantIds.includes(participant.id)) tournament.participantIds.push(participant.id)
-      tournament.categoryAssignments[participant.id] = categoryId
-    },
-  )
-}
-
-async function clearParticipantCategory(tournament, participant) {
-  await persistChange(
-    () => props.repository.setParticipantCategory(tournament.id, participant.id, ''),
-    () => {
-      delete tournament.categoryAssignments[participant.id]
-    },
-  )
-}
-
-async function toggleTournamentStarted(tournament) {
-  const starting = !tournament.startedAt
-  if (starting && !window.confirm(t('Start this tournament? A club cannot change it after it starts.'))) return
-  const startedAt = starting ? new Date().toISOString() : ''
-  const saved = await persistChange(
-    () => props.repository.setTournamentStarted(tournament.id, startedAt),
-    () => {
-      tournament.startedAt = startedAt
-    },
-  )
-  if (saved) notify(starting ? 'Tournament started' : 'Tournament reopened')
-}
-
-async function removeParticipantFromTournament(tournament, participant) {
-  if (!window.confirm(t('Remove {name} from this tournament?', { name: fullName(participant) }))) return
-  await toggleParticipant(tournament, participant.id)
-}
-
-async function setParticipantClub(participant, event) {
-  const existingClubId = participant.clubId || ''
-  const clubId = event.target.value
-  const saved = await persistChange(
-    () => props.repository.setParticipantClub(participant.id, clubId),
-    () => {
-      participant.clubId = clubId
-    },
-  )
-  if (!saved) event.target.value = existingClubId
 }
 
 function openTournament(tournamentId, tab = 'participants') {
@@ -944,43 +871,6 @@ async function saveParticipant() {
 
   closeModal()
   notify(isEditing ? 'Archer details updated' : 'Archer saved')
-}
-
-async function toggleClub(club) {
-  if (!club.email && !club.userEmail && !club.userEnabled) {
-    notify('Add a club email before enabling access')
-    return
-  }
-  const enabled = !club.userEnabled
-  if (
-    !(await persistChange(
-      () => props.repository.setClubEnabled(club.id, enabled),
-      () => {
-        club.userEnabled = enabled
-      },
-    ))
-  )
-    return
-
-  notify(club.userEnabled ? 'Club user enabled' : 'Club user disabled')
-}
-async function toggleParticipant(tournament, participantId) {
-  const index = tournament.participantIds.indexOf(participantId)
-  const included = index === -1
-  if (
-    !(await persistChange(
-      () => props.repository.setTournamentParticipant(tournament.id, participantId, included),
-      () => {
-        if (included) {
-          tournament.participantIds.push(participantId)
-        } else {
-          tournament.participantIds.splice(index, 1)
-          delete tournament.categoryAssignments[participantId]
-        }
-      },
-    ))
-  )
-    return
 }
 </script>
 
