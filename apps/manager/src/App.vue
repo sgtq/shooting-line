@@ -19,7 +19,9 @@ import PlansPage from './components/PlansPage.vue'
 import TournamentTypesPage from './components/TournamentTypesPage.vue'
 import UserAccessPage from './components/UserAccessPage.vue'
 import { useTheme } from './composables/useTheme'
+import { useArcherRequestActions } from './composables/useArcherRequestActions'
 import { useNavItems } from './composables/useNavItems'
+import { usePlanActions } from './composables/usePlanActions'
 import { usePermissions } from './composables/usePermissions'
 import { useToast } from './composables/useToast'
 import { useManagerStore } from './stores/managerStore'
@@ -33,12 +35,11 @@ import TournamentForm from './components/TournamentForm.vue'
 import AppModal from './components/AppModal.vue'
 import TargetTypeModal from './components/TargetTypeModal.vue'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
-import { summarizeDecision } from './services/archerRequests'
 import { fullName } from './services/display'
+import { makeId } from './services/ids'
 import { modalLabels } from './services/modalLabels'
 import { buildScoreRows } from './services/scoreRows'
 import { categoryBlockReason as categoryBlockReasonFor } from './services/categoryEligibility'
-import { findOverlappingSubscription } from './services/planRules'
 import { datesToForm, resolveDays } from './services/tournamentDates'
 
 const props = defineProps({
@@ -59,10 +60,6 @@ store.load(props.initialData)
 const { data, databaseError, modalError, targetTypeError } = storeToRefs(store)
 const { persistChange, clubFor, tournamentTypeFor, categoryFor, participantById } = store
 
-function makeId() {
-  return crypto.randomUUID()
-}
-
 const selectedTournamentId = ref(data.value.tournaments[0]?.id || '')
 const selectedTournament = computed(() => data.value.tournaments.find((item) => item.id === selectedTournamentId.value))
 const {
@@ -82,6 +79,15 @@ const {
 } = usePermissions(props, data, selectedTournament)
 const visibleNavItems = useNavItems(canManage, isClubUser)
 const { toast, notify } = useToast()
+const { savePlan, savePlanPrice, saveSubscription, setSubscriptionEnd, removeSubscription } = usePlanActions({
+  repository: props.repository,
+  notify,
+})
+const { createArcherRequest, decideArcherRequests } = useArcherRequestActions({
+  repository: props.repository,
+  scope: props.userScope,
+  notify,
+})
 // Clubs have no separate detail page; the edit form is the club's detail view, so users who cannot edit
 // are taken to the Clubs directory instead.
 function openClubDetails(club) {
@@ -572,108 +578,6 @@ async function saveTournamentDates() {
   if (!saved) return
   closeModal()
   notify('Tournament dates updated')
-}
-
-async function savePlan(plan) {
-  const saved = { ...plan, id: plan.id || makeId(), userRole: plan.userRole ?? 'club', isActive: plan.isActive ?? true }
-  await persistChange(
-    () => props.repository.savePlan(saved),
-    () => {
-      data.value.plans ??= []
-      const index = data.value.plans.findIndex((item) => item.id === saved.id)
-      if (index === -1) data.value.plans.push(saved)
-      else data.value.plans[index] = saved
-    },
-  )
-}
-
-async function savePlanPrice(price) {
-  const saved = { ...price, id: makeId() }
-  const wasSaved = await persistChange(
-    () => props.repository.savePlanPrice(saved),
-    () => {
-      data.value.planPrices ??= []
-      data.value.planPrices.push(saved)
-    },
-  )
-  if (wasSaved) notify('Price saved')
-}
-
-async function saveSubscription(subscription) {
-  if (findOverlappingSubscription(data.value.subscriptions ?? [], subscription)) {
-    notify('This account already has a plan during these dates')
-    return
-  }
-  const saved = { ...subscription, id: makeId() }
-  const wasSaved = await persistChange(
-    () => props.repository.saveSubscription(saved),
-    () => {
-      data.value.subscriptions ??= []
-      data.value.subscriptions.push(saved)
-    },
-  )
-  if (wasSaved) notify('Plan assigned')
-}
-
-async function setSubscriptionEnd({ subscription, endsOn }) {
-  const wasSaved = await persistChange(
-    () => props.repository.updateSubscriptionEnd(subscription.id, endsOn),
-    () => {
-      const saved = data.value.subscriptions.find((item) => item.id === subscription.id)
-      if (saved) saved.endsOn = endsOn
-    },
-  )
-  if (wasSaved) notify('End date saved')
-}
-
-async function removeSubscription(subscription) {
-  await persistChange(
-    () => props.repository.removeSubscription(subscription.id),
-    () => {
-      data.value.subscriptions = data.value.subscriptions.filter((item) => item.id !== subscription.id)
-    },
-  )
-}
-
-/** @returns {Promise<void>} */
-async function createArcherRequest(participantId) {
-  const request = {
-    id: makeId(),
-    participantId,
-    clubId: props.userScope.clubId || '',
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-  }
-  const wasSaved = await persistChange(
-    () => props.repository.createArcherRequest(request),
-    () => {
-      data.value.archerRequests ??= []
-      data.value.archerRequests.push(request)
-    },
-  )
-  if (wasSaved) notify('Request sent')
-}
-
-/** @returns {Promise<void>} */
-async function decideArcherRequests({ action, requestIds }) {
-  const status = action === 'approve' ? 'approved' : 'rejected'
-  let results
-  try {
-    results = await props.repository.decideArcherRequests(action, requestIds)
-  } catch (error) {
-    databaseError.value = `${t('Save failed')}: ${error.message}`
-    return
-  }
-  const { succeededIds, failures } = summarizeDecision(results)
-  for (const request of data.value.archerRequests ?? []) {
-    if (succeededIds.includes(request.id)) request.status = status
-  }
-  if (failures.length) {
-    databaseError.value = `${t('Some requests could not be decided')}: ${failures.join('; ')}`
-    return
-  }
-  databaseError.value = ''
-  notify(action === 'approve' ? 'Requests approved' : 'Requests rejected')
 }
 
 async function saveTournamentType() {
