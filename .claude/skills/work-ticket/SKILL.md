@@ -38,11 +38,14 @@ from the code, ask the user before planning.
 
 - Never work on `develop` or `main`. Check `git branch --show-current` and `git status`.
 - If the current branch already fits this ticket and the tree is clean, use it.
-- Otherwise create a branch from the up to date `develop` (fetch first) named `feat/...`, `fix/...`,
-  `test/...`, or `docs/...` to match the ticket. If `develop` does not exist locally or remotely, ask
-  which base to use. Create it with `gh issue develop <number> --name <branch> --base develop` so the
-  branch is linked to the issue. Its PR then shows in the issue's Development section. The default
-  branch is `main`, so `Closes #N` alone does not make that link.
+- Otherwise create a branch from the up to date `develop` (fetch first), named
+  `<app>/<type>/<short-name>`. `<app>` is the ticket's `app:*` label without the prefix, `<type>` is
+  `feat`, `fix`, `test`, `docs`, or `refactor`, and `<short-name>` is a few lowercase words joined by
+  hyphens that sum up the ticket (for example `manager/feat/move-saves-out-of-app`). If `develop` does
+  not exist locally or remotely, ask which base to use. Create it with
+  `gh issue develop <number> --name <branch> --base develop` so the branch is linked to the issue. Its
+  PR then shows in the issue's Development section. The default branch is `main`, so `Closes #N` alone
+  does not make that link.
 - If the tree has uncommitted changes that do not belong to this ticket, never stash, reset, or switch
   over them. Use a git worktree for the new branch as the default:
   `git worktree add ../shooting-line-<slug> -b <branch> origin/develop`. Run `npm install` there and do
@@ -51,7 +54,7 @@ from the code, ask the user before planning.
 - If a plain fetch fails with an SSL certificate error on Windows, retry with
   `git -c http.sslBackend=schannel fetch origin`.
 
-Once on the branch, set the ticket to In Progress now (see step 7).
+Once on the new branch, move the ticket to In Progress right away (see step 7).
 
 ## 4. Plan, then confirm
 

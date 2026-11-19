@@ -5,6 +5,14 @@
 - Before creating a PR, show the full draft (title and body) in chat and wait for approval.
 - Before committing, show the draft commit message in chat and wait for approval.
 
+## Branches
+
+- Each ticket gets its own branch, created from the up to date `develop`.
+- Name it `<app>/<type>/<short-name>`: the `app:*` label without the prefix, the change type (`feat`, `fix`,
+  `test`, `docs`, `refactor`), then a few hyphenated words, for example `manager/feat/move-saves-out-of-app`.
+- Create it with `gh issue develop <issue> --name <branch> --base develop` so it links to the issue.
+- Right after creating the branch, move the issue to In Progress in the `ShootingLine` project.
+
 ## Tickets and PR titles
 
 - Tickets are GitHub issues in one project, `ShootingLine` (`sgtq`, number 8). Each has one `app:*` label and
