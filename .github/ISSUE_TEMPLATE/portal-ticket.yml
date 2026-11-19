@@ -1,0 +1,26 @@
+name: Portal ticket
+description: A feature, fix, or task for the portal and app launcher (apps/portal)
+labels: ['app:portal']
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What is needed
+      description: Say what to build or fix and why, in plain language.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: How we know it is done
+      description: The behavior to check, including edge cases and failure paths.
+  - type: input
+    id: depends
+    attributes:
+      label: Depends on
+      description: Issue numbers that must be done first, for example #52, #54.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Links, screenshots, or open questions.
