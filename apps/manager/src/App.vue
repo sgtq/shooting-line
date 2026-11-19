@@ -23,6 +23,7 @@ import { useArcherRequestActions } from './composables/useArcherRequestActions'
 import { useNavItems } from './composables/useNavItems'
 import { usePlanActions } from './composables/usePlanActions'
 import { usePermissions } from './composables/usePermissions'
+import { useScoring } from './composables/useScoring'
 import { useToast } from './composables/useToast'
 import { useManagerStore } from './stores/managerStore'
 import CategoryForm from './components/CategoryForm.vue'
@@ -99,10 +100,7 @@ const search = ref('')
 const participantClubFilter = ref('')
 const participantDirectorySearch = ref('')
 const tournamentStatusFilter = ref('upcoming')
-const selectedRounds = ref({})
-const selectedCategories = ref({})
 const selectedTournamentTab = ref('participants')
-const newRoundName = ref('')
 const selectedScoreParticipantId = ref('')
 const editingTournamentTypeId = ref('')
 const editingCategoryId = ref('')
@@ -134,22 +132,6 @@ const targetTypeOptions = computed(() => {
 const selectedScoreParticipant = computed(() =>
   data.value.participants.find((person) => person.id === selectedScoreParticipantId.value),
 )
-const selectedRound = computed({
-  get() {
-    return selectedRounds.value[selectedTournamentId.value] || selectedTournament.value?.rounds?.[0] || ''
-  },
-  set(round) {
-    if (selectedTournamentId.value) selectedRounds.value[selectedTournamentId.value] = round
-  },
-})
-const selectedCategoryId = computed({
-  get() {
-    return selectedCategories.value[selectedTournamentId.value] || ''
-  },
-  set(categoryId) {
-    if (selectedTournamentId.value) selectedCategories.value[selectedTournamentId.value] = categoryId
-  },
-})
 const currentNavPage = computed(() =>
   activePage.value === 'tournament-detail'
     ? 'tournaments'
@@ -182,33 +164,24 @@ const tournamentParticipants = computed(() => {
     .map((id) => data.value.participants.find((person) => person.id === id))
     .filter(Boolean)
 })
-const scoreRows = computed(() =>
-  tournamentParticipants.value.map((participant) => ({
-    participant,
-    categoryId: selectedTournament.value?.categoryAssignments?.[participant.id] || '',
-    score:
-      data.value.scores.find(
-        (item) =>
-          item.tournamentId === selectedTournamentId.value &&
-          item.participantId === participant.id &&
-          item.round === selectedRound.value,
-      )?.score ?? '',
-  })),
-)
-const olympicMatches = computed(() =>
-  data.value.matches.filter(
-    (match) =>
-      match.tournamentId === selectedTournamentId.value &&
-      (match.sourceRound || selectedTournament.value?.rounds?.[0]) === selectedRound.value &&
-      (match.categoryId || '') === selectedCategoryId.value,
-  ),
-)
-const scoredCount = computed(
-  () =>
-    data.value.scores.filter(
-      (item) => item.tournamentId === selectedTournamentId.value && item.round === selectedRound.value,
-    ).length,
-)
+const {
+  selectedRound,
+  selectedCategoryId,
+  newRoundName,
+  scoreRows,
+  olympicMatches,
+  scoredCount,
+  addRound,
+  saveScore,
+  generateMatches,
+  recordMatchScore,
+} = useScoring({
+  repository: props.repository,
+  notify,
+  selectedTournamentId,
+  selectedTournament,
+  tournamentParticipants,
+})
 const selectedParticipantScoreRows = computed(() => buildScoreRows(selectedScoreParticipantId.value, data.value))
 
 const blankClub = () => ({
@@ -876,27 +849,6 @@ function openScoreDetails(participantId) {
   activePage.value = 'score-detail'
 }
 
-async function addRound() {
-  const name = newRoundName.value.trim()
-  if (!name || !selectedTournament.value) return
-  if (selectedTournament.value.rounds.some((round) => round.toLowerCase() === name.toLowerCase())) {
-    notify('That round already exists for this tournament')
-    return
-  }
-  if (
-    !(await persistChange(
-      () =>
-        props.repository.addTournamentRound(selectedTournamentId.value, name, selectedTournament.value.rounds.length),
-      () => selectedTournament.value.rounds.push(name),
-    ))
-  )
-    return
-
-  selectedRound.value = name
-  newRoundName.value = ''
-  notify('Round added to this tournament')
-}
-
 /** @returns {string} Why the chosen category cannot be used, or an empty string when it can. */
 function categoryChoiceProblem(tournament, participant, categoryId) {
   if (!tournament.categoryIds.length) return ''
@@ -1025,154 +977,6 @@ async function toggleParticipant(tournament, participantId) {
           tournament.participantIds.splice(index, 1)
           delete tournament.categoryAssignments[participantId]
         }
-      },
-    ))
-  )
-    return
-}
-
-async function saveScore(participantId, value) {
-  if (value === '' || value === null) {
-    await persistChange(
-      () =>
-        props.repository.saveScore({
-          tournamentId: selectedTournamentId.value,
-          participantId,
-          round: selectedRound.value,
-          score: null,
-        }),
-      () => {
-        data.value.scores = data.value.scores.filter(
-          (item) =>
-            !(
-              item.tournamentId === selectedTournamentId.value &&
-              item.participantId === participantId &&
-              item.round === selectedRound.value
-            ),
-        )
-      },
-    )
-    return
-  }
-  const numericScore = Number(value)
-  if (!Number.isFinite(numericScore) || numericScore < 0) {
-    notify('Enter a non-negative score')
-    return
-  }
-  const existing = data.value.scores.find(
-    (item) =>
-      item.tournamentId === selectedTournamentId.value &&
-      item.participantId === participantId &&
-      item.round === selectedRound.value,
-  )
-  const categoryId = selectedTournament.value?.categoryAssignments?.[participantId] || ''
-  const score = {
-    tournamentId: selectedTournamentId.value,
-    participantId,
-    round: selectedRound.value,
-    categoryId,
-    score: numericScore,
-  }
-  await persistChange(
-    () => props.repository.saveScore(score),
-    () => {
-      if (existing) Object.assign(existing, score)
-      else data.value.scores.push(score)
-    },
-  )
-}
-
-async function generateMatches() {
-  if (selectedTournament.value?.categoryIds.length && !selectedCategoryId.value) {
-    notify('Select a tournament category before seeding Olympic matches')
-    return
-  }
-  const eligibleParticipants = tournamentParticipants.value.filter(
-    (participant) =>
-      !selectedTournament.value?.categoryIds.length ||
-      selectedTournament.value.categoryAssignments[participant.id] === selectedCategoryId.value,
-  )
-  const ranked = eligibleParticipants
-    .map((participant) => ({
-      participant,
-      score: data.value.scores.find(
-        (item) =>
-          item.tournamentId === selectedTournamentId.value &&
-          item.participantId === participant.id &&
-          item.round === selectedRound.value,
-      )?.score,
-    }))
-    .filter((entry) => entry.score !== undefined)
-    .sort((a, b) => b.score - a.score)
-  if (ranked.length < 2) {
-    notify('Enter at least two scores for this round before seeding matches')
-    return
-  }
-  if (ranked.length % 2 !== 0) {
-    notify('An even number of scored participants is required; byes are not supported yet')
-    return
-  }
-  const half = Math.floor(ranked.length / 2)
-  const newMatches = Array.from({ length: half }, (_, index) => {
-    const higherSeed = ranked[index]
-    const lowerSeed = ranked[ranked.length - index - 1]
-    return {
-      id: makeId(),
-      tournamentId: selectedTournamentId.value,
-      sourceRound: selectedRound.value,
-      categoryId: selectedCategoryId.value,
-      round:
-        ranked.length === 2
-          ? 'Final'
-          : ranked.length === 4
-            ? 'Semifinal'
-            : ranked.length === 8
-              ? 'Quarterfinal'
-              : ranked.length === 16 || ranked.length === 32
-                ? `Round of ${ranked.length}`
-                : `Opening round (${ranked.length} archers)`,
-      seed1Id: higherSeed.participant.id,
-      seed2Id: lowerSeed.participant.id,
-      seed1: index + 1,
-      seed2: ranked.length - index,
-      score1: '',
-      score2: '',
-    }
-  })
-  if (
-    !(await persistChange(
-      () =>
-        props.repository.replaceMatches(
-          selectedTournamentId.value,
-          selectedRound.value,
-          selectedCategoryId.value,
-          newMatches,
-        ),
-      () => {
-        data.value.matches = [
-          ...data.value.matches.filter(
-            (match) =>
-              match.tournamentId !== selectedTournamentId.value ||
-              (match.sourceRound || selectedTournament.value?.rounds?.[0]) !== selectedRound.value ||
-              (match.categoryId || '') !== selectedCategoryId.value,
-          ),
-          ...newMatches,
-        ]
-      },
-    ))
-  )
-    return
-
-  notify('{count} first-round matches seeded', { count: newMatches.length })
-}
-
-async function recordMatchScore(match, side, value) {
-  const score = value === '' ? '' : Math.max(0, Number(value) || 0)
-  if (
-    !(await persistChange(
-      () => props.repository.setMatchScore(match.id, side, score),
-      () => {
-        match[side] = score
       },
     ))
   )
