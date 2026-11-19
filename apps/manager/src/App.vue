@@ -10,6 +10,7 @@ import ClubsPage from './components/ClubsPage.vue'
 import DashboardPage from './components/DashboardPage.vue'
 import TournamentCategoriesTab from './components/TournamentCategoriesTab.vue'
 import TournamentDetailPage from './components/TournamentDetailPage.vue'
+import TournamentOlympicTab from './components/TournamentOlympicTab.vue'
 import TournamentScoresTab from './components/TournamentScoresTab.vue'
 import TournamentsPage from './components/TournamentsPage.vue'
 import ParticipantsPage from './components/ParticipantsPage.vue'
@@ -1691,88 +1692,19 @@ async function recordMatchScore(match, side, value) {
             @save-score="saveScore"
             @view-archers="selectedTournamentTab = 'participants'"
           />
-          <section v-else>
-            <div class="olympic-toolbar">
-              <label class="select-field"
-                ><span>{{ t('CATEGORY') }}</span
-                ><select v-model="selectedCategoryId" :disabled="!canManage">
-                  <option value="">{{ t('All archers') }}</option>
-                  <option v-for="categoryId in selectedTournament.categoryIds" :key="categoryId" :value="categoryId">
-                    {{ categoryFor(categoryId)?.name }}
-                  </option>
-                </select></label
-              >
-              <div>
-                <span class="contact-label">{{ t('SEEDING SCORES FROM') }}</span><strong class="round-label">{{
-                  selectedRound
-                }}</strong>
-              </div>
-              <span class="seed-note"><span>↕</span> {{ t('1st place vs. last place · 2nd vs. second-last') }}</span>
-              <button v-if="canManage" class="button button-primary" @click="generateMatches">
-                <span>✦</span> {{ t('Seed from round scores') }}
-              </button>
-            </div>
-            <div v-if="olympicMatches.length" class="matches-grid">
-              <section v-for="(match, index) in olympicMatches" :key="match.id" class="match-card">
-                <div class="match-head">
-                  <span>{{ match.round }}</span><span class="match-number"
-                    >{{ t('MATCH') }} {{ String(index + 1).padStart(2, '0') }}</span
-                  >
-                </div>
-                <div class="match-archer">
-                  <span class="seed-badge">{{ match.seed1 }}</span><strong>{{
-                    fullName(participantById(match.seed1Id) || { firstName: t('Unknown'), lastName: '' })
-                  }}</strong
-                  ><input
-                    class="sl-score"
-                    type="number"
-                    min="0"
-                    :value="match.score1"
-                    placeholder="—"
-                    :disabled="!canManage"
-                    @change="recordMatchScore(match, 'score1', $event.target.value)"
-                  />
-                </div>
-                <div class="match-divider">
-                  <span>{{ t('VS') }}</span>
-                </div>
-                <div class="match-archer">
-                  <span class="seed-badge">{{ match.seed2 }}</span><strong>{{
-                    fullName(participantById(match.seed2Id) || { firstName: t('Unknown'), lastName: '' })
-                  }}</strong
-                  ><input
-                    class="sl-score"
-                    type="number"
-                    min="0"
-                    :value="match.score2"
-                    placeholder="—"
-                    :disabled="!canManage"
-                    @change="recordMatchScore(match, 'score2', $event.target.value)"
-                  />
-                </div>
-                <div class="match-foot">
-                  <span>{{
-                    match.score1 !== '' && match.score2 !== '' ? 'Scores recorded' : 'Enter both match scores'
-                  }}</span><i :class="{ complete: match.score1 !== '' && match.score2 !== '' }"></i>
-                </div>
-              </section>
-            </div>
-            <section v-else class="panel empty-state bracket-empty">
-              <div class="empty-icon">⌁</div>
-              <strong>{{ t('No matches seeded yet') }}</strong>
-              <p>{{ t('Record at least two scores for this tournament round. Highest seed faces lowest seed.') }}</p>
-              <button class="button button-outline" @click="selectedTournamentTab = 'scores'">
-                {{ t('Enter round scores') }}
-              </button>
-            </section>
-            <p class="bracket-note">
-              {{
-                t(
-                  'First-round pairings belong to this tournament. Re-seeding replaces its current first-round matches.',
-                )
-              }}
-            </p>
-          </section>
+          <TournamentOlympicTab
+            v-else
+            v-model:category-id="selectedCategoryId"
+            :tournament="selectedTournament"
+            :categories="data.categories"
+            :participants="data.participants"
+            :matches="olympicMatches"
+            :round="selectedRound"
+            :can-manage="canManage"
+            @generate="generateMatches"
+            @record-score="recordMatchScore"
+            @view-scores="selectedTournamentTab = 'scores'"
+          />
           <template #empty>
             <strong>{{ t('Tournament not found') }}</strong><button
               class="button button-outline"
