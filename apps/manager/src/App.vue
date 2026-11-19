@@ -2,7 +2,7 @@
 import { t } from '@shooting-line/i18n'
 import LanguageSwitcher from '@shooting-line/i18n/LanguageSwitcher.vue'
 import { storeToRefs } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import CategoriesPage from './components/CategoriesPage.vue'
 import ClubsPage from './components/ClubsPage.vue'
@@ -25,7 +25,10 @@ import { usePlanActions } from './composables/usePlanActions'
 import { usePermissions } from './composables/usePermissions'
 import { useScoring } from './composables/useScoring'
 import { useTournamentActions } from './composables/useTournamentActions'
+import { useDialogSaves } from './composables/useDialogSaves'
+import { useDialogs } from './composables/useDialogs'
 import { useToast } from './composables/useToast'
+import { useUserAccessActions } from './composables/useUserAccessActions'
 import { useManagerStore } from './stores/managerStore'
 import CategoryForm from './components/CategoryForm.vue'
 import ClubForm from './components/ClubForm.vue'
@@ -38,11 +41,7 @@ import AppModal from './components/AppModal.vue'
 import TargetTypeModal from './components/TargetTypeModal.vue'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
 
-import { makeId } from './services/ids'
-import { modalLabels } from './services/modalLabels'
 import { buildScoreRows } from './services/scoreRows'
-import { categoryBlockReason as categoryBlockReasonFor } from './services/categoryEligibility'
-import { datesToForm, resolveDays } from './services/tournamentDates'
 
 const props = defineProps({
   initialData: { type: Object, required: true },
@@ -60,7 +59,6 @@ const { theme, toggleTheme } = useTheme()
 const store = useManagerStore()
 store.load(props.initialData)
 const { data, databaseError, modalError, targetTypeError } = storeToRefs(store)
-const { persistChange, clubFor, tournamentTypeFor, categoryFor, participantById } = store
 
 const selectedTournamentId = ref(data.value.tournaments[0]?.id || '')
 const selectedTournament = computed(() => data.value.tournaments.find((item) => item.id === selectedTournamentId.value))
@@ -103,32 +101,8 @@ const participantDirectorySearch = ref('')
 const tournamentStatusFilter = ref('upcoming')
 const selectedTournamentTab = ref('participants')
 const selectedScoreParticipantId = ref('')
-const editingTournamentTypeId = ref('')
-const editingCategoryId = ref('')
-const editingUserRoleId = ref('')
-const modalFlow = ref(null)
-const showModal = ref(false)
-const modalType = ref('')
-const showTargetTypeModal = ref(false)
-const targetTypeName = ref('')
-const assignNewParticipant = ref(false)
-// Matches for what the user types in the add-archer form. Each has a one-time token and never a database ID.
-const archerMatches = ref([])
-const selectedMatchToken = ref('')
-let archerSearchTimer = null
-let archerSearchRun = 0
-const editingClubId = ref('')
-const editingParticipantId = ref('')
 const tournamentQuery = ref('')
 const userName = ref(props.userName)
-const targetTypeOptions = computed(() => {
-  const options = data.value.targetTypes.map((type) => type.name)
-  const selected = form.value.targetType
-  if (selected && !options.some((name) => name.toLowerCase() === selected.toLowerCase())) {
-    options.push(selected)
-  }
-  return options
-})
 
 const selectedScoreParticipant = computed(() =>
   data.value.participants.find((person) => person.id === selectedScoreParticipantId.value),
@@ -140,7 +114,6 @@ const currentNavPage = computed(() =>
       ? 'participants'
       : activePage.value,
 )
-// A tournament still counts as next while its last day has not passed.
 const roleSummary = computed(() => {
   const roleLabels = {
     admin: 'System admin',
@@ -156,9 +129,6 @@ const roleSummary = computed(() => {
 // Name-only archers (other clubs') appear in tournaments and scores but never in the directory or its pickers,
 // so a club cannot browse archers it does not own.
 const directoryParticipants = computed(() => data.value.participants.filter((person) => !person.nameOnly))
-const selectedMatch = computed(
-  () => archerMatches.value.find((match) => match.token === selectedMatchToken.value) || null,
-)
 const tournamentParticipants = computed(() => {
   if (!selectedTournament.value) return []
   return selectedTournament.value.participantIds
@@ -193,576 +163,62 @@ const {
   toggleClub,
 } = useTournamentActions({ repository: props.repository, notify, selectedCategoryId })
 const selectedParticipantScoreRows = computed(() => buildScoreRows(selectedScoreParticipantId.value, data.value))
-
-const blankClub = () => ({
-  name: '',
-  representative: '',
-  phone: '',
-  email: '',
-  website: '',
-  address: '',
-  mapUrl: '',
-  logoUrl: '',
-  logoFile: null,
-  logoPreview: '',
-  userEmail: '',
-  userEnabled: false,
+const dialogs = useDialogs({
+  repository: props.repository,
+  userScope: props.userScope,
+  userName,
+  canManage,
+  isClubUser,
+  canSearchArchers,
+  selectedTournamentId,
+  participantClubFilter,
 })
-const blankTournament = () => ({
-  name: '',
-  dateMode: 'range',
-  startDate: '',
-  endDate: '',
-  days: [''],
-  discipline: 'Outdoor target',
-  tournamentTypeId: data.value.tournamentTypes[0]?.id || '',
-  clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : data.value.clubs[0]?.id || '',
-  venueMode: 'club',
-  customAddress: '',
+const {
+  form,
+  showModal,
+  modalType,
+  modalText,
+  showTargetTypeModal,
+  targetTypeName,
+  targetTypeOptions,
+  assignNewParticipant,
+  editingParticipantId,
+  archerMatches,
+  selectedMatchToken,
+  selectedMatch,
+  openModal,
+  openTournamentChildModal,
+  handleClubLogoSelection,
+  addParticipantToClub,
+  addParticipantToTournament,
+  editClub,
+  editParticipant,
+  editTournamentType,
+  editCategory,
+  closeModal,
+  openTargetTypeModal,
+  closeTargetTypeModal,
+  clearArcherForm,
+  openTournamentDatesModal,
+} = dialogs
+const { submitModal, saveTargetType, sendOwnPasswordReset } = useDialogSaves({
+  repository: props.repository,
+  notify,
+  userId: props.userId,
+  userEmail: props.userEmail,
+  userScope: props.userScope,
+  userName,
+  canManage,
+  isClubUser,
+  canCreateTournament,
+  canEditTournament,
+  selectedTournament,
+  selectedTournamentId,
+  selectedTournamentTab,
+  activePage,
+  dialogs,
 })
-const blankTournamentType = () => ({
-  name: '',
-  distance: '',
-  distanceUnit: 'm',
-  targetType: data.value.targetTypes[0]?.name || '',
-  ends: '',
-  arrowsPerEnd: '',
-})
-const blankCategory = () => ({
-  name: '',
-  minAge: '',
-  maxAge: '',
-  bowType: '',
-  sortOrder: '',
-  levelExempt: false,
-})
-const blankParticipant = () => ({
-  firstName: '',
-  lastName: '',
-  birthDate: '',
-  waId: '',
-  aetayId: '',
-  email: '',
-  clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : '',
-  // Only used when the archer is created from a tournament roster. They are not saved on the archer.
-  bowType: '',
-  categoryId: '',
-})
-const blankUserRole = () => ({
-  email: '',
-  role: 'manager',
-  displayName: '',
-})
-const form = ref({})
-// Searches while the user types: the affiliation IDs first, then the name. Only the add-archer form searches, and
-// only for users who may change data, so a club without an active plan never reaches the database.
-watch(() => [form.value.waId, form.value.aetayId, form.value.lastName, form.value.firstName], scheduleArcherSearch)
-
-/** @returns {void} */
-function scheduleArcherSearch() {
-  window.clearTimeout(archerSearchTimer)
-  selectedMatchToken.value = ''
-  const isAddingArcher = showModal.value && modalType.value === 'participant' && !editingParticipantId.value
-  const query = {
-    affiliationId: (form.value.waId || '').trim() || (form.value.aetayId || '').trim(),
-    lastName: (form.value.lastName || '').trim(),
-    firstName: (form.value.firstName || '').trim(),
-    tournamentId: assignNewParticipant.value ? selectedTournamentId.value : '',
-  }
-  if (!isAddingArcher || !canSearchArchers.value || (!query.affiliationId && query.lastName.length < 3)) {
-    archerSearchRun += 1
-    archerMatches.value = []
-    return
-  }
-  const run = (archerSearchRun += 1)
-  archerSearchTimer = window.setTimeout(async () => {
-    try {
-      const found = await props.repository.searchArchers(query)
-      if (run === archerSearchRun) archerMatches.value = found
-    } catch (error) {
-      if (run !== archerSearchRun) return
-      archerMatches.value = []
-      modalError.value = `${t('Archer search failed')}: ${error.message}`
-    }
-  }, 300)
-}
-
-const modalText = computed(() => {
-  const editingByType = {
-    club: editingClubId.value,
-    tournamentType: editingTournamentTypeId.value,
-    category: editingCategoryId.value,
-    participant: editingParticipantId.value,
-  }
-  return modalLabels(modalType.value, {
-    editing: Boolean(editingByType[modalType.value]),
-    hasMatch: Boolean(selectedMatch.value),
-    hasParentForm: Boolean(modalFlow.value),
-  })
-})
-
-/** @returns {Promise<void>} Runs the save of the open dialog. */
-async function submitModal() {
-  const saves = {
-    club: saveClub,
-    tournament: saveTournament,
-    tournamentDates: saveTournamentDates,
-    tournamentType: saveTournamentType,
-    category: saveCategory,
-    userRole: saveUserRole,
-    profile: saveUserProfile,
-  }
-  await (saves[modalType.value] ?? saveParticipant)()
-}
-
-function openModal(type, assignToCurrentTournament = false) {
-  releaseClubLogoPreview()
-  modalFlow.value = null
-  databaseError.value = ''
-  modalError.value = ''
-  targetTypeError.value = ''
-  showTargetTypeModal.value = false
-  modalType.value = type
-  assignNewParticipant.value = assignToCurrentTournament
-  window.clearTimeout(archerSearchTimer)
-  archerSearchRun += 1
-  archerMatches.value = []
-  selectedMatchToken.value = ''
-  editingClubId.value = ''
-  editingParticipantId.value = ''
-  editingTournamentTypeId.value = ''
-  editingCategoryId.value = ''
-  editingUserRoleId.value = ''
-  form.value =
-    type === 'club'
-      ? blankClub()
-      : type === 'tournament'
-        ? blankTournament()
-        : type === 'tournamentType'
-          ? blankTournamentType()
-          : type === 'category'
-            ? blankCategory()
-            : type === 'userRole'
-              ? blankUserRole()
-              : type === 'profile'
-                ? { displayName: userName.value }
-                : blankParticipant()
-  showModal.value = true
-}
-
-function openTournamentChildModal(type) {
-  modalFlow.value = {
-    parentType: 'tournament',
-    parentForm: { ...form.value },
-    linkField: type === 'club' ? 'clubId' : 'tournamentTypeId',
-  }
-  editingClubId.value = ''
-  editingTournamentTypeId.value = ''
-  modalType.value = type
-  form.value = type === 'club' ? blankClub() : blankTournamentType()
-}
-
-function returnToParentModal(record) {
-  if (!modalFlow.value) return false
-
-  const flow = modalFlow.value
-  releaseClubLogoPreview()
-  modalFlow.value = null
-  modalType.value = flow.parentType
-  form.value = { ...flow.parentForm, [flow.linkField]: record.id }
-  return true
-}
-
-function releaseClubLogoPreview() {
-  if (form.value.logoFile && form.value.logoPreview) {
-    URL.revokeObjectURL(form.value.logoPreview)
-  }
-}
-
-function handleClubLogoSelection(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2_000_000) {
-    modalError.value = t('Choose a JPG, PNG, or WebP logo smaller than 2 MB.')
-    event.target.value = ''
-    return
-  }
-
-  releaseClubLogoPreview()
-  form.value.logoFile = file
-  form.value.logoPreview = URL.createObjectURL(file)
-  modalError.value = ''
-}
-
-function addParticipantToClub(clubId) {
-  openModal('participant')
-  form.value.clubId = clubId
-}
-
-function addParticipantToTournament() {
-  openModal('participant', true)
-  if (participantClubFilter.value && participantClubFilter.value !== '__unassigned__') {
-    form.value.clubId = participantClubFilter.value
-  }
-}
-
-function editClub(club) {
-  modalType.value = 'club'
-  editingClubId.value = club.id
-  form.value = { ...club, logoFile: null, logoPreview: club.logoUrl }
-  showModal.value = true
-}
-
-function editParticipant(person) {
-  modalType.value = 'participant'
-  editingParticipantId.value = person.id
-  form.value = { ...person }
-  showModal.value = true
-}
-
-function editTournamentType(type) {
-  modalType.value = 'tournamentType'
-  editingTournamentTypeId.value = type.id
-  form.value = { ...type }
-  showModal.value = true
-}
-
-function editCategory(category) {
-  modalType.value = 'category'
-  editingCategoryId.value = category.id
-  form.value = { ...category }
-  showModal.value = true
-}
-
-function closeModal() {
-  if (modalFlow.value) {
-    const flow = modalFlow.value
-    releaseClubLogoPreview()
-    modalFlow.value = null
-    modalType.value = flow.parentType
-    form.value = flow.parentForm
-    modalError.value = ''
-    return
-  }
-
-  releaseClubLogoPreview()
-  showModal.value = false
-  showTargetTypeModal.value = false
-  modalError.value = ''
-  targetTypeError.value = ''
-  editingClubId.value = ''
-  editingParticipantId.value = ''
-  editingTournamentTypeId.value = ''
-  editingCategoryId.value = ''
-  editingUserRoleId.value = ''
-}
-
-async function saveClub() {
-  const isEditing = Boolean(editingClubId.value)
-  const existingClub = isEditing ? clubFor(editingClubId.value) : null
-  const hadUserEnabled = Boolean(existingClub?.userEnabled)
-  const { logoFile } = form.value
-  const clubForm = { ...form.value }
-  delete clubForm.logoFile
-  delete clubForm.logoPreview
-  clubForm.email = (clubForm.email || '').trim()
-  clubForm.userEmail = clubForm.email || (clubForm.userEmail || '').trim()
-  if (!clubForm.userEmail) clubForm.userEnabled = false
-  const club = { ...clubForm, id: editingClubId.value || makeId() }
-  const saved = await persistChange(
-    async () => {
-      if (logoFile) club.logoUrl = await props.repository.uploadClubLogo(club.id, logoFile)
-      await props.repository.saveClub(club, {
-        syncUserAccess: canManage.value,
-        hadUserEnabled,
-      })
-    },
-    () => {
-      if (isEditing && existingClub) {
-        Object.assign(existingClub, club)
-      } else if (!isEditing) {
-        data.value.clubs.unshift(club)
-      }
-    },
-    'modal',
-  )
-  if (!saved) return
-
-  if (returnToParentModal(club)) {
-    notify('Club added')
-    return
-  }
-  closeModal()
-  notify(isEditing ? 'Club details updated' : 'Club added')
-}
-
-async function saveTournament() {
-  if (!canCreateTournament.value) {
-    notify('An active plan is required to create tournaments')
-    return
-  }
-  if (form.value.venueMode === 'club' && !form.value.clubId) {
-    notify('Select a host club or use a custom address')
-    return
-  }
-  const { dateMode, startDate, endDate, days, ...details } = form.value
-  const { dates, error: dateError } = resolveDays({ dateMode, startDate, endDate, days })
-  if (dateError) {
-    modalError.value = t(dateError)
-    return
-  }
-  const tournament = {
-    ...details,
-    dates,
-    // A club user can only host for their own club, whatever the form holds.
-    clubId: canManage.value ? form.value.clubId : props.userScope.clubId,
-    id: makeId(),
-    rounds: ['Qualification'],
-    participantIds: [],
-    categoryIds: [],
-    categoryAssignments: {},
-  }
-  if (
-    !(await persistChange(
-      () => props.repository.saveTournament(tournament),
-      () => data.value.tournaments.unshift(tournament),
-      'modal',
-    ))
-  )
-    return
-
-  selectedTournamentId.value = tournament.id
-  selectedTournamentTab.value = 'participants'
-  closeModal()
-  activePage.value = 'tournament-detail'
-  notify('Tournament created')
-}
-
-function openTournamentDatesModal(tournament) {
-  openModal('tournamentDates')
-  form.value = datesToForm(tournament.dates)
-}
-
-async function saveTournamentDates() {
-  const tournament = selectedTournament.value
-  if (!tournament || !canEditTournament.value) return
-  const { dates, error } = resolveDays(form.value)
-  if (error) {
-    modalError.value = t(error)
-    return
-  }
-  const saved = await persistChange(
-    () => props.repository.saveTournamentDates(tournament.id, dates),
-    () => {
-      tournament.dates = dates
-    },
-    'modal',
-  )
-  if (!saved) return
-  closeModal()
-  notify('Tournament dates updated')
-}
-
-async function saveTournamentType() {
-  const isEditing = Boolean(editingTournamentTypeId.value)
-  const type = {
-    ...form.value,
-    id: editingTournamentTypeId.value || makeId(),
-    distance: Number(form.value.distance),
-    ends: Number(form.value.ends),
-    arrowsPerEnd: Number(form.value.arrowsPerEnd),
-  }
-  const saved = await persistChange(
-    () => props.repository.saveTournamentType(type),
-    () => {
-      if (isEditing) {
-        const existing = tournamentTypeFor(type.id)
-        if (existing) Object.assign(existing, type)
-      } else {
-        data.value.tournamentTypes.push(type)
-      }
-    },
-    'modal',
-  )
-  if (!saved) return
-
-  if (returnToParentModal(type)) {
-    notify('Tournament type added')
-    return
-  }
-  closeModal()
-  notify(isEditing ? 'Tournament type updated' : 'Tournament type created')
-}
-
-function openTargetTypeModal() {
-  targetTypeName.value = ''
-  targetTypeError.value = ''
-  showTargetTypeModal.value = true
-}
-
-function closeTargetTypeModal() {
-  showTargetTypeModal.value = false
-  targetTypeError.value = ''
-}
-
-async function saveTargetType() {
-  const name = targetTypeName.value.trim()
-  if (!name) {
-    targetTypeError.value = t('Enter a target type name.')
-    return
-  }
-
-  const existing = data.value.targetTypes.find((type) => type.name.toLowerCase() === name.toLowerCase())
-  if (existing) {
-    form.value.targetType = existing.name
-    closeTargetTypeModal()
-    return
-  }
-
-  const targetType = { id: makeId(), name }
-  const saved = await persistChange(
-    () => props.repository.saveTargetType(targetType),
-    () => data.value.targetTypes.push(targetType),
-    'targetType',
-  )
-  if (!saved) return
-
-  form.value.targetType = targetType.name
-  closeTargetTypeModal()
-}
-
-async function saveCategory() {
-  const isEditing = Boolean(editingCategoryId.value)
-  const category = {
-    ...form.value,
-    id: editingCategoryId.value || makeId(),
-    minAge: form.value.minAge === '' ? null : Number(form.value.minAge),
-    maxAge: form.value.maxAge === '' ? null : Number(form.value.maxAge),
-    // Exempt categories are not ranked, so their order is stored as 0 and never read.
-    sortOrder: form.value.levelExempt ? 0 : Number(form.value.sortOrder),
-    levelExempt: Boolean(form.value.levelExempt),
-  }
-  if (category.minAge !== null && category.maxAge !== null && category.minAge > category.maxAge) {
-    notify('Minimum age cannot be greater than maximum age')
-    return
-  }
-  const saved = await persistChange(
-    () => props.repository.saveCategory(category),
-    () => {
-      if (isEditing) {
-        const existing = categoryFor(category.id)
-        if (existing) Object.assign(existing, category)
-      } else {
-        data.value.categories.push(category)
-      }
-    },
-    'modal',
-  )
-  if (!saved) return
-
-  closeModal()
-  notify(isEditing ? 'Category updated' : 'Category created')
-}
-
-async function saveUserRole() {
-  const role = {
-    email: form.value.email.trim(),
-    role: 'manager',
-    displayName: form.value.displayName.trim(),
-  }
-  let userId
-  const saved = await persistChange(
-    async () => {
-      userId = await props.repository.assignUserRole(role)
-    },
-    () => {
-      const assigned = {
-        userId,
-        email: role.email,
-        role: role.role,
-        clubId: '',
-        participantId: '',
-      }
-      const existing = data.value.userRoles.find((item) => item.userId === userId && item.role === role.role)
-      if (existing) Object.assign(existing, assigned)
-      else data.value.userRoles.push(assigned)
-    },
-    'modal',
-  )
-  if (!saved) return
-
-  closeModal()
-  notify('Manager role assigned')
-}
-
-async function removeUserRole(role) {
-  if (
-    !(await persistChange(
-      () => props.repository.removeUserRole(role.userId, role.role),
-      () => {
-        data.value.userRoles = data.value.userRoles.filter(
-          (item) => item.userId !== role.userId || item.role !== role.role,
-        )
-      },
-    ))
-  )
-    return
-  notify('User role removed')
-}
-
-async function saveUserProfile() {
-  const displayName = form.value.displayName.trim()
-  if (!displayName) {
-    modalError.value = t('Enter a display name.')
-    return
-  }
-
-  if (
-    !(await persistChange(
-      () => props.repository.saveUserProfile(props.userId, displayName),
-      () => {
-        userName.value = displayName
-      },
-      'modal',
-    ))
-  )
-    return
-
-  closeModal()
-  notify('Profile updated')
-}
-
-/** @returns {Promise<void>} */
-async function sendOwnPasswordReset() {
-  if (
-    !(await persistChange(
-      () => props.repository.sendOwnPasswordReset(props.userEmail),
-      () => {},
-      'modal',
-    ))
-  )
-    return
-
-  notify('If the account exists, a password reset email will be sent')
-}
-
-/** @returns {Promise<void>} */
-async function sendRolePasswordReset(role) {
-  if (
-    !(await persistChange(
-      () => props.repository.sendAdminPasswordReset(role.email),
-      () => {},
-    ))
-  )
-    return
-
-  notify('If the account exists, a password reset email will be sent')
-}
-
-/** @returns {string} The reason an archer cannot enter the category, or an empty string. */
-function categoryBlockReason(tournament, participant, category) {
-  return categoryBlockReasonFor(tournament, participant, category, data.value)
-}
+const { removeUserRole, sendRolePasswordReset } = useUserAccessActions({ repository: props.repository, notify })
 
 function openTournament(tournamentId, tab = 'participants') {
   selectedTournamentId.value = tournamentId
@@ -774,103 +230,6 @@ function openTournament(tournamentId, tab = 'participants') {
 function openScoreDetails(participantId) {
   selectedScoreParticipantId.value = participantId
   activePage.value = 'score-detail'
-}
-
-/** @returns {string} Why the chosen category cannot be used, or an empty string when it can. */
-function categoryChoiceProblem(tournament, participant, categoryId) {
-  if (!tournament.categoryIds.length) return ''
-  const category = categoryFor(categoryId)
-  if (!category) return t('Select a valid category')
-  return categoryBlockReason(tournament, participant, category)
-}
-
-/**
- * Empties the add-archer form so a different archer can be found or created. The club stays as it was, because a
- * club user cannot change it and a manager may have opened the form from a club filter.
- * @returns {void}
- */
-function clearArcherForm() {
-  form.value = { ...blankParticipant(), clubId: form.value.clubId }
-  selectedMatchToken.value = ''
-  archerMatches.value = []
-  modalError.value = ''
-}
-
-/**
- * Adds the archer the user chose from the matches. The database does the adding and the checks (age limits,
- * category level) and returns only the archer's name.
- * @returns {Promise<void>}
- */
-async function addSelectedMatch() {
-  const tournament = selectedTournament.value
-  const token = selectedMatchToken.value
-  const categoryId = tournament.categoryIds.length ? form.value.categoryId : ''
-  if (tournament.categoryIds.length && !categoryFor(categoryId)) {
-    notify('Select a valid category')
-    return
-  }
-  let archer = null
-  const saved = await persistChange(
-    async () => {
-      archer = await props.repository.addArcherByToken(tournament.id, token, categoryId)
-    },
-    () => {
-      if (!participantById(archer.id)) data.value.participants.push(archer)
-      tournament.participantIds.push(archer.id)
-      if (categoryId) tournament.categoryAssignments[archer.id] = categoryId
-    },
-    'modal',
-  )
-  if (!saved) return
-
-  closeModal()
-  notify('Archer added to this tournament')
-}
-
-async function saveParticipant() {
-  if (selectedMatch.value) {
-    await addSelectedMatch()
-    return
-  }
-  const isEditing = Boolean(editingParticipantId.value)
-  // eslint-disable-next-line no-unused-vars
-  const { bowType, categoryId: chosenCategoryId, ...fields } = form.value
-  const participant = {
-    ...fields,
-    id: editingParticipantId.value || makeId(),
-    clubId: !canManage.value && isClubUser.value ? props.userScope.clubId || '' : form.value.clubId || '',
-  }
-  const tournament = !isEditing && assignNewParticipant.value ? selectedTournament.value : null
-  const categoryId = tournament?.categoryIds.length ? chosenCategoryId : ''
-  if (tournament) {
-    const problem = categoryChoiceProblem(tournament, participant, categoryId)
-    if (problem) {
-      notify(problem)
-      return
-    }
-  }
-  if (
-    !(await persistChange(
-      () => props.repository.saveParticipant(participant, tournament?.id || '', isEditing, categoryId),
-      () => {
-        if (isEditing) {
-          const existing = participantById(participant.id)
-          if (existing) Object.assign(existing, participant)
-        } else {
-          data.value.participants.unshift(participant)
-          if (tournament) {
-            tournament.participantIds.push(participant.id)
-            if (categoryId) tournament.categoryAssignments[participant.id] = categoryId
-          }
-        }
-      },
-      'modal',
-    ))
-  )
-    return
-
-  closeModal()
-  notify(isEditing ? 'Archer details updated' : 'Archer saved')
 }
 </script>
 
