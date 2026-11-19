@@ -5,7 +5,10 @@ import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import NavIcon from './components/NavIcon.vue'
+import CategoriesPage from './components/CategoriesPage.vue'
 import PlansPage from './components/PlansPage.vue'
+import TournamentTypesPage from './components/TournamentTypesPage.vue'
+import UserAccessPage from './components/UserAccessPage.vue'
 import { useTheme } from './composables/useTheme'
 import { useNavItems } from './composables/useNavItems'
 import { usePermissions } from './composables/usePermissions'
@@ -1955,172 +1958,33 @@ async function recordMatchScore(match, side, value) {
           </div>
         </section>
 
-        <section v-else-if="activePage === 'tournament-types'">
-          <div class="page-heading heading-row">
-            <div>
-              <p class="eyebrow">{{ t('EVENT FORMATS') }}</p>
-              <h1>{{ t('Tournament types') }}</h1>
-              <p class="page-subtitle">
-                {{ t('Create reusable formats with a distance, target, ends, and arrows per end.') }}
-              </p>
-            </div>
-            <button v-if="canManage" class="button button-primary" @click="openModal('tournamentType')">
-              <span>＋</span> {{ t('Create tournament type') }}
-            </button>
-          </div>
-          <div class="format-grid">
-            <article v-for="type in data.tournamentTypes" :key="type.id" class="format-card">
-              <div class="format-card-head">
-                <span class="quick-icon mint"><NavIcon name="tournament-types" /></span
-                ><button
-                  v-if="canManage"
-                  class="button button-icon"
-                  :aria-label="t('Edit type')"
-                  :title="t('Edit type')"
-                  @click="editTournamentType(type)"
-                >
-                  <NavIcon name="pencil" />
-                </button>
-              </div>
-              <h2>{{ type.name }}</h2>
-              <div class="format-distance">
-                <strong>{{ type.distance }}</strong><span>{{ type.distanceUnit }}</span
-                ><small>{{ t('distance') }}</small>
-              </div>
-              <div class="format-details">
-                <div>
-                  <span>{{ t('TARGET') }}</span><strong>{{ type.targetType }}</strong>
-                </div>
-                <div>
-                  <span>{{ t('ENDS') }}</span><strong>{{ type.ends }}</strong>
-                </div>
-                <div>
-                  <span>{{ t('ARROWS / END') }}</span><strong>{{ type.arrowsPerEnd }}</strong>
-                </div>
-              </div>
-              <div class="format-total">
-                {{ t('Total arrows per archer') }} <strong>{{ Number(type.ends) * Number(type.arrowsPerEnd) }}</strong>
-              </div>
-              <div class="format-usage">
-                {{ data.tournaments.filter((event) => event.tournamentTypeId === type.id).length }}
-                {{ t('tournaments use this type') }}
-              </div>
-            </article>
-            <button v-if="canManage" class="add-card format-add-card" @click="openModal('tournamentType')">
-              <span>＋</span><strong>{{ t('Create a tournament type') }}</strong
-              ><small>{{ t('Set a reusable shooting format') }}</small>
-            </button>
-          </div>
-        </section>
+        <TournamentTypesPage
+          v-else-if="activePage === 'tournament-types'"
+          :tournament-types="data.tournamentTypes"
+          :tournaments="data.tournaments"
+          :can-manage="canManage"
+          @create="openModal('tournamentType')"
+          @edit="editTournamentType"
+        />
 
-        <section v-else-if="activePage === 'categories'">
-          <div class="page-heading heading-row">
-            <div>
-              <p class="eyebrow">{{ t('CATEGORY DIRECTORY') }}</p>
-              <h1>{{ t('Categories') }}</h1>
-              <p class="page-subtitle">
-                {{ t('Create age and/or bow-type divisions, then add them to each tournament.') }}
-              </p>
-            </div>
-            <button v-if="canManage" class="button button-primary" @click="openModal('category')">
-              <span>＋</span> {{ t('Create category') }}
-            </button>
-          </div>
-          <div class="category-grid">
-            <article v-for="category in data.categories" :key="category.id" class="category-card">
-              <div class="format-card-head">
-                <span class="quick-icon lavender"><NavIcon name="categories" /></span
-                ><button
-                  v-if="canManage"
-                  class="button button-icon"
-                  :aria-label="t('Edit category')"
-                  :title="t('Edit category')"
-                  @click="editCategory(category)"
-                >
-                  <NavIcon name="pencil" />
-                </button>
-              </div>
-              <h2>{{ category.name }}</h2>
-              <p>{{ categoryDescription(category) }}</p>
-              <div class="format-usage">
-                {{ data.tournaments.filter((event) => event.categoryIds.includes(category.id)).length }}
-                {{ t('tournaments use this category') }}
-              </div>
-            </article>
-            <button v-if="canManage" class="add-card format-add-card" @click="openModal('category')">
-              <span>＋</span><strong>{{ t('Create a category') }}</strong
-              ><small>{{ t('Set an age range, bow type, or both') }}</small>
-            </button>
-          </div>
-        </section>
+        <CategoriesPage
+          v-else-if="activePage === 'categories'"
+          :categories="data.categories"
+          :tournaments="data.tournaments"
+          :can-manage="canManage"
+          @create="openModal('category')"
+          @edit="editCategory"
+        />
 
-        <section v-else-if="activePage === 'user-access' && canManage">
-          <div class="page-heading heading-row">
-            <div>
-              <p class="eyebrow">{{ t('ACCOUNT MANAGEMENT') }}</p>
-              <h1>{{ t('User access') }}</h1>
-              <p class="page-subtitle">{{ t('Assign manager roles and send password reset emails.') }}</p>
-            </div>
-            <div v-if="isAdmin" class="heading-actions">
-              <button class="button button-primary" @click="openModal('userRole')">
-                <span>＋</span> {{ t('Add manager') }}
-              </button>
-            </div>
-          </div>
-          <section class="panel table-panel">
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>{{ t('ACCOUNT') }}</th>
-                    <th>{{ t('ROLE') }}</th>
-                    <th>{{ t('SCOPE') }}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="role in data.userRoles.filter((item) => ['admin', 'manager'].includes(item.role))"
-                    :key="`${role.userId}-${role.role}`"
-                  >
-                    <td>{{ role.email }}</td>
-                    <td>{{ role.role === 'admin' ? t('System admin') : t('Manager') }}</td>
-                    <td>{{ t('All records') }}</td>
-                    <td class="row-actions">
-                      <button class="text-link" @click="sendRolePasswordReset(role)">
-                        {{ t('Send password reset') }}
-                      </button>
-                      <button
-                        v-if="isAdmin"
-                        class="text-link"
-                        :disabled="
-                          role.role === 'admin' &&
-                          role.userId === userId &&
-                          data.userRoles.filter((item) => item.role === 'admin').length === 1
-                        "
-                        @click="removeUserRole(role)"
-                      >
-                        {{ t('Remove role') }}
-                      </button>
-                    </td>
-                  </tr>
-                  <tr v-if="!data.userRoles.filter((item) => ['admin', 'manager'].includes(item.role)).length">
-                    <td colspan="4">
-                      <div class="table-empty">{{ t('No manager assignments found.') }}</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-          <p class="privacy-note">
-            {{
-              t(
-                'A reset email can only be requested by an admin or manager. The account must already exist in Supabase Auth.',
-              )
-            }}
-          </p>
-        </section>
+        <UserAccessPage
+          v-else-if="activePage === 'user-access' && canManage"
+          :user-roles="data.userRoles"
+          :user-id="userId"
+          :is-admin="isAdmin"
+          @add="openModal('userRole')"
+          @reset-password="sendRolePasswordReset"
+          @remove="removeUserRole"
+        />
 
         <ArcherRequestsPage
           v-else-if="activePage === 'requests' && (canManage || isClubUser)"
