@@ -17,8 +17,8 @@ archived and no longer updated. Do not read them for tickets.
 - If the argument is a URL or an issue number, read it with `gh issue view <number or url>`
   (add `--comments` when the discussion matters).
 - Fetch one issue only. Do not list or dump every issue body.
-- The `app:<name>` label (`manager`, `portal`, `scorecard`, `ianseo-dashboard`) tells which app it
-  belongs to. Read `docs/planning/<app>/plan.md` before planning when it exists.
+- The `app:<name>` label (`manager`, `portal`, `scorecard`, `ianseo-dashboard`, `platform`) tells which
+  app it belongs to. Read `docs/planning/<app>/plan.md` before planning when it exists.
 - The issue body can have a "Depends on: #N" line, and some issues have a parent or sub-issues. Read
   those with `gh issue view` when they matter.
 - If there is no argument, or the issue does not exist, say so and ask. Do not pick a ticket yourself.
