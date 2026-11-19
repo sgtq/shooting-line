@@ -4,10 +4,10 @@ import LanguageSwitcher from '@shooting-line/i18n/LanguageSwitcher.vue'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
-import NavIcon from './components/NavIcon.vue'
 import CategoriesPage from './components/CategoriesPage.vue'
 import ClubsPage from './components/ClubsPage.vue'
 import DashboardPage from './components/DashboardPage.vue'
+import TournamentArchersTab from './components/TournamentArchersTab.vue'
 import TournamentCategoriesTab from './components/TournamentCategoriesTab.vue'
 import TournamentDetailPage from './components/TournamentDetailPage.vue'
 import TournamentOlympicTab from './components/TournamentOlympicTab.vue'
@@ -25,9 +25,9 @@ import { useToast } from './composables/useToast'
 import { useManagerStore } from './stores/managerStore'
 import ArcherRequestsPage from './components/ArcherRequestsPage.vue'
 import { summarizeDecision } from './services/archerRequests'
-import { ageAtTournament, displayChoice, fullName } from './services/display'
+import { displayChoice, fullName } from './services/display'
 import { buildScoreRows } from './services/scoreRows'
-import { findBlockingCategory } from './services/categoryRules'
+import { categoryBlockReason as categoryBlockReasonFor } from './services/categoryEligibility'
 import { findOverlappingSubscription } from './services/planRules'
 import { MAX_TOURNAMENT_DAYS, datesToForm, resolveDays } from './services/tournamentDates'
 
@@ -97,7 +97,6 @@ const modalType = ref('')
 const showTargetTypeModal = ref(false)
 const targetTypeName = ref('')
 const assignNewParticipant = ref(false)
-const changingCategoryKey = ref('')
 // Matches for what the user types in the add-archer form. Each has a one-time token and never a database ID.
 const archerMatches = ref([])
 const selectedMatchToken = ref('')
@@ -158,37 +157,6 @@ const roleSummary = computed(() => {
 // Name-only archers (other clubs') appear in tournaments and scores but never in the directory or its pickers,
 // so a club cannot browse archers it does not own.
 const directoryParticipants = computed(() => data.value.participants.filter((person) => !person.nameOnly))
-const filteredTournamentParticipantsDirectory = computed(() => {
-  const query = participantDirectorySearch.value.trim().toLowerCase()
-  const entered = selectedTournament.value?.participantIds ?? []
-  return data.value.participants.filter((person) => {
-    if (!entered.includes(person.id)) return false
-    const matchesClub =
-      !participantClubFilter.value ||
-      (participantClubFilter.value === '__unassigned__' && !person.clubId) ||
-      person.clubId === participantClubFilter.value
-    const matchesQuery =
-      !query ||
-      [person.lastName, person.waId, person.aetayId]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(query))
-    return matchesClub && matchesQuery
-  })
-})
-const participantSearchOptions = computed(() => {
-  const entered = selectedTournament.value?.participantIds ?? []
-  const values = data.value.participants
-    .filter(
-      (person) =>
-        entered.includes(person.id) &&
-        (!participantClubFilter.value ||
-          (participantClubFilter.value === '__unassigned__' && !person.clubId) ||
-          person.clubId === participantClubFilter.value),
-    )
-    .flatMap((person) => [person.lastName, person.waId, person.aetayId])
-    .filter(Boolean)
-  return [...new Set(values)]
-})
 const selectedMatch = computed(
   () => archerMatches.value.find((match) => match.token === selectedMatchToken.value) || null,
 )
@@ -888,25 +856,6 @@ async function toggleTournamentCategory(tournament, categoryId) {
     return
 }
 
-/** @returns {object | null} A higher level category of the same bow type the archer already entered. */
-function blockingCategoryFor(tournament, participant, category) {
-  return findBlockingCategory({
-    participantId: participant.id,
-    category,
-    tournaments: data.value.tournaments,
-    categories: data.value.categories,
-  })
-}
-
-/** @returns {object[]} The tournament's categories the entered archer may move to, other than the current one. */
-function categoryChangeOptions(tournament, participant) {
-  const currentId = tournament.categoryAssignments[participant.id]
-  return tournament.categoryIds
-    .filter((categoryId) => categoryId !== currentId)
-    .map(categoryFor)
-    .filter((category) => category && !categoryBlockReason(tournament, participant, category))
-}
-
 /** @returns {string[]} The bow types of the categories offered by the tournament. */
 function tournamentBowTypes(tournament) {
   return [...new Set(tournament.categoryIds.map((categoryId) => categoryFor(categoryId)?.bowType ?? ''))]
@@ -914,15 +863,7 @@ function tournamentBowTypes(tournament) {
 
 /** @returns {string} The reason an archer cannot enter the category, or an empty string. */
 function categoryBlockReason(tournament, participant, category) {
-  const age = ageAtTournament(participant, tournament)
-  if (age !== null && category.minAge !== null && category.minAge !== '' && age < category.minAge) {
-    return t("{name} is below this category's minimum age", { name: fullName(participant) })
-  }
-  if (age !== null && category.maxAge !== null && category.maxAge !== '' && age > category.maxAge) {
-    return t("{name} is above this category's maximum age", { name: fullName(participant) })
-  }
-  const blocking = blockingCategoryFor(tournament, participant, category)
-  return blocking ? t('Already entered {category}, a higher level', { category: blocking.name }) : ''
+  return categoryBlockReasonFor(tournament, participant, category, data.value)
 }
 
 async function addParticipantWithCategory(tournament, participant, event) {
@@ -952,16 +893,6 @@ function categoryLimitHint() {
   return t("Limited by the archer's age and the categories they have already entered")
 }
 
-/** @returns {string} Identifies one archer's row in the open tournament for the change-category picker. */
-function changeKey(participant) {
-  return `${selectedTournament.value.id}:${participant.id}`
-}
-
-/** @returns {boolean} Whether this row is showing the change-category picker. */
-function isChangingCategory(participant) {
-  return changingCategoryKey.value === changeKey(participant)
-}
-
 async function clearParticipantCategory(tournament, participant) {
   await persistChange(
     () => props.repository.setParticipantCategory(tournament.id, participant.id, ''),
@@ -987,11 +918,6 @@ async function toggleTournamentStarted(tournament) {
 async function removeParticipantFromTournament(tournament, participant) {
   if (!window.confirm(t('Remove {name} from this tournament?', { name: fullName(participant) }))) return
   await toggleParticipant(tournament, participant.id)
-}
-
-async function changeParticipantCategory(tournament, participant, event) {
-  await addParticipantWithCategory(tournament, participant, event)
-  changingCategoryKey.value = ''
 }
 
 async function setParticipantClub(participant, event) {
@@ -1507,167 +1433,22 @@ async function recordMatchScore(match, side, value) {
           @edit-dates="openTournamentDatesModal"
           @toggle-started="toggleTournamentStarted"
         >
-          <section v-if="selectedTournamentTab === 'participants'" class="panel roster-panel">
-            <div class="panel-heading">
-              <div>
-                <h2>{{ t('Tournament archers') }}</h2>
-                <p>{{ t('Archers entered in this tournament.') }}</p>
-              </div>
-              <button
-                v-if="canEditTournament"
-                class="button button-small button-outline"
-                @click="addParticipantToTournament"
-              >
-                {{ t('＋ Add archer') }}
-              </button>
-            </div>
-            <div class="participant-directory-filter">
-              <label class="select-field"
-                ><span>{{ t('FILTER BY CLUB') }}</span
-                ><select v-model="participantClubFilter" :aria-label="t('Filter archers by club')">
-                  <option value="">{{ t('All clubs') }}</option>
-                  <option value="__unassigned__">{{ t('No club assigned') }}</option>
-                  <option v-for="club in data.clubs" :key="club.id" :value="club.id">{{ club.name }}</option>
-                </select></label
-              >
-              <label class="select-field"
-                ><span>{{ t('SEARCH LAST NAME OR AFFILIATION') }}</span
-                ><input
-                  v-model="participantDirectorySearch"
-                  list="archer-search-options"
-                  :aria-label="t('Search archers by last name or affiliation')"
-                  :placeholder="t('Type a last name or ID')"
-              /></label>
-              <datalist id="archer-search-options">
-                <option v-for="value in participantSearchOptions" :key="value" :value="value" />
-              </datalist>
-            </div>
-            <div v-if="filteredTournamentParticipantsDirectory.length" class="roster-list">
-              <div class="roster-row roster-head">
-                <span>{{ t('ARCHER') }}</span>
-                <span>{{ t('CATEGORY') }}</span>
-                <span v-if="canEditTournament">{{ t('ACTIONS') }}</span>
-              </div>
-              <div v-for="person in filteredTournamentParticipantsDirectory" :key="person.id" class="roster-row">
-                <span class="roster-person">
-                  <span class="person-avatar">{{ person.firstName.charAt(0) }}{{ person.lastName.charAt(0) }}</span>
-                  <span class="roster-name"
-                    ><strong>{{ person.lastName }}, {{ person.firstName }}</strong
-                    ><small
-                      >{{
-                        person.waId ? `World Archery ${person.waId}` : person.aetayId || t('No affiliation number')
-                      }}
-                      · {{ clubFor(person.clubId)?.name || t('No club') }} ·
-                      {{ ageAtTournament(person, selectedTournament) ?? t('Age unknown') }} {{ t('at event') }}</small
-                    ></span
-                  >
-                </span>
-                <span class="roster-category-cell">
-                  <template v-if="isChangingCategory(person)">
-                    <select
-                      class="category-select"
-                      :title="categoryLimitHint()"
-                      :aria-label="t('Change category of {name}', { name: fullName(person) })"
-                      value=""
-                      @change="changeParticipantCategory(selectedTournament, person, $event)"
-                    >
-                      <option value="">{{ t('Change category') }}</option>
-                      <option
-                        v-for="category in categoryChangeOptions(selectedTournament, person)"
-                        :key="category.id"
-                        :value="category.id"
-                      >
-                        {{ category.name }}
-                      </option>
-                    </select>
-                    <button
-                      class="button"
-                      :aria-label="t('Cancel changing the category of {name}', { name: fullName(person) })"
-                      @click="changingCategoryKey = ''"
-                    >
-                      {{ t('Cancel') }}
-                    </button>
-                  </template>
-                  <template v-else-if="selectedTournament.categoryAssignments[person.id]">
-                    <span class="roster-category">{{
-                      categoryFor(selectedTournament.categoryAssignments[person.id])?.name || '—'
-                    }}</span>
-                    <template v-if="canEditTournament">
-                      <button
-                        v-if="categoryChangeOptions(selectedTournament, person).length"
-                        class="button button-icon"
-                        :aria-label="t('Change category of {name}', { name: fullName(person) })"
-                        :title="t('Change category')"
-                        @click="changingCategoryKey = changeKey(person)"
-                      >
-                        <NavIcon name="pencil" />
-                      </button>
-                      <button
-                        class="button button-icon"
-                        :aria-label="t('Remove the category of {name}', { name: fullName(person) })"
-                        :title="t('Remove category')"
-                        @click="clearParticipantCategory(selectedTournament, person)"
-                      >
-                        <NavIcon name="close" />
-                      </button>
-                    </template>
-                  </template>
-                  <select
-                    v-else-if="canEditTournament && selectedTournament.categoryIds.length"
-                    class="category-select"
-                    :title="categoryLimitHint()"
-                    :aria-label="t('Choose category of {name}', { name: fullName(person) })"
-                    value=""
-                    @change="addParticipantWithCategory(selectedTournament, person, $event)"
-                  >
-                    <option value="">{{ t('Choose category') }}</option>
-                    <option
-                      v-for="categoryId in selectedTournament.categoryIds"
-                      :key="categoryId"
-                      :value="categoryId"
-                      :disabled="Boolean(categoryBlockReason(selectedTournament, person, categoryFor(categoryId)))"
-                      :title="categoryBlockReason(selectedTournament, person, categoryFor(categoryId))"
-                    >
-                      {{ categoryFor(categoryId)?.name }}
-                    </option>
-                  </select>
-                  <span v-else class="roster-category">—</span>
-                </span>
-                <span v-if="canEditTournament" class="roster-actions">
-                  <button
-                    class="button button-soft-danger"
-                    :aria-label="t('Remove {name} from tournament', { name: fullName(person) })"
-                    @click="removeParticipantFromTournament(selectedTournament, person)"
-                  >
-                    {{ t('Remove from tournament') }}
-                  </button>
-                </span>
-              </div>
-            </div>
-            <div v-else class="empty-state">
-              <strong>{{
-                selectedTournament.participantIds.length
-                  ? t('No archers match these filters')
-                  : t('No archers in this tournament')
-              }}</strong>
-              <p>
-                {{
-                  selectedTournament.participantIds.length
-                    ? t('Choose another club or clear the search.')
-                    : canEditTournament
-                      ? t('Add an archer from the database or create a new one.')
-                      : t('Archers entered in this tournament will appear here.')
-                }}
-              </p>
-              <button
-                v-if="canEditTournament && !selectedTournament.participantIds.length"
-                class="button button-primary"
-                @click="addParticipantToTournament"
-              >
-                {{ t('Add archer') }}
-              </button>
-            </div>
-          </section>
+          <TournamentArchersTab
+            v-if="selectedTournamentTab === 'participants'"
+            v-model:club-filter="participantClubFilter"
+            v-model:search="participantDirectorySearch"
+            :tournament="selectedTournament"
+            :participants="data.participants"
+            :clubs="data.clubs"
+            :categories="data.categories"
+            :tournaments="data.tournaments"
+            :can-edit-tournament="canEditTournament"
+            @add-archer="addParticipantToTournament"
+            @choose-category="addParticipantWithCategory"
+            @change-category="addParticipantWithCategory"
+            @clear-category="clearParticipantCategory"
+            @remove="removeParticipantFromTournament"
+          />
           <TournamentCategoriesTab
             v-else-if="selectedTournamentTab === 'categories'"
             :tournament="selectedTournament"
