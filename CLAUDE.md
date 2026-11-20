@@ -44,8 +44,8 @@ Use these tools and versions as the default. Ask before adding a new library or 
 - End-to-end tests: Playwright (`@playwright/test`).
 - Backend: Supabase (Postgres migrations in `supabase/migrations/`, edge functions in
   `supabase/functions/`).
-- CI: GitHub Actions workflows in `.github/workflows/` (`quality.yml`, `pages.yml`,
-  `supabase-functions.yml`, `supabase-migrations.yml`).
+- CI: GitHub Actions workflows in `.github/workflows/` (`quality.yml`, `database-tests.yml`,
+  `pages.yml`, `supabase-functions.yml`, `supabase-migrations.yml`).
 
 ## Standard directory layout
 
@@ -54,7 +54,7 @@ Use these tools and versions as the default. Ask before adding a new library or 
 - `apps/ianseo-dashboard/`, `apps/scorecard/`: app packages.
 - `packages/auth/`, `packages/i18n/`: shared workspace packages. Source lives in `src/`.
 - `tests/e2e/`: Playwright specs.
-- `supabase/`: `config.toml`, `migrations/`, `functions/`, and SQL bootstrap scripts.
+- `supabase/`: `config.toml`, `migrations/`, `functions/`, `tests/database/` (pgTAP), and SQL bootstrap scripts.
 - `scripts/`: build and tooling helpers.
 - `docs/`: planning notes, drafts, and assets. Not for code.
 

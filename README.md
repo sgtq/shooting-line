@@ -42,7 +42,7 @@ Unit tests cover manager workflows and shared authentication access queries usin
 End-to-end tests in `tests/e2e/` fake the Supabase REST API and sign-in, so they need no real project. They start
 their own dev server and never reuse one. If a dev server is already running on port 5173 or 5174, stop it first;
 otherwise Playwright stops with an "already used" error.
-The quality workflow runs ESLint, Prettier, `vue-tsc`, unit and end-to-end tests, and builds on pull requests and pushes to `develop` and `main`. The active Vue workspaces use JavaScript; `vue-tsc` checks Vue components and templates while `checkJs` remains disabled.
+The quality workflow runs ESLint, Prettier, `vue-tsc`, unit and end-to-end tests, and builds on pull requests and pushes to `develop` and `main`. The database tests workflow starts a local Supabase stack and runs the pgTAP tests on the same events, and a failing test fails the check. The active Vue workspaces use JavaScript; `vue-tsc` checks Vue components and templates while `checkJs` remains disabled.
 
 ## Testing
 
@@ -58,6 +58,18 @@ The quality workflow runs ESLint, Prettier, `vue-tsc`, unit and end-to-end tests
 - **Coverage:** `npm run test:coverage` prints a summary and writes an HTML report to `coverage/`. There is no
   minimum threshold.
 - **End-to-end tests:** `npm run test:e2e` runs all specs. Run one with `npx playwright test tests/e2e/<spec>`.
+- **Database tests:** pgTAP tests in `supabase/tests/database/` check the migrations and the row-level security
+  rules against a local Supabase database. They need [Docker](https://docs.docker.com/get-docker/) running and the
+  [Supabase CLI](https://supabase.com/docs/guides/cli). They add no npm package.
+  1. `supabase start` creates the local stack and applies every migration to a fresh database.
+  2. `supabase test db` runs every file in `supabase/tests/database/`. Pass a file path to run only that file.
+  3. `supabase db reset` rebuilds the local database from the migrations if an earlier run left it in a bad state.
+
+  Name a test `<subject>.test.sql`. Each file opens with `begin;` and ends with `rollback;`, so it leaves no data
+  behind and files do not affect each other. Write rows as the table owner, then call
+  `pg_temp.sign_in_as(<user id>)` so the policies apply to the checks. Include it with
+  `\ir ../helpers/sign_in_as.psql`. Shared helpers live in `supabase/tests/helpers/` with a `.psql` extension,
+  because `supabase test db` runs every `.sql` file there as a test.
 
 ## Shared access and database
 
