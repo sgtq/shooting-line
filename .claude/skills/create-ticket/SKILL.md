@@ -59,17 +59,19 @@ tests, docs, and Spanish translations in the acceptance criteria when the change
 ## 5. Confirm, then create
 
 An issue is visible to everyone with access to the repo, so create nothing before approval. Show the full
-draft in chat (title, labels, body, priority, and any parent or dependencies) and wait. Then:
+draft in chat (title, labels, body, priority, board position, and any parent or dependencies) and wait. Then:
 
 1. `gh issue create --title "<title>" --label "<app label>,<type label>" --body-file <file>`
    (write the body to a temp file in the scratchpad).
 2. Add it to the single project: `gh project item-add 8 --owner sgtq --url <issue url> --format json`.
-3. Set Status to Todo. Set Priority by app unless the user says otherwise: `app:platform` High,
-   `app:manager` Medium, `app:scorecard` Low, `app:ianseo-dashboard` and `app:portal` none. Get ids with
+3. Set Status to Todo and always set a Priority (High, Medium, or Low). A ticket never goes on the board
+   without one, because `next-ticket` sorts by priority. Use the app default unless the user says
+   otherwise: `app:platform` High, `app:manager` Medium, `app:scorecard` Low. `app:portal` and
+   `app:ianseo-dashboard` have no default, so propose one in the draft and ask. Get ids with
    `gh project field-list 8 --owner sgtq --format json`, then `gh project item-edit`.
-4. Report the issue number, URL, labels, and priority.
-
-5. Link the relationships (see step 6). Do not leave them only as text in the body.
+4. Link the relationships (see step 6). Do not leave them only as text in the body.
+5. Move the item to the right place on the board (see step 7).
+6. Report the issue number, URL, labels, priority, and board position.
 
 ## 6. Relationships to other issues
 
@@ -87,3 +89,18 @@ files). Propose the links in the draft and wait for approval. Use GitHub's real 
 
 Verify each link with `gh api repos/sgtq/shooting-line/issues/<number>/sub_issues` or `.../dependencies/blocked_by`.
 If a call fails, report which link failed and ask the user to add it in the issue sidebar.
+
+## 7. Board order
+
+A new item lands at the bottom of the board. `next-ticket` reads the board order within each priority, so
+move the item to where it belongs. Propose the position in the draft and wait for approval.
+
+- Read the order: `gh project item-list 8 --owner sgtq --format json -L 200` (items come in board order).
+- Within its priority and app, place the new item after every issue it is blocked by, and before every
+  issue it blocks. If it has neither, put it after the last Todo item of the same priority and app, unless
+  the user says it is more urgent. Then say which ticket it sits after.
+- Move it with the GraphQL mutation. `afterId` is the project item id of the item it goes after (omit it to
+  move to the top). Get the project id from `gh project view 8 --owner sgtq --format json`.
+  `gh api graphql -f query='mutation($p:ID!,$i:ID!,$a:ID){updateProjectV2ItemPosition(input:{projectId:$p,itemId:$i,afterId:$a}){items(first:1){nodes{id}}}}' -f p=<project id> -f i=<new item id> -f a=<after item id>`
+- Check with `gh project item-list` that the item is now in the expected spot. If the move fails, report
+  it and ask the user to drag the card on the board.
