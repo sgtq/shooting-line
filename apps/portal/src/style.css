@@ -243,6 +243,16 @@ h1 {
   line-height: 1.55;
 }
 
+.card-icon {
+  flex: none;
+  margin-bottom: 14px;
+  color: #94702b;
+}
+
+.app-card-disabled .card-icon {
+  color: #8f9aaa;
+}
+
 .card-status {
   margin-bottom: 18px;
   color: #94702b;
@@ -361,5 +371,140 @@ h1 {
   .portal-footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+/* Dark theme follows the system setting. The shared language switcher reads the custom properties. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    color: #e6ebf2;
+    background: #0e1420;
+    --text-primary: #e6ebf2;
+    --text-secondary: #9aa6b8;
+    --border-subtle: #2c384a;
+    --bg-surface: #172033;
+  }
+
+  body {
+    background: radial-gradient(circle at 85% 8%, rgba(220, 184, 96, 0.08), transparent 25rem), #0e1420;
+  }
+
+  .portal-header,
+  .portal-footer {
+    border-color: #263245;
+  }
+
+  .environment-badge {
+    border-color: #6b5622;
+    color: #ecd28b;
+    background: #2a2210;
+  }
+
+  .brand,
+  h1,
+  .app-card h2 {
+    color: #f1f4f9;
+  }
+
+  .signed-in-as,
+  .portal-footer,
+  .access-note,
+  .loading-message,
+  .empty-access {
+    color: #9aa6b8;
+  }
+
+  .portal-panel {
+    border-color: #263245;
+    background: #172033;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.4);
+  }
+
+  .status-panel,
+  .panel-copy > p:last-child {
+    color: #a9b4c4;
+  }
+
+  .eyebrow,
+  .card-status,
+  .card-action,
+  .card-icon {
+    color: #dcb860;
+  }
+
+  .sign-in-form label {
+    color: #c5cedb;
+  }
+
+  .sign-in-form input {
+    border-color: #34415a;
+    color: #e6ebf2;
+    background: #0e1420;
+  }
+
+  .sign-in-form input:focus {
+    border-color: #dcb860;
+    outline-color: rgba(220, 184, 96, 0.3);
+  }
+
+  .primary-button {
+    color: #0e1420;
+    background: #dcb860;
+  }
+
+  .primary-button:hover {
+    background: #e8c878;
+  }
+
+  .secondary-button {
+    border-color: #34415a;
+    color: #d5dce8;
+    background: #172033;
+  }
+
+  .app-card {
+    border-color: #263245;
+    background: #172033;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.3);
+  }
+
+  .app-card > p:not(.card-status) {
+    color: #a9b4c4;
+  }
+
+  .coming-soon-status {
+    border-color: #6b5622;
+    color: #ecd28b;
+    background: #2a2210;
+  }
+
+  .app-card-link:hover {
+    border-color: #dcb860;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+  }
+
+  .app-card-link:focus-visible {
+    outline-color: rgba(220, 184, 96, 0.5);
+  }
+
+  .app-card-disabled {
+    border-color: #222d3f;
+    background: #121a29;
+    box-shadow: none;
+  }
+
+  .app-card-disabled h2 {
+    color: #8793a6;
+  }
+
+  .app-card-disabled > p:not(.card-status),
+  .app-card-disabled .card-status:not(.coming-soon-status),
+  .app-card-disabled .card-icon {
+    color: #738095;
+  }
+
+  .error-message {
+    color: #f19a96;
   }
 }
