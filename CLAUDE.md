@@ -12,6 +12,7 @@
   `test`, `docs`, `refactor`), then a few hyphenated words, for example `manager/feat/move-saves-out-of-app`.
 - Create it with `gh issue develop <issue> --name <branch> --base develop` so it links to the issue.
 - Right after creating the branch, move the issue to In Progress in the `ShootingLine` project.
+- When work on a ticket starts, rename the session to `SL-<issue>`, for example `SL-125`.
 
 ## Tickets and PR titles
 
