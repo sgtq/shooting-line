@@ -1,0 +1,14 @@
+name: Set up the Supabase CLI
+description: Installs the pinned Supabase CLI version used by every workflow in this repository.
+
+# This is the only place the CLI version is set. Dependabot does not update the `version` input, so bump it by
+# hand: check the CLI release notes, install the same version locally, run `supabase start` and
+# `supabase test db`, then change the number below. Do it when a release has a fix or feature we need, or at
+# least when the local CLI is updated, so CI and local runs stay on the same version.
+runs:
+  using: composite
+  steps:
+    - name: Install the Supabase CLI
+      uses: supabase/setup-cli@v1
+      with:
+        version: 3.1.0

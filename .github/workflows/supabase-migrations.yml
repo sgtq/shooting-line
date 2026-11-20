@@ -27,9 +27,7 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
+      - uses: ./.github/actions/setup-supabase-cli
 
       - name: Validate migration settings
         env:
