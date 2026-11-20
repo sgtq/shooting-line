@@ -5,6 +5,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { APP_IDS, createSupabaseClient, hasAppAccess } from '@shooting-line/auth'
 import { createManagerRepository, readLegacyWorkspace } from './services/workspace.js'
 import App from './App.vue'
+import ArcherView from './components/ArcherView.vue'
 
 const client = ref(null)
 const repository = ref(null)
@@ -24,6 +25,11 @@ const isChecking = ref(true)
 const isAuthorized = ref(false)
 const hasAccess = ref(false)
 const isImportPrompt = ref(false)
+const isPlanLapsed = ref(false)
+const isArcherDisabled = ref(false)
+const isArcherView = ref(false)
+const upcomingTournaments = ref([])
+const lastPlanEndedOn = ref('')
 const isImporting = ref(false)
 let authSubscription
 
@@ -79,6 +85,44 @@ async function checkAppAccess(userId) {
     userMetadata.value.given_name ||
     ''
 
+  // The database shows a club without an active plan no data at all, so the app is not opened for it.
+  if (currentRole === 'club') {
+    const planResult = await client.value.rpc('has_active_plan')
+    if (planResult.error) {
+      errorMessage.value = `${t('Unable to check your club plan')}: ${planResult.error.message}`
+      isChecking.value = false
+      return
+    }
+    if (!planResult.data) {
+      const lastPlan = await client.value
+        .from('user_subscriptions')
+        .select('ends_on')
+        .eq('user_id', userId)
+        .order('ends_on', { ascending: false })
+        .limit(1)
+      lastPlanEndedOn.value = lastPlan.data?.[0]?.ends_on || ''
+      isPlanLapsed.value = true
+      isChecking.value = false
+      return
+    }
+  }
+
+  // The database also shows a disabled archer no data. Their own plan and their club decide, so it asks the
+  // database instead of repeating the rule here.
+  if (currentRole === 'archer') {
+    const lockResult = await client.value.rpc('user_without_plan')
+    if (lockResult.error) {
+      errorMessage.value = `${t('Unable to check your access')}: ${lockResult.error.message}`
+      isChecking.value = false
+      return
+    }
+    if (lockResult.data) {
+      isArcherDisabled.value = true
+      isChecking.value = false
+      return
+    }
+  }
+
   const managerRepository = createManagerRepository(client.value)
   try {
     workspace.value = await managerRepository.load({ includeUserRoles: ['admin', 'manager'].includes(currentRole) })
@@ -89,6 +133,19 @@ async function checkAppAccess(userId) {
   }
 
   repository.value = managerRepository
+  // An archer gets their own view, not the club screens.
+  if (currentRole === 'archer') {
+    try {
+      upcomingTournaments.value = await managerRepository.loadUpcomingTournaments()
+    } catch (upcomingError) {
+      errorMessage.value = `${t('Unable to load the tournament calendar')}: ${upcomingError.message}`
+      isChecking.value = false
+      return
+    }
+    isArcherView.value = true
+    isChecking.value = false
+    return
+  }
   const hasManagerData = Object.entries(workspace.value).some(([key, rows]) => key !== 'userRoles' && rows.length > 0)
   const databaseIsEmpty = !hasManagerData
   if (databaseIsEmpty && ['admin', 'manager'].includes(currentRole)) {
@@ -167,8 +224,17 @@ onUnmounted(() => authSubscription?.unsubscribe())
 </script>
 
 <template>
+  <ArcherView
+    v-if="isArcherView"
+    :data="workspace"
+    :upcoming="upcomingTournaments"
+    :participant-id="userScope.participantId"
+    :user-name="userName"
+    :user-email="userEmail"
+  />
+
   <App
-    v-if="isAuthorized"
+    v-else-if="isAuthorized"
     :initial-data="workspace"
     :repository="repository"
     :user-id="userId"
@@ -178,6 +244,28 @@ onUnmounted(() => authSubscription?.unsubscribe())
     :user-roles="userRoles"
     :user-scope="userScope"
   />
+
+  <main v-else-if="isPlanLapsed" class="manager-access-state">
+    <section class="manager-access-panel" role="status">
+      <LanguageSwitcher />
+      <p class="manager-access-eyebrow">{{ t('ShootingLine access') }}</p>
+      <h1>{{ t('The plan for your club is no longer current') }}</h1>
+      <p v-if="lastPlanEndedOn">{{ t('Your last plan ended on {date}.', { date: lastPlanEndedOn }) }}</p>
+      <p v-else>{{ t('Your club has no plan yet.') }}</p>
+      <p>{{ t('Ask a manager to renew it to use Tournament Manager again.') }}</p>
+      <a href="../">{{ t('Return to main menu') }}</a>
+    </section>
+  </main>
+
+  <main v-else-if="isArcherDisabled" class="manager-access-state">
+    <section class="manager-access-panel" role="status">
+      <LanguageSwitcher />
+      <p class="manager-access-eyebrow">{{ t('ShootingLine access') }}</p>
+      <h1>{{ t('Your user is not enabled') }}</h1>
+      <p>{{ t('Ask your club or a manager to enable it.') }}</p>
+      <a href="../">{{ t('Return to main menu') }}</a>
+    </section>
+  </main>
 
   <main v-else-if="isImportPrompt" class="manager-access-state">
     <section class="manager-access-panel">
@@ -243,7 +331,7 @@ onUnmounted(() => authSubscription?.unsubscribe())
 
 .manager-access-eyebrow {
   color: #9a7223;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 750;
   letter-spacing: 0.12em;
   text-transform: uppercase;

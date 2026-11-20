@@ -1,0 +1,13 @@
+-- Included by the database tests with \ir. The .psql extension keeps `supabase test db`, which runs only
+-- .sql and .pg files, from running this file as a test.
+
+-- Sets the JWT claims that auth.uid() reads, then switches to the role the API gives signed-in users.
+-- The role switch lasts until the end of the transaction, so reset it before signing in as someone else.
+create function pg_temp.sign_in_as(p_user_id uuid) returns void
+language plpgsql
+as $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', p_user_id, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+end;
+$$;

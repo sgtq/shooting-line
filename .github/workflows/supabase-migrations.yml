@@ -23,6 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest
@@ -74,3 +78,17 @@ jobs:
             --set "admin_email=$SYSTEM_ADMIN_EMAIL" \
             --set "admin_name=$SYSTEM_ADMIN_DISPLAY_NAME" \
             --file supabase/bootstrap-system-admin.sql
+
+      # Development only. The script also checks the development URL against the project id and the production
+      # URL, so a mix-up in secrets stops the run instead of seeding the wrong project.
+      - name: Seed development test users
+        if: github.ref_name == 'develop'
+        env:
+          PAGES_DEV_SUPABASE_URL: ${{ vars.PAGES_DEV_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SEED_USER_PASSWORD: ${{ secrets.SEED_USER_PASSWORD }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          PAGES_PRD_SUPABASE_URL: ${{ vars.PAGES_PRD_SUPABASE_URL }}
+        run: |
+          npm ci
+          node scripts/dev-seed/cli.js seed

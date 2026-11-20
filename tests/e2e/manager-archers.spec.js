@@ -13,10 +13,9 @@ const recurve = (id, name, sortOrder) => ({
   level_exempt: false,
 })
 
-const tournament = (id, name, date) => ({
+const tournament = (id, name) => ({
   id,
   name,
-  date,
   discipline: 'Outdoor target',
   tournament_type_id: null,
   club_id: 'club-1',
@@ -42,7 +41,11 @@ const tables = {
   clubs: [{ id: 'club-1', name: 'Test Club', logo_url: '' }],
   participants: [archer('archer-alex', 'Alex', 'Archer'), archer('archer-sam', 'Sam', 'Shooter')],
   categories: [recurve('rec-youth', 'Youth', 0), recurve('rec-open', 'Open', 1), recurve('rec-pro', 'Pro', 2)],
-  tournaments: [tournament('spring', 'Spring Open', '2099-05-01'), tournament('winter', 'Winter Open', '2098-01-01')],
+  tournaments: [tournament('spring', 'Spring Open'), tournament('winter', 'Winter Open')],
+  tournament_dates: [
+    { tournament_id: 'spring', day: '2099-05-01' },
+    { tournament_id: 'winter', day: '2098-01-01' },
+  ],
   tournament_rounds: [
     { id: 'round-spring', tournament_id: 'spring', name: 'Qualification', position: 0 },
     { id: 'round-winter', tournament_id: 'winter', name: 'Qualification', position: 0 },
@@ -73,6 +76,24 @@ async function openSpringArchers(page) {
   }, storageKey)
   await page.route('**/rest/v1/**', async (route) => {
     const request = route.request()
+    const rpcName = new URL(request.url()).pathname.startsWith('/rest/v1/rpc/')
+      ? new URL(request.url()).pathname.split('/').pop()
+      : ''
+    if (rpcName === 'visible_participant_names') {
+      await route.fulfill({ json: [] })
+      return
+    }
+    if (rpcName === 'search_archers') {
+      await route.fulfill({
+        json: [{ token: 'token-alex', first_name: 'Alex', last_name: 'Archer', club_id: 'club-1' }],
+      })
+      return
+    }
+    if (rpcName === 'add_archer_by_token') {
+      writes.push({ method: request.method(), url: request.url(), body: request.postDataJSON() })
+      await route.fulfill({ json: [{ id: 'archer-alex', first_name: 'Alex', last_name: 'Archer', club_id: 'club-1' }] })
+      return
+    }
     if (request.method() !== 'GET') {
       writes.push({ method: request.method(), url: request.url(), body: request.postDataJSON() })
       await route.fulfill({ status: request.method() === 'DELETE' ? 204 : 201 })
@@ -90,8 +111,10 @@ async function openSpringArchers(page) {
 
 const addDialog = (page) => page.locator('form.modal')
 
+// The form searches as the user types. A match is clicked to add that archer instead of creating a new one.
 async function chooseAlexAsRecurve(page) {
   await page.getByRole('button', { name: '＋ Add archer' }).click()
+  await addDialog(page).getByPlaceholder('Last name').fill('Arc')
   await addDialog(page)
     .getByRole('radio', { name: /Archer, Alex/ })
     .check()
@@ -111,10 +134,11 @@ test('adds an archer from the database with a category and removes them again', 
   await expect(page.locator('.roster-head')).toContainText('CATEGORY')
   expect(writes).toHaveLength(1)
   expect(writes[0].method).toBe('POST')
-  expect(writes[0].body).toMatchObject({
-    tournament_id: 'spring',
-    participant_id: 'archer-alex',
-    category_id: 'rec-open',
+  expect(writes[0].url).toContain('/rpc/add_archer_by_token')
+  expect(writes[0].body).toEqual({
+    p_tournament_id: 'spring',
+    p_token: 'token-alex',
+    p_category_id: 'rec-open',
   })
 
   page.once('dialog', (dialog) => {
@@ -128,8 +152,9 @@ test('adds an archer from the database with a category and removes them again', 
   expect(writes[1].method).toBe('DELETE')
   expect(writes[1].url).toContain('participant_id=eq.archer-alex')
 
-  // The archer stays in the database, so they can be added again.
+  // The archer stays in the database, so they can be found and added again.
   await page.getByRole('button', { name: '＋ Add archer' }).click()
+  await addDialog(page).getByPlaceholder('Last name').fill('Arc')
   await expect(addDialog(page).getByRole('radio', { name: /Archer, Alex/ })).toBeVisible()
 })
 
@@ -146,15 +171,24 @@ test('keeps the archer when the removal prompt is cancelled', async ({ page }) =
   expect(writes.map((write) => write.method)).toEqual(['POST'])
 })
 
-test('disables categories below the level the archer already entered', async ({ page }) => {
+test('has one add-archer form that starts with the affiliation IDs and can be cleared', async ({ page }) => {
   await openSpringArchers(page)
-  await chooseAlexAsRecurve(page)
+  await page.getByRole('button', { name: '＋ Add archer' }).click()
 
-  const category = addDialog(page).getByLabel('Category')
-  await expect(category.locator('option[value="rec-youth"]')).toBeDisabled()
-  await expect(category.locator('option[value="rec-open"]')).toBeEnabled()
-  await expect(category.locator('option[value="rec-pro"]')).toBeEnabled()
-  await expect(category).toHaveAttribute('title', /limited by the archer's age/i)
+  await expect(addDialog(page).getByRole('button', { name: 'Existing archer' })).toHaveCount(0)
+  await expect(addDialog(page).getByRole('button', { name: 'New archer' })).toHaveCount(0)
+  await expect(addDialog(page).locator('input').first()).toHaveAttribute('placeholder', 'Affiliation number')
+
+  await addDialog(page).getByPlaceholder('Last name').fill('Arc')
+  await addDialog(page)
+    .getByRole('radio', { name: /Archer, Alex/ })
+    .check()
+  await expect(addDialog(page)).toContainText('Adding Alex Archer')
+
+  await addDialog(page).getByRole('button', { name: 'Clear form' }).click()
+  await expect(addDialog(page).getByPlaceholder('Last name')).toHaveValue('')
+  await expect(addDialog(page).getByRole('radio')).toHaveCount(0)
+  await expect(addDialog(page)).not.toContainText('Adding Alex Archer')
 })
 
 test('styles the archer search field like the other filter fields', async ({ page }) => {

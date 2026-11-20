@@ -1,4 +1,5 @@
 import { requestPasswordReset } from '@shooting-line/auth'
+import { normalizeDays } from './tournamentDates.js'
 
 function throwOnError({ error }) {
   if (error) throw error
@@ -28,6 +29,7 @@ function mapParticipant(row) {
     birthDate: row.birth_date || '',
     waId: row.wa_id,
     aetayId: row.aetay_id,
+    email: row.email || '',
     clubId: row.club_id || '',
   }
 }
@@ -48,6 +50,79 @@ function mapTargetType(row) {
   return {
     id: row.id,
     name: row.name,
+  }
+}
+
+/**
+ * An archer known only by name. Other clubs' archers reach a club this way, so birth date and affiliation IDs
+ * stay empty and the row is left out of the archer directory and its pickers.
+ * @returns {object}
+ */
+function mapNameOnlyParticipant(row) {
+  return {
+    id: row.id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    birthDate: '',
+    waId: '',
+    aetayId: '',
+    clubId: row.club_id || '',
+    nameOnly: true,
+  }
+}
+
+/**
+ * @returns {object}
+ */
+function mapPlan(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    userRole: row.user_role,
+    durationKind: row.duration_kind,
+    isActive: row.is_active,
+  }
+}
+
+/**
+ * @returns {object}
+ */
+function mapPlanPrice(row) {
+  return {
+    id: row.id,
+    planId: row.plan_id,
+    amount: Number(row.amount),
+    currency: row.currency,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at || '',
+  }
+}
+
+/**
+ * @returns {object}
+ */
+function mapSubscription(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    planId: row.plan_id,
+    startsOn: row.starts_on,
+    endsOn: row.ends_on || '',
+    pricePaid: Number(row.price_paid),
+    currency: row.currency,
+  }
+}
+
+/**
+ * @returns {object}
+ */
+function mapArcherRequest(row) {
+  return {
+    id: row.id,
+    participantId: row.participant_id,
+    clubId: row.club_id,
+    status: row.status,
+    createdAt: row.created_at,
   }
 }
 
@@ -124,14 +199,23 @@ export function createManagerRepository(client) {
       'target_types',
       'categories',
       'tournaments',
+      'tournament_dates',
       'tournament_rounds',
       'tournament_categories',
       'tournament_participants',
       'round_scores',
       'matches',
+      'plans',
+      'plan_prices',
+      'user_subscriptions',
+      'archer_requests',
     ]
     if (includeUserRoles) tableNames.push('user_roles')
-    const results = await Promise.all(tableNames.map((table) => client.from(table).select('*')))
+    const [namesResult, ...results] = await Promise.all([
+      client.rpc('visible_participant_names'),
+      ...tableNames.map((table) => client.from(table).select('*')),
+    ])
+    throwOnError(namesResult)
     results.forEach(throwOnError)
     const [
       clubsResult,
@@ -140,11 +224,16 @@ export function createManagerRepository(client) {
       targetTypesResult,
       categoriesResult,
       tournamentsResult,
+      datesResult,
       roundsResult,
       tournamentCategoriesResult,
       tournamentParticipantsResult,
       scoresResult,
       matchesResult,
+      plansResult,
+      planPricesResult,
+      subscriptionsResult,
+      archerRequestsResult,
       userRolesResult,
     ] = results
 
@@ -157,6 +246,13 @@ export function createManagerRepository(client) {
       const tournamentRounds = roundsByTournament.get(round.tournament_id) || []
       tournamentRounds.push(round)
       roundsByTournament.set(round.tournament_id, tournamentRounds)
+    }
+
+    const datesByTournament = new Map()
+    for (const entry of datesResult.data) {
+      const days = datesByTournament.get(entry.tournament_id) || []
+      days.push(entry.day)
+      datesByTournament.set(entry.tournament_id, days)
     }
 
     const participantsByTournament = new Map()
@@ -180,19 +276,26 @@ export function createManagerRepository(client) {
 
     return {
       clubs: clubsResult.data.map(mapClub),
-      participants: participantsResult.data.map(mapParticipant),
+      // Full records win. Name-only rows fill in archers the user may not read in full.
+      participants: [
+        ...participantsResult.data.map(mapParticipant),
+        ...(namesResult.data ?? [])
+          .filter((row) => !participantsResult.data.some((full) => full.id === row.id))
+          .map(mapNameOnlyParticipant),
+      ],
       tournamentTypes: typesResult.data.map(mapTournamentType),
       targetTypes: targetTypesResult.data.map(mapTargetType),
       categories: categoriesResult.data.map(mapCategory),
       tournaments: tournamentsResult.data.map((row) => ({
         id: row.id,
         name: row.name,
-        date: row.date,
+        dates: (datesByTournament.get(row.id) || []).sort(),
         discipline: row.discipline,
         tournamentTypeId: row.tournament_type_id,
         clubId: row.club_id || '',
         venueMode: row.venue_mode,
         customAddress: row.custom_address,
+        startedAt: row.started_at || '',
         rounds: (roundsByTournament.get(row.id) || [])
           .sort((a, b) => a.position - b.position)
           .map((round) => round.name),
@@ -220,6 +323,10 @@ export function createManagerRepository(client) {
         score1: row.score1 === null ? '' : Number(row.score1),
         score2: row.score2 === null ? '' : Number(row.score2),
       })),
+      plans: plansResult.data.map(mapPlan),
+      planPrices: planPricesResult.data.map(mapPlanPrice),
+      subscriptions: subscriptionsResult.data.map(mapSubscription),
+      archerRequests: archerRequestsResult.data.map(mapArcherRequest),
       userRoles: userRolesResult ? userRolesResult.data.map(mapUserRole) : [],
     }
   }
@@ -288,13 +395,19 @@ export function createManagerRepository(client) {
       tournaments: workspace.tournaments.map((tournament) => ({
         id: tournamentIds.get(tournament.id),
         name: tournament.name,
-        date: tournament.date,
         discipline: tournament.discipline || '',
         tournament_type_id: typeIds.get(tournament.tournamentTypeId) || null,
         club_id: clubIds.get(tournament.clubId) || null,
         venue_mode: tournament.venueMode || 'club',
         custom_address: tournament.customAddress || '',
       })),
+      tournament_dates: workspace.tournaments.flatMap((tournament) =>
+        // Browser data from before multi-day tournaments holds a single date.
+        normalizeDays(tournament.dates ?? [tournament.date]).map((day) => ({
+          tournament_id: tournamentIds.get(tournament.id),
+          day,
+        })),
+      ),
       tournament_rounds: workspace.tournaments.flatMap((tournament) =>
         tournament.rounds.map((name, position) => ({
           id: getRoundId(tournament.id, name),
@@ -432,6 +545,101 @@ export function createManagerRepository(client) {
     if (error) throw error
   }
 
+  /** @returns {Promise<void>} */
+  async function savePlan(plan) {
+    const { error } = await client.from('plans').upsert({
+      id: plan.id,
+      name: plan.name,
+      user_role: plan.userRole,
+      duration_kind: plan.durationKind,
+      is_active: plan.isActive,
+    })
+    if (error) throw error
+  }
+
+  /** @returns {Promise<void>} */
+  async function savePlanPrice(price) {
+    const { error } = await client.from('plan_prices').insert({
+      id: price.id,
+      plan_id: price.planId,
+      amount: price.amount,
+      currency: price.currency,
+      starts_at: price.startsAt,
+      ends_at: price.endsAt || null,
+    })
+    if (error) throw error
+  }
+
+  /** @returns {Promise<void>} */
+  async function saveSubscription(subscription) {
+    const { error } = await client.from('user_subscriptions').insert({
+      id: subscription.id,
+      user_id: subscription.userId,
+      plan_id: subscription.planId,
+      starts_on: subscription.startsOn,
+      ends_on: subscription.endsOn || null,
+      price_paid: subscription.pricePaid,
+      currency: subscription.currency,
+    })
+    if (error) throw error
+  }
+
+  /**
+   * Finds archers while the user types in the add-archer form. Each match carries a one-time token and no
+   * database ID. Matches are name and club only.
+   * @returns {Promise<Array<{ token: string, firstName: string, lastName: string, clubId: string }>>}
+   */
+  async function searchArchers({ affiliationId = '', lastName = '', firstName = '', tournamentId = '' } = {}) {
+    const { data, error } = await client.rpc('search_archers', {
+      p_affiliation_id: affiliationId || null,
+      p_last_name: lastName || null,
+      p_first_name: firstName || null,
+      p_tournament_id: tournamentId || null,
+    })
+    if (error) throw error
+    return data.map((row) => ({
+      token: row.token,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      clubId: row.club_id || '',
+    }))
+  }
+
+  /** @returns {Promise<object>} The archer as a name-only record. */
+  async function addArcherByToken(tournamentId, token, categoryId = '') {
+    const { data, error } = await client.rpc('add_archer_by_token', {
+      p_tournament_id: tournamentId,
+      p_token: token,
+      p_category_id: categoryId || null,
+    })
+    if (error) throw error
+    return mapNameOnlyParticipant(data[0])
+  }
+
+  /** @returns {Promise<void>} */
+  async function setTournamentStarted(tournamentId, startedAt) {
+    const { error } = await client
+      .from('tournaments')
+      .update({ started_at: startedAt || null })
+      .eq('id', tournamentId)
+    if (error) throw error
+  }
+
+  /**
+   * Sets the last day of a subscription, for example to end one that had no end date.
+   * @returns {Promise<void>}
+   */
+  async function updateSubscriptionEnd(subscriptionId, endsOn) {
+    const { error } = await client.from('user_subscriptions').update({ ends_on: endsOn }).eq('id', subscriptionId)
+    if (error) throw error
+  }
+
+  /** @returns {Promise<void>} */
+  async function removeSubscription(subscriptionId) {
+    const { error } = await client.from('user_subscriptions').delete().eq('id', subscriptionId)
+    if (error) throw error
+  }
+
   async function saveUserProfile(userId, displayName) {
     const { error } = await client.from('user_profiles').upsert({
       user_id: userId,
@@ -457,6 +665,34 @@ export function createManagerRepository(client) {
       if (payload.error) throw new Error(payload.error)
     }
     throw error
+  }
+
+  /** @returns {Promise<void>} */
+  async function createArcherRequest(request) {
+    const { error } = await client.from('archer_requests').insert({
+      id: request.id,
+      participant_id: request.participantId,
+      club_id: request.clubId,
+    })
+    if (error) throw error
+  }
+
+  /**
+   * Approves or rejects requests in the edge function, which creates the logins.
+   * @returns {Promise<Array<{ id: string, ok: boolean, error?: string }>>} One result per request.
+   */
+  async function decideArcherRequests(action, requestIds) {
+    const { data, error } = await client.functions.invoke('decide-archer-requests', {
+      body: { action, requestIds },
+    })
+    if (error) {
+      if (error.context instanceof Response) {
+        const payload = await error.context.json()
+        if (payload.error) throw new Error(payload.error)
+      }
+      throw error
+    }
+    return data.results
   }
 
   async function saveTournamentType(type) {
@@ -493,11 +729,24 @@ export function createManagerRepository(client) {
     if (error) throw error
   }
 
+  /**
+   * Deletes a half-created tournament so a failed save leaves nothing behind, then rethrows the original error.
+   * @param {string} tournamentId Tournament to remove.
+   * @param {Error} cause The error that stopped the save.
+   * @returns {Promise<never>} Always throws.
+   */
+  async function removeTournamentAfterFailure(tournamentId, cause) {
+    const { error: cleanupError } = await client.from('tournaments').delete().eq('id', tournamentId)
+    if (cleanupError) {
+      throw new Error(`${cause.message}; cleanup also failed: ${cleanupError.message}`)
+    }
+    throw cause
+  }
+
   async function saveTournament(tournament) {
     const { error: tournamentError } = await client.from('tournaments').insert({
       id: tournament.id,
       name: tournament.name,
-      date: tournament.date,
       discipline: tournament.discipline,
       tournament_type_id: tournament.tournamentTypeId || null,
       club_id: tournament.clubId || null,
@@ -506,6 +755,11 @@ export function createManagerRepository(client) {
     })
     if (tournamentError) throw tournamentError
 
+    const { error: datesError } = await client
+      .from('tournament_dates')
+      .insert(normalizeDays(tournament.dates).map((day) => ({ tournament_id: tournament.id, day })))
+    if (datesError) await removeTournamentAfterFailure(tournament.id, datesError)
+
     const roundId = makeId()
     const { error: roundError } = await client.from('tournament_rounds').insert({
       id: roundId,
@@ -513,14 +767,26 @@ export function createManagerRepository(client) {
       name: 'Qualification',
       position: 0,
     })
-    if (roundError) {
-      const { error: cleanupError } = await client.from('tournaments').delete().eq('id', tournament.id)
-      if (cleanupError) {
-        throw new Error(`${roundError.message}; cleanup also failed: ${cleanupError.message}`)
-      }
-      throw roundError
-    }
+    if (roundError) await removeTournamentAfterFailure(tournament.id, roundError)
     roundIds.set(roundKey(tournament.id, 'Qualification'), roundId)
+  }
+
+  // New days go in first so the tournament never has none if the second step fails.
+  async function saveTournamentDates(tournamentId, dates) {
+    const days = normalizeDays(dates)
+    if (!days.length) throw new Error('A tournament needs at least one day')
+    const { error: insertError } = await client.from('tournament_dates').upsert(
+      days.map((day) => ({ tournament_id: tournamentId, day })),
+      { onConflict: 'tournament_id,day', ignoreDuplicates: true },
+    )
+    if (insertError) throw insertError
+
+    const { error: deleteError } = await client
+      .from('tournament_dates')
+      .delete()
+      .eq('tournament_id', tournamentId)
+      .not('day', 'in', `(${days.join(',')})`)
+    if (deleteError) throw deleteError
   }
 
   async function saveParticipant(participant, tournamentId = '', isEditing = false, categoryId = '') {
@@ -530,6 +796,7 @@ export function createManagerRepository(client) {
       birth_date: participant.birthDate || null,
       wa_id: participant.waId,
       aetay_id: participant.aetayId,
+      email: (participant.email || '').trim(),
       club_id: participant.clubId || null,
     }
     if (isEditing) {
@@ -679,20 +946,62 @@ export function createManagerRepository(client) {
     if (error) throw error
   }
 
+  /**
+   * The tournament calendar for an archer, from a database function so no table policy is widened.
+   * @returns {Promise<object[]>}
+   */
+  async function loadUpcomingTournaments() {
+    const { data, error } = await client.rpc('upcoming_tournaments')
+    if (error) throw error
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      days: row.days ?? [],
+      discipline: row.discipline || '',
+      tournamentType: row.tournament_type || '',
+      typeDetails: row.tournament_type
+        ? {
+            distance: Number(row.type_distance),
+            distanceUnit: row.type_distance_unit,
+            target: row.type_target,
+            ends: row.type_ends,
+            arrowsPerEnd: row.type_arrows_per_end,
+          }
+        : null,
+      hostClub: row.host_club || '',
+      address: row.address || '',
+      mapUrl: row.map_url || '',
+      categories: (row.categories ?? []).map((category) => ({ name: category.name, bowType: category.bow_type || '' })),
+      isEntered: Boolean(row.is_entered),
+    }))
+  }
+
   return {
     load,
+    loadUpcomingTournaments,
     importLegacyWorkspace,
     saveClub,
     uploadClubLogo,
     assignUserRole,
     removeUserRole,
+    savePlan,
+    savePlanPrice,
+    saveSubscription,
+    updateSubscriptionEnd,
+    removeSubscription,
+    setTournamentStarted,
+    searchArchers,
+    addArcherByToken,
     saveUserProfile,
     sendAdminPasswordReset,
+    createArcherRequest,
+    decideArcherRequests,
     sendOwnPasswordReset,
     saveTournamentType,
     saveTargetType,
     saveCategory,
     saveTournament,
+    saveTournamentDates,
     saveParticipant,
     setParticipantClub,
     setClubEnabled,

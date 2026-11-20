@@ -45,6 +45,7 @@ describe('manager repository', () => {
     const filters = { eq: vi.fn().mockReturnThis() }
     filters.eq.mockImplementationOnce(() => filters).mockResolvedValueOnce({ error: null })
     const client = {
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
       from: vi.fn((table) => ({
         select: vi.fn().mockResolvedValue({
           data:
@@ -87,6 +88,7 @@ describe('manager repository', () => {
     const assignmentError = new Error('Assignment failed')
     const cleanup = vi.fn().mockResolvedValue({ error: null })
     const client = {
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
       from: vi.fn((table) =>
         table === 'participants'
           ? { insert: vi.fn().mockResolvedValue({ error: null }), delete: () => ({ eq: cleanup }) }
@@ -111,6 +113,7 @@ describe('manager repository', () => {
 
   it('reports both assignment and cleanup failures', async () => {
     const client = {
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
       from: vi.fn((table) =>
         table === 'participants'
           ? {
@@ -303,6 +306,7 @@ describe('manager repository', () => {
         birthDate: '2000-01-01',
         waId: 'WA-1',
         aetayId: '',
+        email: ' alex@example.test ',
         clubId: 'club-1',
       },
       '',
@@ -315,8 +319,623 @@ describe('manager repository', () => {
       birth_date: '2000-01-01',
       wa_id: 'WA-1',
       aetay_id: '',
+      email: 'alex@example.test',
       club_id: 'club-1',
     })
     expect(eq).toHaveBeenCalledWith('id', 'archer-1')
+  })
+})
+
+describe('tournament dates', () => {
+  const tournament = {
+    id: 't1',
+    name: 'Cup',
+    dates: ['2026-05-02', '2026-05-01', '2026-05-02', ''],
+    discipline: 'Field',
+    tournamentTypeId: '',
+    clubId: '',
+    venueMode: 'club',
+    customAddress: '',
+  }
+
+  function insertClient({ failTable = '', deleteError = null } = {}) {
+    const inserts = []
+    const deleteEq = vi.fn().mockResolvedValue({ error: deleteError })
+    const client = {
+      from: vi.fn((table) => ({
+        insert: vi.fn((row) => {
+          inserts.push({ table, row })
+          return Promise.resolve({ error: table === failTable ? new Error(`${table} failed`) : null })
+        }),
+        delete: () => ({ eq: deleteEq }),
+      })),
+    }
+    return { client, inserts, deleteEq }
+  }
+
+  it('loads the days of each tournament oldest first', async () => {
+    const client = {
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+      from: vi.fn((table) => ({
+        select: vi.fn().mockResolvedValue({
+          data:
+            table === 'tournaments'
+              ? [{ id: 't1', name: 'Cup', club_id: null }]
+              : table === 'tournament_dates'
+                ? [
+                    { tournament_id: 't1', day: '2026-05-03' },
+                    { tournament_id: 't1', day: '2026-05-01' },
+                  ]
+                : [],
+          error: null,
+        }),
+      })),
+    }
+    const workspace = await createManagerRepository(client).load()
+
+    expect(workspace.tournaments[0].dates).toEqual(['2026-05-01', '2026-05-03'])
+  })
+
+  it('loads a tournament with no days as an empty list', async () => {
+    const client = {
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+      from: vi.fn((table) => ({
+        select: vi
+          .fn()
+          .mockResolvedValue({ data: table === 'tournaments' ? [{ id: 't1', name: 'Cup' }] : [], error: null }),
+      })),
+    }
+    const workspace = await createManagerRepository(client).load()
+
+    expect(workspace.tournaments[0].dates).toEqual([])
+  })
+
+  it('saves each day once, in order, without blanks', async () => {
+    const { client, inserts } = insertClient()
+    await createManagerRepository(client).saveTournament(tournament)
+
+    const dates = inserts.find((call) => call.table === 'tournament_dates')
+    expect(dates.row).toEqual([
+      { tournament_id: 't1', day: '2026-05-01' },
+      { tournament_id: 't1', day: '2026-05-02' },
+    ])
+    expect(inserts.find((call) => call.table === 'tournaments').row).not.toHaveProperty('date')
+  })
+
+  it('removes the tournament when its days cannot be saved', async () => {
+    const { client, inserts, deleteEq } = insertClient({ failTable: 'tournament_dates' })
+
+    await expect(createManagerRepository(client).saveTournament(tournament)).rejects.toThrow('tournament_dates failed')
+    expect(deleteEq).toHaveBeenCalledWith('id', 't1')
+    expect(inserts.some((call) => call.table === 'tournament_rounds')).toBe(false)
+  })
+
+  it('reports both errors when the cleanup also fails', async () => {
+    const { client } = insertClient({ failTable: 'tournament_dates', deleteError: new Error('no delete') })
+
+    await expect(createManagerRepository(client).saveTournament(tournament)).rejects.toThrow(
+      'tournament_dates failed; cleanup also failed: no delete',
+    )
+  })
+
+  describe('saveTournamentDates', () => {
+    function datesClient({ failStep = '' } = {}) {
+      const upsert = vi.fn().mockResolvedValue({ error: failStep === 'upsert' ? new Error('upsert failed') : null })
+      const not = vi.fn().mockResolvedValue({ error: failStep === 'delete' ? new Error('delete failed') : null })
+      const eq = vi.fn(() => ({ not }))
+      const client = { from: vi.fn(() => ({ upsert, delete: () => ({ eq }) })) }
+      return { client, upsert, eq, not }
+    }
+
+    it('adds the new days, then removes the days no longer listed', async () => {
+      const { client, upsert, eq, not } = datesClient()
+      await createManagerRepository(client).saveTournamentDates('t1', ['2026-05-02', '2026-05-01', '2026-05-02'])
+
+      expect(client.from).toHaveBeenCalledWith('tournament_dates')
+      expect(upsert).toHaveBeenCalledWith(
+        [
+          { tournament_id: 't1', day: '2026-05-01' },
+          { tournament_id: 't1', day: '2026-05-02' },
+        ],
+        { onConflict: 'tournament_id,day', ignoreDuplicates: true },
+      )
+      expect(eq).toHaveBeenCalledWith('tournament_id', 't1')
+      expect(not).toHaveBeenCalledWith('day', 'in', '(2026-05-01,2026-05-02)')
+      expect(upsert.mock.invocationCallOrder[0]).toBeLessThan(not.mock.invocationCallOrder[0])
+    })
+
+    it('does not remove anything when adding the days fails', async () => {
+      const { client, not } = datesClient({ failStep: 'upsert' })
+
+      await expect(createManagerRepository(client).saveTournamentDates('t1', ['2026-05-01'])).rejects.toThrow(
+        'upsert failed',
+      )
+      expect(not).not.toHaveBeenCalled()
+    })
+
+    it('reports a failure to remove the old days', async () => {
+      const { client } = datesClient({ failStep: 'delete' })
+
+      await expect(createManagerRepository(client).saveTournamentDates('t1', ['2026-05-01'])).rejects.toThrow(
+        'delete failed',
+      )
+    })
+
+    it('refuses an empty list so the tournament keeps its days', async () => {
+      const { client } = datesClient()
+
+      await expect(createManagerRepository(client).saveTournamentDates('t1', ['', ''])).rejects.toThrow(
+        'at least one day',
+      )
+      expect(client.from).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('browser data import', () => {
+    const emptyWorkspace = {
+      clubs: [],
+      participants: [],
+      tournamentTypes: [],
+      categories: [],
+      scores: [],
+      matches: [],
+    }
+    const base = { name: 'Cup', discipline: '', rounds: [], categoryIds: [], participantIds: [] }
+
+    it('turns the single date of older browser data into one day', async () => {
+      const rpc = vi.fn().mockResolvedValue({ error: null })
+      await createManagerRepository({ rpc }).importLegacyWorkspace({
+        ...emptyWorkspace,
+        tournaments: [{ ...base, id: 'old', date: '2025-01-01', categoryAssignments: {} }],
+      })
+
+      const payload = rpc.mock.calls[0][1].p_workspace
+      expect(payload.tournament_dates).toHaveLength(1)
+      expect(payload.tournament_dates[0].day).toBe('2025-01-01')
+      expect(payload.tournaments[0]).not.toHaveProperty('date')
+    })
+
+    it('keeps every day of data that already has several', async () => {
+      const rpc = vi.fn().mockResolvedValue({ error: null })
+      await createManagerRepository({ rpc }).importLegacyWorkspace({
+        ...emptyWorkspace,
+        tournaments: [{ ...base, id: 'new', dates: ['2025-01-02', '2025-01-01'], categoryAssignments: {} }],
+      })
+
+      const days = rpc.mock.calls[0][1].p_workspace.tournament_dates.map((row) => row.day)
+      expect(days).toEqual(['2025-01-01', '2025-01-02'])
+    })
+  })
+})
+
+describe('plans repository', () => {
+  function planClient(result = { error: null }) {
+    const insert = vi.fn().mockResolvedValue(result)
+    const upsert = vi.fn().mockResolvedValue(result)
+    const eq = vi.fn().mockResolvedValue(result)
+    const update = vi.fn(() => ({ eq }))
+    const client = {
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+      from: vi.fn(() => ({
+        insert,
+        upsert,
+        delete: () => ({ eq }),
+        update,
+        select: vi.fn().mockResolvedValue({
+          data:
+            {
+              plans: [{ id: 'p1', name: 'Monthly', user_role: 'club', duration_kind: 'monthly', is_active: true }],
+              plan_prices: [
+                { id: 'pr1', plan_id: 'p1', amount: '12.50', currency: 'MXN', starts_at: '2026-01-01', ends_at: null },
+              ],
+              user_subscriptions: [
+                {
+                  id: 's1',
+                  user_id: 'u1',
+                  plan_id: 'p1',
+                  starts_on: '2026-01-01',
+                  ends_on: '2026-01-31',
+                  price_paid: '10.00',
+                  currency: 'MXN',
+                },
+                {
+                  id: 's2',
+                  user_id: 'u2',
+                  plan_id: 'p1',
+                  starts_on: '2026-01-01',
+                  ends_on: null,
+                  price_paid: '0.00',
+                  currency: 'MXN',
+                },
+              ],
+            }[client.from.mock.lastCall[0]] || [],
+          error: null,
+        }),
+      })),
+    }
+    return { client, insert, upsert, eq, update }
+  }
+
+  it('loads plans, prices, and subscriptions with numbers and empty end dates normalized', async () => {
+    const { client } = planClient()
+    const data = await createManagerRepository(client).load()
+
+    expect(data.plans).toEqual([
+      { id: 'p1', name: 'Monthly', userRole: 'club', durationKind: 'monthly', isActive: true },
+    ])
+    expect(data.planPrices[0]).toEqual(expect.objectContaining({ amount: 12.5, endsAt: '' }))
+    expect(data.subscriptions[0]).toEqual(
+      expect.objectContaining({ userId: 'u1', pricePaid: 10, endsOn: '2026-01-31' }),
+    )
+  })
+
+  it('loads a subscription with no end date as an empty end date', async () => {
+    const { client } = planClient()
+    const data = await createManagerRepository(client).load()
+
+    expect(data.subscriptions[1]).toEqual(expect.objectContaining({ userId: 'u2', pricePaid: 0, endsOn: '' }))
+  })
+
+  it('stores an empty end date as null and can set one later', async () => {
+    const { client, insert, update, eq } = planClient()
+    const repository = createManagerRepository(client)
+
+    await repository.saveSubscription({
+      id: 's',
+      userId: 'u1',
+      planId: 'p1',
+      startsOn: '2026-02-01',
+      endsOn: '',
+      pricePaid: 0,
+      currency: 'MXN',
+    })
+    expect(insert).toHaveBeenLastCalledWith(expect.objectContaining({ ends_on: null, price_paid: 0 }))
+
+    await repository.updateSubscriptionEnd('s', '2027-01-31')
+    expect(update).toHaveBeenCalledWith({ ends_on: '2027-01-31' })
+    expect(eq).toHaveBeenLastCalledWith('id', 's')
+  })
+
+  it('writes plans, prices, and subscriptions with database column names', async () => {
+    const { client, insert, upsert, eq } = planClient()
+    const repository = createManagerRepository(client)
+
+    await repository.savePlan({ id: 'p1', name: 'Yearly', userRole: 'club', durationKind: 'yearly', isActive: false })
+    expect(upsert).toHaveBeenCalledWith({
+      id: 'p1',
+      name: 'Yearly',
+      user_role: 'club',
+      duration_kind: 'yearly',
+      is_active: false,
+    })
+
+    await repository.savePlanPrice({
+      id: 'pr',
+      planId: 'p1',
+      amount: 9,
+      currency: 'MXN',
+      startsAt: '2026-02-01',
+      endsAt: '',
+    })
+    expect(insert).toHaveBeenLastCalledWith({
+      id: 'pr',
+      plan_id: 'p1',
+      amount: 9,
+      currency: 'MXN',
+      starts_at: '2026-02-01',
+      ends_at: null,
+    })
+
+    await repository.saveSubscription({
+      id: 's',
+      userId: 'u1',
+      planId: 'p1',
+      startsOn: '2026-02-01',
+      endsOn: '2026-02-28',
+      pricePaid: 9,
+      currency: 'MXN',
+    })
+    expect(insert).toHaveBeenLastCalledWith({
+      id: 's',
+      user_id: 'u1',
+      plan_id: 'p1',
+      starts_on: '2026-02-01',
+      ends_on: '2026-02-28',
+      price_paid: 9,
+      currency: 'MXN',
+    })
+
+    await repository.removeSubscription('s')
+    expect(eq).toHaveBeenCalledWith('id', 's')
+  })
+
+  it('throws the database error when a write is rejected', async () => {
+    const { client } = planClient({ error: new Error('row-level security') })
+    const repository = createManagerRepository(client)
+
+    await expect(
+      repository.savePlan({ id: 'p', name: 'x', userRole: 'club', durationKind: 'custom', isActive: true }),
+    ).rejects.toThrow('row-level security')
+    await expect(repository.removeSubscription('s')).rejects.toThrow('row-level security')
+    await expect(repository.updateSubscriptionEnd('s', '2027-01-31')).rejects.toThrow('row-level security')
+  })
+})
+
+describe('tournament start lock', () => {
+  it('loads started_at and writes or clears it', async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null })
+    const update = vi.fn(() => ({ eq }))
+    const client = {
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+      from: vi.fn(() => ({
+        update,
+        select: vi.fn().mockResolvedValue({
+          data: [{ id: 't1', name: 'Cup', dates: ['2026-05-05'], club_id: null, started_at: '2026-05-05T10:00:00Z' }],
+          error: null,
+        }),
+      })),
+    }
+    const repository = createManagerRepository(client)
+
+    const data = await repository.load()
+    expect(data.tournaments[0].startedAt).toBe('2026-05-05T10:00:00Z')
+
+    await repository.setTournamentStarted('t1', '2026-05-06T00:00:00Z')
+    expect(update).toHaveBeenLastCalledWith({ started_at: '2026-05-06T00:00:00Z' })
+    await repository.setTournamentStarted('t1', '')
+    expect(update).toHaveBeenLastCalledWith({ started_at: null })
+    expect(eq).toHaveBeenCalledWith('id', 't1')
+  })
+
+  it('throws when the database refuses the change', async () => {
+    const client = {
+      from: () => ({ update: () => ({ eq: vi.fn().mockResolvedValue({ error: new Error('denied') }) }) }),
+    }
+    await expect(createManagerRepository(client).setTournamentStarted('t1', '')).rejects.toThrow('denied')
+  })
+})
+
+describe('archers a club cannot read in full', () => {
+  function clientWith({ participants = [], names = [], rpcResult } = {}) {
+    return {
+      rpc: vi.fn((name) =>
+        Promise.resolve(name === 'visible_participant_names' ? { data: names, error: null } : rpcResult),
+      ),
+      from: vi.fn((table) => ({
+        select: vi.fn().mockResolvedValue({ data: table === 'participants' ? participants : [], error: null }),
+      })),
+    }
+  }
+
+  it('adds name-only archers without birth dates or IDs, and lets full records win', async () => {
+    const client = clientWith({
+      participants: [
+        {
+          id: 'own',
+          first_name: 'Alex',
+          last_name: 'Archer',
+          birth_date: '2000-01-01',
+          wa_id: 'WA-1',
+          aetay_id: '',
+          club_id: 'club-1',
+        },
+      ],
+      names: [
+        { id: 'own', first_name: 'Alex', last_name: 'Archer', club_id: 'club-1' },
+        { id: 'other', first_name: 'Sam', last_name: 'Shooter', club_id: 'club-2' },
+      ],
+    })
+    const { participants } = await createManagerRepository(client).load()
+
+    expect(participants).toHaveLength(2)
+    expect(participants[0]).toEqual(expect.objectContaining({ id: 'own', birthDate: '2000-01-01', waId: 'WA-1' }))
+    expect(participants[0].nameOnly).toBeUndefined()
+    expect(participants[1]).toEqual({
+      id: 'other',
+      firstName: 'Sam',
+      lastName: 'Shooter',
+      birthDate: '',
+      waId: '',
+      aetayId: '',
+      clubId: 'club-2',
+      nameOnly: true,
+    })
+  })
+
+  it('fails the load when the names cannot be read', async () => {
+    const client = clientWith()
+    client.rpc.mockResolvedValueOnce({ data: null, error: new Error('names denied') })
+    await expect(createManagerRepository(client).load()).rejects.toThrow('names denied')
+  })
+})
+
+describe('searching archers', () => {
+  const row = { token: 'tok-1', first_name: 'Sam', last_name: 'Shooter', club_id: 'club-2' }
+
+  it('sends the typed fields and returns only a token, names, and the club', async () => {
+    const client = { rpc: vi.fn().mockResolvedValue({ data: [row], error: null }) }
+    const found = await createManagerRepository(client).searchArchers({ affiliationId: 'WA-5', lastName: 'Sho' })
+
+    expect(client.rpc).toHaveBeenCalledWith('search_archers', {
+      p_affiliation_id: 'WA-5',
+      p_last_name: 'Sho',
+      p_first_name: null,
+      p_tournament_id: null,
+    })
+    expect(found).toEqual([{ token: 'tok-1', firstName: 'Sam', lastName: 'Shooter', clubId: 'club-2' }])
+  })
+
+  it('treats a club-less archer as an empty club and surfaces a refusal', async () => {
+    const client = { rpc: vi.fn().mockResolvedValue({ data: [{ ...row, club_id: null }], error: null }) }
+    expect((await createManagerRepository(client).searchArchers({ lastName: 'Sho' }))[0].clubId).toBe('')
+
+    client.rpc.mockResolvedValue({ data: null, error: new Error('An active plan is required to search archers') })
+    await expect(createManagerRepository(client).searchArchers({ lastName: 'Sho' })).rejects.toThrow('active plan')
+  })
+
+  it('adds the archer behind a token, with no category when none is chosen', async () => {
+    const client = {
+      rpc: vi.fn().mockResolvedValue({
+        data: [{ id: 'a1', first_name: 'Sam', last_name: 'Shooter', club_id: 'club-2' }],
+        error: null,
+      }),
+    }
+    const archer = await createManagerRepository(client).addArcherByToken('t1', 'tok-1')
+
+    expect(client.rpc).toHaveBeenCalledWith('add_archer_by_token', {
+      p_tournament_id: 't1',
+      p_token: 'tok-1',
+      p_category_id: null,
+    })
+    expect(archer).toEqual(expect.objectContaining({ id: 'a1', nameOnly: true, birthDate: '', waId: '' }))
+  })
+
+  it('throws when the token has expired or the add is refused', async () => {
+    const client = {
+      rpc: vi.fn().mockResolvedValue({ data: null, error: new Error('That search result has expired. Search again') }),
+    }
+    await expect(createManagerRepository(client).addArcherByToken('t1', 'old')).rejects.toThrow('expired')
+  })
+})
+
+describe('archer emails and login requests', () => {
+  function tableClient(tables) {
+    return {
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+      from: vi.fn((table) => ({
+        select: vi.fn().mockResolvedValue({ data: tables[table] || [], error: null }),
+      })),
+    }
+  }
+
+  it('loads the archer email, using an empty text when none is saved', async () => {
+    const client = tableClient({
+      participants: [
+        { id: 'a1', first_name: 'A', last_name: 'One', email: 'a@example.test', club_id: 'c1' },
+        { id: 'a2', first_name: 'B', last_name: 'Two', email: null, club_id: null },
+      ],
+    })
+    const data = await createManagerRepository(client).load()
+
+    expect(data.participants.map((person) => person.email)).toEqual(['a@example.test', ''])
+  })
+
+  it('loads login requests', async () => {
+    const client = tableClient({
+      archer_requests: [
+        { id: 'r1', participant_id: 'a1', club_id: 'c1', status: 'pending', created_at: '2026-01-01T00:00:00Z' },
+      ],
+    })
+    const data = await createManagerRepository(client).load()
+
+    expect(data.archerRequests).toEqual([
+      { id: 'r1', participantId: 'a1', clubId: 'c1', status: 'pending', createdAt: '2026-01-01T00:00:00Z' },
+    ])
+  })
+
+  it('saves a new archer with an empty email when none is given', async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null })
+    const client = { from: vi.fn().mockReturnValue({ insert }) }
+    await createManagerRepository(client).saveParticipant({ id: 'a1', firstName: 'A', lastName: 'One' })
+
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1', email: '' }))
+  })
+
+  it('creates a request with database column names and leaves the status to the database', async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null })
+    const client = { from: vi.fn().mockReturnValue({ insert }) }
+    await createManagerRepository(client).createArcherRequest({ id: 'r1', participantId: 'a1', clubId: 'c1' })
+
+    expect(client.from).toHaveBeenCalledWith('archer_requests')
+    expect(insert).toHaveBeenCalledWith({ id: 'r1', participant_id: 'a1', club_id: 'c1' })
+  })
+
+  it('throws when the request cannot be created', async () => {
+    const failure = new Error('row-level security')
+    const client = { from: vi.fn().mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: failure }) }) }
+
+    await expect(
+      createManagerRepository(client).createArcherRequest({ id: 'r1', participantId: 'a1', clubId: 'c1' }),
+    ).rejects.toBe(failure)
+  })
+
+  it('sends the decision to the edge function and returns its results', async () => {
+    const results = [{ id: 'r1', ok: true }]
+    const invoke = vi.fn().mockResolvedValue({ data: { results }, error: null })
+    const client = { functions: { invoke } }
+
+    await expect(createManagerRepository(client).decideArcherRequests('approve', ['r1'])).resolves.toEqual(results)
+    expect(invoke).toHaveBeenCalledWith('decide-archer-requests', { body: { action: 'approve', requestIds: ['r1'] } })
+  })
+
+  it('throws the message the edge function returned', async () => {
+    const error = { context: new Response(JSON.stringify({ error: 'Manager access is required' }), { status: 403 }) }
+    const client = { functions: { invoke: vi.fn().mockResolvedValue({ data: null, error }) } }
+
+    await expect(createManagerRepository(client).decideArcherRequests('reject', ['r1'])).rejects.toThrow(
+      'Manager access is required',
+    )
+  })
+
+  it('throws the original error when the edge function gave no message', async () => {
+    const error = new Error('Failed to fetch')
+    const client = { functions: { invoke: vi.fn().mockResolvedValue({ data: null, error }) } }
+
+    await expect(createManagerRepository(client).decideArcherRequests('approve', ['r1'])).rejects.toBe(error)
+  })
+})
+
+describe('loadUpcomingTournaments', () => {
+  it('maps the calendar rows and tolerates missing optional values', async () => {
+    const client = {
+      rpc: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'u1',
+            name: 'Winter',
+            days: ['2099-01-01'],
+            discipline: 'Indoor',
+            tournament_type: 'Indoor 18m',
+            type_distance: '18',
+            type_distance_unit: 'm',
+            type_target: '40 cm',
+            type_ends: 10,
+            type_arrows_per_end: 3,
+            host_club: 'Club A',
+            address: 'Main street 1',
+            map_url: 'https://maps.example.com/a',
+            categories: [{ name: 'Open', bow_type: 'Recurve' }],
+            is_entered: true,
+          },
+          { id: 'u2', name: 'Bare', days: null, tournament_type: null, categories: null },
+        ],
+        error: null,
+      }),
+    }
+    const upcoming = await createManagerRepository(client).loadUpcomingTournaments()
+
+    expect(client.rpc).toHaveBeenCalledWith('upcoming_tournaments')
+    expect(upcoming[0]).toEqual({
+      id: 'u1',
+      name: 'Winter',
+      days: ['2099-01-01'],
+      discipline: 'Indoor',
+      tournamentType: 'Indoor 18m',
+      typeDetails: { distance: 18, distanceUnit: 'm', target: '40 cm', ends: 10, arrowsPerEnd: 3 },
+      hostClub: 'Club A',
+      address: 'Main street 1',
+      mapUrl: 'https://maps.example.com/a',
+      categories: [{ name: 'Open', bowType: 'Recurve' }],
+      isEntered: true,
+    })
+    expect(upcoming[1]).toMatchObject({ days: [], typeDetails: null, hostClub: '', mapUrl: '', categories: [] })
+  })
+
+  it('returns an empty list for no rows and throws the database error', async () => {
+    const empty = { rpc: vi.fn().mockResolvedValue({ data: null, error: null }) }
+    expect(await createManagerRepository(empty).loadUpcomingTournaments()).toEqual([])
+
+    const failing = { rpc: vi.fn().mockResolvedValue({ data: null, error: new Error('no access') }) }
+    await expect(createManagerRepository(failing).loadUpcomingTournaments()).rejects.toThrow('no access')
   })
 })
