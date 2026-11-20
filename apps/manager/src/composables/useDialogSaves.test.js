@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { buildDialogKit } from './dialogTestKit'
+import { buildDialogKit } from '../../test-utils/dialogTestKit'
 
 afterEach(() => vi.restoreAllMocks())
 
