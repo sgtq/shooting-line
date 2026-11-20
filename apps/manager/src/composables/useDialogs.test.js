@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildDialogKit } from './dialogTestKit'
+import { buildDialogKit } from '../../test-utils/dialogTestKit'
 
 afterEach(() => {
   vi.useRealTimers()

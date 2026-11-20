@@ -1,9 +1,9 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { vi } from 'vitest'
 import { computed, ref } from 'vue'
-import { useManagerStore } from '../stores/managerStore'
-import { useDialogSaves } from './useDialogSaves'
-import { useDialogs } from './useDialogs'
+import { useManagerStore } from '../src/stores/managerStore'
+import { useDialogSaves } from '../src/composables/useDialogSaves'
+import { useDialogs } from '../src/composables/useDialogs'
 
 /** @returns {object} The repository methods the dialogs call, all succeeding. */
 export function fakeRepository() {

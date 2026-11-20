@@ -17,7 +17,7 @@ Each app has its own README with its current features and commands.
 
 ## Workspace commands
 
-Requirements: Node.js compatible with Vite 8 and npm.
+Requirements: Node.js 22 (pinned in `.nvmrc` and `engines`; CI reads the same file) and npm.
 
 ```sh
 npm install
@@ -27,6 +27,7 @@ npm run dev:manager
 npm run build
 npm run preview
 npm run test:unit
+npm run test:coverage
 npm run test:e2e
 npm run cs-fix
 npm run cs-check
@@ -42,6 +43,21 @@ End-to-end tests in `tests/e2e/` fake the Supabase REST API and sign-in, so they
 their own dev server and never reuse one. If a dev server is already running on port 5173 or 5174, stop it first;
 otherwise Playwright stops with an "already used" error.
 The quality workflow runs ESLint, Prettier, `vue-tsc`, unit and end-to-end tests, and builds on pull requests and pushes to `develop` and `main`. The active Vue workspaces use JavaScript; `vue-tsc` checks Vue components and templates while `checkJs` remains disabled.
+
+## Testing
+
+- **Where tests go:** unit tests sit beside the file they cover and are named `<file>.test.js`, for example
+  `App.test.js` beside `App.vue`. End-to-end specs go in `tests/e2e/` and are named `<flow>.spec.js`.
+- **Shared setup:** `test-utils/vitest.setup.js` runs before every unit test file. It gives tests a working
+  jsdom `localStorage` on every Node version and empties it after each test.
+- **Shared helpers:** helpers used by more than one test live in a `test-utils/` folder, outside `src/`, so they
+  are never part of a build. Root `test-utils/` holds helpers for the whole repo; an app keeps its own in
+  `apps/<app>/test-utils/` (for example `apps/manager/test-utils/dialogTestKit.js`).
+- **Unit tests:** `npm run test:unit` runs everything. Run one app or file with a path filter, for example
+  `npx vitest run apps/manager` or `npx vitest run apps/manager/src/App.test.js`.
+- **Coverage:** `npm run test:coverage` prints a summary and writes an HTML report to `coverage/`. There is no
+  minimum threshold.
+- **End-to-end tests:** `npm run test:e2e` runs all specs. Run one with `npx playwright test tests/e2e/<spec>`.
 
 ## Shared access and database
 
