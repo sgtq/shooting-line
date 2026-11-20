@@ -90,9 +90,28 @@ The workflow at `.github/workflows/pages.yml` builds the current `main` site at 
 - `PAGES_DEV_SUPABASE_URL` and `PAGES_DEV_SUPABASE_PUBLISHABLE_KEY`
 - Optional `PAGES_PRD_BASE_PATH` and `PAGES_DEV_BASE_PATH` to override the default production and preview paths.
 
+The build base comes from `VITE_BASE_PATH` (see `scripts/vite-base.js`). When it is not set, the apps are built for the domain root (`/`). The GitHub Pages workflow sets it explicitly for the project site: `/<repository>/` for production and `/<repository>/develop/` for the preview.
+
 Both builds use the Node version in the `.nvmrc` on `develop`. The production build fetches that one file from `develop` because `main` may not have it yet, so a push to `develop` does not fail when `main` is behind.
 
 The preview uses a separate development Supabase project and is labeled **DEVELOPMENT / QA** in the UI. Supabase Auth and `app_access` restrict app use and data, but GitHub Pages still serves the static HTML and JavaScript publicly. Do not put personal or service-role tokens in a browser build.
+
+## Cloudflare Pages
+
+Cloudflare Pages will replace GitHub Pages. It serves the site from the domain root, so production and the `develop` preview both build with base `/` and no `/develop/` subfolder. Leave `VITE_BASE_PATH` unset for those builds.
+
+One-time setup:
+
+1. In the Cloudflare dashboard, create a Pages project named `shooting-line` with **Direct Upload** (no Git integration). The deploy workflow uploads the built `dist` folder with `wrangler pages deploy`, and sends `develop` as a preview branch.
+2. Create an API token limited to **Cloudflare Pages: Edit** for that account. Note the account ID from the dashboard.
+3. In **Repository Settings → Environments**, add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as secrets in both the `production` and `development` environments.
+
+Two files in `public/` end up at the root of `dist/` and configure Cloudflare Pages:
+
+- `_redirects` sends every `/manager/*` request to `/manager/index.html` with status 200. Without it, the single-page fallback of Cloudflare Pages would serve the portal page for manager routes.
+- `_headers` sets long-lived caching for the hashed files under `/assets/*` and `/manager/assets/*`, no caching for the two `index.html` files, and the `X-Content-Type-Options` and `Referrer-Policy` headers for every path. It sets no Content-Security-Policy.
+
+The workflow that uses the secrets is a separate step of the Cloudflare move. Until then, the GitHub Pages workflow stays in place.
 
 ## Branching and database deployment
 

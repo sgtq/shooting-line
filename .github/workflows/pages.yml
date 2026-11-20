@@ -55,7 +55,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ vars.PAGES_PRD_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.PAGES_PRD_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_BASE_PATH: ${{ vars.PAGES_PRD_BASE_PATH }}
+          VITE_BASE_PATH: ${{ vars.PAGES_PRD_BASE_PATH || format('/{0}/', github.event.repository.name) }}
           VITE_APP_ENV: production
       - name: Upload production site
         uses: actions/upload-artifact@v4
