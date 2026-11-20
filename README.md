@@ -42,7 +42,7 @@ Unit tests cover manager workflows and shared authentication access queries usin
 End-to-end tests in `tests/e2e/` fake the Supabase REST API and sign-in, so they need no real project. They start
 their own dev server and never reuse one. If a dev server is already running on port 5173 or 5174, stop it first;
 otherwise Playwright stops with an "already used" error.
-The quality workflow runs ESLint, Prettier, `vue-tsc`, unit and end-to-end tests, and builds on pull requests and pushes to `develop` and `main`. The database tests workflow starts a local Supabase stack and runs the pgTAP tests on the same events, and a failing test fails the check. The active Vue workspaces use JavaScript; `vue-tsc` checks Vue components and templates while `checkJs` remains disabled.
+The quality workflow runs on pull requests and pushes to `develop` and `main`. It has four jobs that run in parallel, so one failure does not hide the others: `lint-types` (ESLint, Prettier, `vue-tsc`), `unit`, `e2e`, and `build`. `build` starts only after `lint-types` and `unit` pass. Branch protection can require each job by its name. The database tests workflow starts a local Supabase stack and runs the pgTAP tests on the same events, and a failing test fails the check. The active Vue workspaces use JavaScript; `vue-tsc` checks Vue components and templates while `checkJs` remains disabled.
 
 ## Testing
 
