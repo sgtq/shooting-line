@@ -26,9 +26,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up the Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
+        uses: ./.github/actions/setup-supabase-cli
 
       # Starting the stack applies every migration to a fresh database, which is the state the tests expect.
       - name: Start the local Supabase stack

@@ -65,6 +65,12 @@ The quality workflow runs on pull requests and pushes to `develop` and `main`. I
   2. `supabase test db` runs every file in `supabase/tests/database/`. Pass a file path to run only that file.
   3. `supabase db reset` rebuilds the local database from the migrations if an earlier run left it in a bad state.
 
+  CI installs one pinned CLI version, set in `.github/actions/setup-supabase-cli/action.yml` and shared by the
+  database tests, migrations, and functions workflows. Keep your local CLI on the same version (`supabase --version`).
+  Dependabot does not update that pin. To bump it, update the CLI locally, run `supabase start` and
+  `supabase test db`, then change the version in the action file. Do this when a release has a fix or feature we
+  need, or whenever you update your local CLI.
+
   Name a test `<subject>.test.sql`. Each file opens with `begin;` and ends with `rollback;`, so it leaves no data
   behind and files do not affect each other. Write rows as the table owner, then call
   `pg_temp.sign_in_as(<user id>)` so the policies apply to the checks. Include it with
