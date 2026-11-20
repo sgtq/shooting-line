@@ -38,18 +38,25 @@ from the code, ask the user before planning.
 
 - Never work on `develop` or `main`. Check `git branch --show-current` and `git status`.
 - If the current branch already fits this ticket and the tree is clean, use it.
-- Otherwise create a branch from the up to date `develop` (fetch first) named `feat/...`, `fix/...`,
-  `test/...`, or `docs/...` to match the ticket. If `develop` does not exist locally or remotely, ask
-  which base to use.
+- Otherwise create a branch from the up to date `develop` (fetch first), named
+  `<app>/<type>/<short-name>`. `<app>` is the ticket's `app:*` label without the prefix, `<type>` is
+  `feat`, `fix`, `test`, `docs`, or `refactor`, and `<short-name>` is a few lowercase words joined by
+  hyphens that sum up the ticket (for example `manager/feat/move-saves-out-of-app`). If `develop` does
+  not exist locally or remotely, ask which base to use. Create it with
+  `gh issue develop <number> --name <branch> --base develop --checkout`. This creates the branch on
+  GitHub, links it to the issue, and switches to it locally in one step. Its PR then shows in the
+  issue's Development section. The default branch is `main`, so `Closes #N` alone does not make that
+  link.
 - If the tree has uncommitted changes that do not belong to this ticket, never stash, reset, or switch
-  over them. Use a git worktree for the new branch as the default:
-  `git worktree add ../shooting-line-<slug> -b <branch> origin/develop`. Run `npm install` there and do
-  all the work in that folder. Ask the user first only when it is unclear whether the changes belong to
-  this ticket.
+  over them. Use a git worktree for the new branch as the default. Create and link the branch without
+  `--checkout`: `gh issue develop <number> --name <branch> --base develop`. Then run `git fetch origin`
+  and `git worktree add ../shooting-line-<slug> <branch>`. Run `npm install` there and do all the work
+  in that folder. Do not use `-b` here, since that would make a second branch that is not linked to the
+  issue. Ask the user first only when it is unclear whether the changes belong to this ticket.
 - If a plain fetch fails with an SSL certificate error on Windows, retry with
   `git -c http.sslBackend=schannel fetch origin`.
 
-Once on the branch, set the ticket to In Progress now (see step 7).
+Once on the new branch, move the ticket to In Progress right away (see step 7).
 
 ## 4. Plan, then confirm
 
@@ -91,12 +98,12 @@ user at the end instead of fixing it.
 
 ## 7. Update the ticket status
 
-The status is the Status field of the issue in its project (`ShootingLine <App>`, owned by `sgtq`).
+The status is the Status field of the issue in the single `ShootingLine` project (number 8, owned by
+`sgtq`). All apps share it. The app comes from the `app:*` label and the `[app]` title prefix.
 
 - Set In Progress as soon as the branch is ready (end of step 3), before planning or coding. Find the
-  item with `gh project item-list <project number> --owner sgtq --format json -L 200`, then run
-  `gh project item-edit` with the project, field, and option ids from `gh project field-list`.
-  Project numbers: manager 3, scorecard 4, ianseo-dashboard 5, portal 6, platform 7.
+  item with `gh project item-list 8 --owner sgtq --format json -L 200`, then run
+  `gh project item-edit` with the project, field, and option ids from `gh project field-list 8`.
 - Do not close the issue by hand. Put `Closes #<number>` in the PR body so GitHub closes it on merge
   and the project moves it to Done.
 - If the work stops half way or is handed back, leave it In Progress and say what remains.
@@ -109,6 +116,14 @@ user to approve. Start the message with a short summary line that names the tick
 attribution line from the session's system reminder. Do not push or open a PR unless the user asks.
 If they ask for a PR, open it against `develop` (`gh pr create --base develop`). Show the full draft
 (title and body) and wait for approval first.
+
+PR title format: `<type>(<app>): <summary> (#<issue>)`, for example
+`feat(manager): move saves out of App.vue (#8)`. `<type>` is `feat`, `fix`, `test`, `docs`, or
+`refactor`. `<app>` is the ticket's `app:*` label without the prefix. Start the body from
+`.github/pull_request_template.md` and keep `Closes #<issue>`. After the PR is open, check that it
+shows under the issue's Development section (`gh issue develop <issue> --list`). If the branch was not
+created with `gh issue develop`, it cannot be linked by API, so ask the user to link it in the issue
+sidebar.
 
 ## 9. Report back
 
