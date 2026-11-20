@@ -31,6 +31,8 @@ from the code, ask the user before planning.
 - If the issue is closed, tell the user it is already done and ask if they still want to continue.
 - If its project Status is In Progress, look at the current branch, recent commits, and any related code
   to see what is already built. Report that and continue only the remaining part.
+- If its Status is In Review, a PR is already open. Tell the user and ask whether to continue (for
+  example, to address review comments) before changing anything.
 - Read the code the ticket touches. Check related issues (parent, sub-issues, dependencies) so the work
   does not clash with or duplicate them.
 
@@ -104,9 +106,14 @@ The status is the Status field of the issue in the single `ShootingLine` project
 - Set In Progress as soon as the branch is ready (end of step 3), before planning or coding. Find the
   item with `gh project item-list 8 --owner sgtq --format json -L 200`, then run
   `gh project item-edit` with the project, field, and option ids from `gh project field-list 8`.
+- Set In Review once the work is ready for review: the commits are pushed, the PR is open, and CI has
+  passed locally. Do it right after the PR is created (end of step 8), using the In Review option id
+  from `gh project field-list 8`. Do not set it before the PR exists.
 - Do not close the issue by hand. Put `Closes #<number>` in the PR body so GitHub closes it on merge
   and the project moves it to Done.
 - If the work stops half way or is handed back, leave it In Progress and say what remains.
+- If review asks for more changes, move it back to In Progress while you work, then to In Review again
+  after the new commits are pushed.
 - If the issue is not in a project, skip this step and say so.
 
 ## 8. Commit
@@ -123,7 +130,7 @@ PR title format: `<type>(<app>): <summary> (#<issue>)`, for example
 `.github/pull_request_template.md` and keep `Closes #<issue>`. After the PR is open, check that it
 shows under the issue's Development section (`gh issue develop <issue> --list`). If the branch was not
 created with `gh issue develop`, it cannot be linked by API, so ask the user to link it in the issue
-sidebar.
+sidebar. Then move the ticket to In Review (see step 7).
 
 ## 9. Report back
 

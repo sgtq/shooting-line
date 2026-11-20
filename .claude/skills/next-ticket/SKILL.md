@@ -26,7 +26,8 @@ same order as the cards on the board. Each item lists its labels. Do not sort by
 
 - Items with Status "In Progress" are already started. Report them first and ask whether to continue
   one of them instead of starting a new ticket.
-- Candidates are the items with Status "Todo".
+- Candidates are the items with Status "Todo". Ignore every other Status: In Review items already have
+  an open PR, and Backlog and Done items are not ready to start.
 - Order the candidates by the Priority field first: High, then Medium, then Low. Items with the same
   priority, and items with no priority, keep their board order. Items with a priority come before items
   without one. When no candidate has a priority, the order is the board order.
