@@ -10,7 +10,9 @@ The portal is the shared entry point for ShootingLine. It signs users in through
 - Reads the user's app grants from `public.app_access`.
 - Links to Tournament Manager only when the user has the `manager` grant.
 - Shows the Ianseo Dashboard and Shooting Scorecard as unavailable placeholders.
+- Each app tile has a decorative inline SVG icon (clipboard with pencil, checklist, scoreboard) that follows the tile's text color.
 - Provides sign-out and reports missing Supabase configuration or access-query errors.
+- Uses a dark theme when the system or browser asks for dark mode; there is no manual switch.
 - Offers English and Latin American Spanish, sharing the browser's language preference with Tournament Manager.
 - The GitHub Pages development preview uses its separate Supabase project and displays a Development / QA label.
 

@@ -2,6 +2,7 @@
 import { t } from '@shooting-line/i18n'
 import LanguageSwitcher from '@shooting-line/i18n/LanguageSwitcher.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import AppIcon from './components/AppIcon.vue'
 import { APP_IDS, createSupabaseClient, listAppAccess, requestPasswordReset } from '@shooting-line/auth'
 
 const baseUrl = import.meta.env.BASE_URL
@@ -307,6 +308,7 @@ onUnmounted(() => authSubscription?.unsubscribe())
           }"
           :aria-disabled="app.ready && app.hasAccess ? null : 'true'"
         >
+          <AppIcon class="card-icon" :app-id="app.id" />
           <p v-if="!app.ready" class="card-status coming-soon-status">{{ t('COMING SOON') }}</p>
           <p v-else-if="!app.hasAccess" class="card-status access-required-status">{{ t('Access required') }}</p>
           <h2>{{ app.name }}</h2>
