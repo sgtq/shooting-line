@@ -90,6 +90,8 @@ The workflow at `.github/workflows/pages.yml` builds the current `main` site at 
 - `PAGES_DEV_SUPABASE_URL` and `PAGES_DEV_SUPABASE_PUBLISHABLE_KEY`
 - Optional `PAGES_PRD_BASE_PATH` and `PAGES_DEV_BASE_PATH` to override the default production and preview paths.
 
+Both builds use the Node version in the `.nvmrc` on `develop`. The production build fetches that one file from `develop` because `main` may not have it yet, so a push to `develop` does not fail when `main` is behind.
+
 The preview uses a separate development Supabase project and is labeled **DEVELOPMENT / QA** in the UI. Supabase Auth and `app_access` restrict app use and data, but GitHub Pages still serves the static HTML and JavaScript publicly. Do not put personal or service-role tokens in a browser build.
 
 ## Branching and database deployment
